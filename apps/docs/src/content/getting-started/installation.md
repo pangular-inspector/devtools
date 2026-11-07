@@ -165,6 +165,27 @@ bun add -D @pangular-inspector/devtools
 
 MCP agent support (`@devframes/agentic`) and Devframe itself are included. You don't install them separately.
 
+### Set up with ng add
+
+In an Angular CLI workspace, `ng add` installs the package and wires it in for you:
+
+```bash
+ng add @pangular-inspector/devtools
+```
+
+It looks at the project and picks the setup this page describes for it:
+
+| The project has                               | What `ng add` does                                                                                                                                                                             |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `vite.config.ts` (Analog)                   | Adds `pangular()` to the `plugins` of the [Vite plugin](./vite.md). The plugin loads the overlay, so `main.ts` stays as it is.                                                                 |
+| An Express `server.ts` (Angular SSR)          | Adds `initPangularHub({ws: false})` and `app.use(devtools.nodeMiddleware)` right after `const app = express()`, as in [Angular CLI and Express](./express.md). Loads the overlay in `main.ts`. |
+| Neither                                       | Loads the overlay in `main.ts`, and prints the steps to run the standalone CLI behind the `ng serve` proxy, as in [Client-only Angular CLI app](#client-only-angular-cli-app).                 |
+| A `server.ts` on another server, such as Hono | Loads the overlay in `main.ts`, leaves `server.ts` alone and points at [Hono, h3 and Fastify](./other-servers.md).                                                                             |
+
+The overlay goes after bootstrap, behind the `ngDevMode` check shown in [Browser part](#browser-part). Pass `--project <name>` in a workspace with several applications. Without it, `ng add` takes the only application, or the first one.
+
+`ng add` only inserts lines next to code it recognizes, such as `import express from 'express'` and `const app = express()`. When a file looks different, it leaves the file alone and prints the snippet to add by hand. It reads `angular.json` the way the Angular CLI does, with comments and trailing commas. When it can't read it, it changes nothing and prints the overlay snippet, and with `--project` it stops with an error that names `angular.json`. Running it again changes nothing: it skips files that already import the devtools. It saves the package as a dependency, which every setup works with. See [Dependency or dev dependency](#dependency-or-dev-dependency) to move it.
+
 ### Dependency or dev dependency
 
 | Setup                                      | Install it as                                                                                                                                                                                          |

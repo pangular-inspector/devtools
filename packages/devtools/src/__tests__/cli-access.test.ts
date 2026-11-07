@@ -216,6 +216,75 @@ describe('pangular dev', () => {
     expect(String(log.mock.calls[1][0])).toContain('bootstrapApplication(App, appConfig)');
   });
 
+  async function lanDev(extra: string[]) {
+    const root = mkdtempSync(join(tmpdir(), 'pangular-cli-'));
+    dirs.push(root);
+    writeFileSync(join(root, 'angular.json'), '{}');
+    const log = vi.fn();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cwd = process.cwd();
+    const { createPangularCli } = await import('../cli.ts');
+    try {
+      await createPangularCli({ log, env: {} }).parse([
+        'node',
+        'pangular',
+        'dev',
+        '--root',
+        root,
+        '--port',
+        '9992',
+        '--no-open',
+        ...extra,
+      ]);
+      const onReady = devServer.options[0]['onReady'] as (info: {
+        origin: string;
+        port: number;
+      }) => Promise<void>;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({ ok: false })),
+      );
+      await onReady({ origin: 'http://localhost:9992', port: 9992 });
+    } finally {
+      vi.unstubAllGlobals();
+      process.chdir(cwd);
+    }
+    const warnings = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    return {
+      printed: log.mock.calls.map(([message]) => String(message)).join('\n'),
+      warnings,
+      options: devServer.options[0],
+    };
+  }
+
+  it('prints the LAN address and its define with --lan-address on a network host', async () => {
+    const { printed, options } = await lanDev(['--host', '192.168.1.20', '--lan-address']);
+    expect(printed).toContain('LAN address for a device build: http://192.168.1.20:9992/');
+    expect(printed).toContain(`--define "__PANGULAR_LAN_URL__='http://192.168.1.20:9992/'"`);
+    // The flag only prints: the bind host and the origin check stay as they were.
+    expect(options).toMatchObject({ host: '192.168.1.20' });
+    expect(options).not.toHaveProperty('allowedOrigins');
+  });
+
+  it('prints nothing and says why with --lan-address on localhost', async () => {
+    const { printed, warnings, options } = await lanDev(['--lan-address']);
+    expect(printed).not.toContain('LAN address');
+    expect(warnings.some((message) => message.includes('--lan-address prints nothing'))).toBe(true);
+    expect(options).toMatchObject({ host: 'localhost' });
+  });
+
+  it('prints nothing without --lan-address', async () => {
+    const { printed } = await lanDev(['--host', '192.168.1.20']);
+    expect(printed).not.toContain('LAN address');
+  });
+
+  it('refuses a loopback address for --lan-address', async () => {
+    const { printed, warnings } = await lanDev(['--host', '0.0.0.0', '--lan-address', '127.0.0.1']);
+    expect(printed).not.toContain('LAN address');
+    expect(warnings.some((message) => message.includes('Ignoring --lan-address'))).toBe(true);
+  });
+
   it("keeps devframe's default origin check without --allowed-origin", async () => {
     const root = mkdtempSync(join(tmpdir(), 'pangular-cli-'));
     dirs.push(root);

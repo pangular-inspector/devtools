@@ -1105,6 +1105,43 @@ export function pickPangularConfig<T extends PangularConfig>(
   };
 }
 
+/**
+ * The `lanAddress` option of the Vite plugin and `--lan-address` of `pangular dev`: off (the
+ * default), on with the machine's own LAN address, or on with the IPv4 address given.
+ */
+export type LanAddressOption = boolean | string;
+
+/** `lanAddress` once read: off, or on with the address to use when one was given. */
+export type ResolvedLanAddress = { on: false } | { on: true; address?: string };
+
+// No leading zeros: `010.0.0.1` would read as octal in some tools, and `00.0.0.0` would dodge the unspecified check.
+const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+/**
+ * Reads `lanAddress`. Anything but `true` or a network IPv4 address, such as `192.168.1.20`,
+ * leaves it off with a warning: a loopback or unspecified address is no LAN address.
+ */
+export function resolveLanAddress(
+  value: unknown,
+  warn: (message: string) => void = () => undefined,
+): ResolvedLanAddress {
+  if (value === undefined || value === false) return { on: false };
+  if (value === true) return { on: true };
+  if (typeof value === 'string' && IPV4.test(value)) {
+    if (value.startsWith('127.') || value === '0.0.0.0') {
+      warn(
+        `[pangular] Ignoring lanAddress: ${value} is not a network address. Pass true, or your machine's LAN address such as 192.168.1.20.`,
+      );
+      return { on: false };
+    }
+    return { on: true, address: value };
+  }
+  warn(
+    `[pangular] Ignoring lanAddress: got ${describe(value)}. Pass true, or your machine's LAN address such as 192.168.1.20.`,
+  );
+  return { on: false };
+}
+
 /** Form actions that work without a `formId`: they act on the page, not on one form. */
 export const FORMLESS_FORM_ACTIONS: readonly string[] = [
   'locate',

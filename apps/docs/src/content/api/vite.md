@@ -163,6 +163,14 @@ interface PangularViteOptions extends PangularConfig {
    * default. Ignored with `allowLan`.
    */
   terminals?: boolean;
+  /**
+   * Inject the dev server's LAN address into the app as `__PANGULAR_LAN_URL__`,
+   * so a phone app (Capacitor, NativeScript) built in development mode finds
+   * the devtools. `true` picks this machine's address; a string names one,
+   * such as `'192.168.1.20'`. Off by default. Needs `allowLan` in effect and
+   * `server.host` on the network; it changes nothing about who may connect.
+   */
+  lanAddress?: boolean | string;
   /** Pangular plugins' server sides: their agent tools and shared state. */
   serverPlugins?: readonly PangularServerPlugin[];
 }

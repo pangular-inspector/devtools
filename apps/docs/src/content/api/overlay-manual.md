@@ -43,6 +43,18 @@ async function installSignalWriteHook(
 ): Promise<(() => void) | null>;
 ```
 
+## lanDevtoolsURL
+
+Function. Source: [`packages/devtools/src/lan-url.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/lan-url.ts).
+
+The devtools server URL on the LAN that the build injected, or `undefined`
+when it injected none. Bundlers replace the constant at build time; Vite's
+dev server may define it on `globalThis` instead, so both are read.
+
+```ts
+function lanDevtoolsURL(): string | undefined;
+```
+
 ## OverlayConnectionMeta
 
 Type. Source: [`packages/devtools/src/overlay.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/overlay.ts).

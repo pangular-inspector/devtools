@@ -30,13 +30,28 @@ Function. Source: [`packages/devtools/src/overlay-nativescript.ts`](https://gith
 function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}): () => void;
 ```
 
+## lanDevtoolsURL
+
+Function. Source: [`packages/devtools/src/lan-url.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/lan-url.ts).
+
+The devtools server URL on the LAN that the build injected, or `undefined`
+when it injected none. Bundlers replace the constant at build time; Vite's
+dev server may define it on `globalThis` instead, so both are read.
+
+```ts
+function lanDevtoolsURL(): string | undefined;
+```
+
 ## NativeScriptOverlayOptions
 
 Interface. Source: [`packages/devtools/src/overlay-nativescript.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/overlay-nativescript.ts).
 
 ```ts
 interface NativeScriptOverlayOptions {
-  /** Absolute URL of the devtools server. Defaults to `defaultDevtoolsBaseURL()`. */
+  /**
+   * Absolute URL of the devtools server. Defaults to the LAN address the build
+   * injected (`lanDevtoolsURL()`), then to `defaultDevtoolsBaseURL()`.
+   */
   baseURL?: string;
   /** How often the app reports, in milliseconds. Defaults to the server's `limits.refreshMs`. */
   intervalMs?: number;

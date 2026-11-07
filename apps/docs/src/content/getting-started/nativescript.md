@@ -94,13 +94,73 @@ Call it before `runNativeScriptAngularApp()`, as above. The injector inspector r
 
 ### Where the overlay connects
 
-| Target           | Default URL              |
-| ---------------- | ------------------------ |
-| iOS simulator    | `http://localhost:9999/` |
-| Android emulator | `http://10.0.2.2:9999/`  |
-| Physical device  | Pass `{ baseURL }`       |
+| Target           | Default URL                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| iOS simulator    | `http://localhost:9999/`                                                                |
+| Android emulator | `http://10.0.2.2:9999/`                                                                 |
+| Physical device  | Pass `{ baseURL }`, or [inject the LAN address](#use-the-injected-lan-address) at build |
 
-For a physical device, pass the address of your machine as `baseURL`. Android 9 and later and iOS App Transport Security block plain `http` to a LAN address, so allow it for development builds: set `android:usesCleartextTraffic="true"` in `AndroidManifest.xml`, and add an `NSAppTransportSecurity` exception for the address in `Info.plist`.
+A build that defines `__PANGULAR_LAN_URL__` takes that URL over the defaults above. `baseURL` still wins over both.
+
+### Use the injected LAN address
+
+For a physical device, pass the address of your machine as `baseURL`, or let the build inject it, so `main.ts` keeps no address. Start the server with `--lan-address` (see [Run the devtools server](#run-the-devtools-server)) to print the URL, then define it in `webpack.config.js` from an environment variable:
+
+```js {6-13}
+// webpack.config.js
+const webpack = require('@nativescript/webpack');
+
+module.exports = (env) => {
+  webpack.init(env);
+  const lanUrl = process.env['PANGULAR_LAN_URL'];
+  if (lanUrl && !env.production) {
+    webpack.chainWebpack((config) => {
+      config.plugin('DefinePlugin').tap((args) => {
+        Object.assign(args[0], {__PANGULAR_LAN_URL__: JSON.stringify(lanUrl)});
+        return args;
+      });
+    });
+  }
+  return webpack.resolveConfig();
+};
+```
+
+Run the app with the URL the server printed, for example `PANGULAR_LAN_URL=http://192.168.1.20:9999/ ns run android`. `initNativeScriptOverlay()` without `baseURL` then connects there. A release build (`--env.production`) gets no address.
+
+### Allow plain HTTP to your machine
+
+The devtools server speaks plain `http`. Android 9 and later block cleartext traffic, and iOS App Transport Security can block it, so allow it to your machine in development builds.
+
+On Android, list the hosts the app may reach over cleartext in `App_Resources/Android/src/main/res/xml/network_security_config.xml`. The emulator reaches your machine at `10.0.2.2`, and a device at your machine's address:
+
+```html
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App_Resources/Android/src/main/res/xml/network_security_config.xml -->
+<network-security-config>
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">localhost</domain>
+    <domain includeSubdomains="false">10.0.2.2</domain>
+    <domain includeSubdomains="false">192.168.1.20</domain>
+  </domain-config>
+</network-security-config>
+```
+
+Then set `android:networkSecurityConfig="@xml/network_security_config"` on the `<application>` element of `App_Resources/Android/src/main/AndroidManifest.xml`. If the manifest already sets `android:usesCleartextTraffic="true"`, every host is allowed already. `examples/nativescript` ships a network security config. Keep these entries out of release builds.
+
+On iOS, add the local networking exception to `App_Resources/iOS/Info.plist`:
+
+```html
+<!-- App_Resources/iOS/Info.plist (excerpt) -->
+<key>NSAppTransportSecurity</key>
+<dict>
+  <key>NSAllowsLocalNetworking</key>
+  <true />
+</dict>
+<key>NSLocalNetworkUsageDescription</key>
+<string>Connects to Pangular Inspector on your computer during development.</string>
+```
+
+On iOS 14 and later, the first connection to an address on your network shows a local network permission prompt with that text. If the app was denied, turn it back on in **Settings** > **Privacy & Security** > **Local Network**.
 
 ### Run the devtools server
 
@@ -121,10 +181,10 @@ The server listens on `localhost` only, which the iOS simulator and the Android 
 A physical device reaches your machine over the network, so the server has to listen on an interface the device can reach:
 
 ```bash
-npx @pangular-inspector/devtools dev --host 192.168.1.20 --allowed-origin http://192.168.1.20:9999 --no-auth
+npx @pangular-inspector/devtools dev --host 192.168.1.20 --allowed-origin http://192.168.1.20:9999 --no-auth --lan-address
 ```
 
-The server then listens on that address only, not on `localhost`, so open the panel at `http://192.168.1.20:9999/`. `--allowed-origin` lets the panel's own origin through there. Use your machine's address and the server's port.
+The server then listens on that address only, not on `localhost`, so open the panel at `http://192.168.1.20:9999/`. `--allowed-origin` lets the panel's own origin through there. `--lan-address` prints the URL to [inject into the app](#use-the-injected-lan-address). Use your machine's address and the server's port.
 
 <ngmd-alert severity="warning" label="Trusted networks only">
   With <code>--host</code> and <code>--no-auth</code>, every host that can reach that address can call the devtools RPC and MCP endpoints without a code. Use it on a trusted network only. Binding to the one address the device uses, as above, keeps the server off your other interfaces, which <code>0.0.0.0</code> would not.
@@ -183,11 +243,11 @@ The overlay marks its component reports with `platform: 'nativescript'`, the URL
 
 `initNativeScriptOverlay()` takes an optional object:
 
-| Option       | Default                         | What it does                                                                  |
-| ------------ | ------------------------------- | ----------------------------------------------------------------------------- |
-| `baseURL`    | `defaultDevtoolsBaseURL()`      | Absolute URL of the devtools server.                                          |
-| `intervalMs` | The server's `limits.refreshMs` | How often the app reports, in milliseconds.                                   |
-| `retryMs`    | `5000`                          | How long to wait before connecting again after a failure or a dropped socket. |
+| Option       | Default                                             | What it does                                                                  |
+| ------------ | --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `baseURL`    | `lanDevtoolsURL()`, then `defaultDevtoolsBaseURL()` | Absolute URL of the devtools server.                                          |
+| `intervalMs` | The server's `limits.refreshMs`                     | How often the app reports, in milliseconds.                                   |
+| `retryMs`    | `5000`                                              | How long to wait before connecting again after a failure or a dropped socket. |
 
 `defaultDevtoolsBaseURL(port = 9999)` is exported from the same entry point and picks the address by platform:
 
@@ -196,7 +256,9 @@ The overlay marks its component reports with `platform: 'nativescript'`, the URL
 | iOS      | `http://localhost:9999/` |
 | Android  | `http://10.0.2.2:9999/`  |
 
-`10.0.2.2` is how the Android emulator reaches its host. The devtools server answers requests sent to it (and to `10.0.3.2`, Genymotion's address for the host) from the emulator without any option, as it does `localhost`. A physical device needs your machine's LAN address as `baseURL`.
+`10.0.2.2` is how the Android emulator reaches its host. The devtools server answers requests sent to it (and to `10.0.3.2`, Genymotion's address for the host) from the emulator without any option, as it does `localhost`. A physical device needs your machine's LAN address, as `baseURL` or injected by the build.
+
+`lanDevtoolsURL()`, exported from the same entry point, returns the URL a development build defined as `__PANGULAR_LAN_URL__`, or `undefined`. When it returns one, the overlay connects there instead of to `defaultDevtoolsBaseURL()`. See [Use the injected LAN address](#use-the-injected-lan-address) and [Allow plain HTTP to your machine](#allow-plain-http-to-your-machine).
 
 `initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget every report the app sent.
 

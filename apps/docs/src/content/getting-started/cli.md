@@ -126,10 +126,31 @@ When the server listens on your network (`--host 0.0.0.0` or a network address),
 | `--allowed-origin <origin>` | An extra origin allowed to reach the server, such as `http://192.168.1.20:8100`. Repeat it for more.                                                                                                                                                                                                                         |
 | `--proxy-origin <origin>`   | The origin of your app's dev server when it proxies `/__pangular/` to this server, such as `http://localhost:4200`. The panel URL on that origin and the one-time code link point there, and the server accepts requests from that origin. See [Client-only Angular CLI app](./installation.md#client-only-angular-cli-app). |
 | `--auth-token <token>`      | A [pairing token](../security.md#pairing-tokens) a client may send instead of the one-time code. Repeat it for more. Prefer the `PANGULAR_AUTH_TOKEN` environment variable.                                                                                                                                                  |
+| `--lan-address [address]`   | Print the server's URL on your network and the define that injects it into a development build of a phone app. Off by default. Without a value it picks this machine's first private IPv4 address. Needs `--host` on the network. See [Inject the LAN address](#inject-the-lan-address).                                     |
 
 <ngmd-callout type="warning" title="Keep it on localhost">
   The server binds to <code>localhost</code> by default and asks for a one-time code. Changing <code>--host</code> or passing <code>--no-auth</code> widens who can reach it. See <a href="../security.md">Access and redaction</a>.
 </ngmd-callout>
+
+### Inject the LAN address
+
+A phone app (Capacitor, NativeScript) needs the server's address on your network. The CLI doesn't build your app, so `--lan-address` prints the URL and the define to pass to your app's build. Start the server on the network with it:
+
+```bash
+npx pangular dev --host 0.0.0.0 --lan-address
+```
+
+It prints lines like these after the startup lines:
+
+```text
+  LAN address for a device build: http://192.168.1.20:9999/
+  Inject it as __PANGULAR_LAN_URL__, for example in an Angular CLI app:
+    ng build --configuration development --define "__PANGULAR_LAN_URL__='http://192.168.1.20:9999/'"
+```
+
+The `--define` flag needs the `application` builder of Angular 17.2 or later. The NativeScript overlay connects to the injected URL when you pass no `baseURL`, and `lanDevtoolsURL()` from `@pangular-inspector/devtools/overlay-manual` reads it in a Capacitor app. See [Set up Capacitor](../guides/capacitor.md#use-the-injected-lan-address) and [Set up NativeScript](./nativescript.md#use-the-injected-lan-address).
+
+`--lan-address` only prints. It doesn't change the host the server binds to, the origin check or the one-time code. With `--host localhost`, the default, it prints a warning and no address, since a phone can't reach that server. `--lan-address 192.168.1.20` names the address, for a machine on several networks. A loopback address is refused.
 
 ### What it shows
 
