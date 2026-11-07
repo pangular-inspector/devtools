@@ -100,7 +100,7 @@ export class Splitter {
   readonly view = input.required<string>();
   /** Which pane the bar sizes: the one before it or the one after it. */
   readonly pane = input<'before' | 'after'>('after');
-  readonly size = model.required<number>();
+  readonly size = model(380);
   readonly min = input(240);
   readonly max = input(720);
   /** The width a double click goes back to. */
