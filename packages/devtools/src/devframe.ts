@@ -1194,7 +1194,8 @@ const pangular = defineDevframe({
         page: typeof pageId === 'string' ? pageId : undefined,
         app,
       });
-      return 'error' in scoped ? state : scoped.state;
+      // An app the page does not have shows nothing, never the first app under its name.
+      return 'error' in scoped ? { pages: [] } : scoped.state;
     };
     const pageFor = (pageId: unknown, app?: unknown) => {
       const state = routerStateFor(pageId, app);

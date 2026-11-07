@@ -283,7 +283,7 @@ describe('router agent tools with several apps', () => {
       ctx.rpc.invokeLocal(`pangular:${name}` as never, ...([payload] as never));
     const call = async (tool: string, args: Record<string, unknown> = {}) =>
       await answerText(ctx.agent.invoke(`pangular:${tool}`, args));
-    return { push, call };
+    return { push, call, ctx };
   }
 
   it('answers for the app named by `app` and names the others', async () => {
@@ -299,6 +299,15 @@ describe('router agent tools with several apps', () => {
     const routes = await call('list-routes', { app: 'cart-widget' });
     expect(routes).toContain('Checkout');
     expect(await call('list-routes', { app: 'nope' })).toContain('has no app');
+  });
+
+  it('shows the panel no data for an app the page does not have', async () => {
+    const { push, ctx } = await boot();
+    await push('push-router', routerReport({ apps: appsList }));
+    const lint = (app: string) =>
+      ctx.rpc.invokeLocal('pangular:router-lint' as never, ...([{ pageId: 'p1', app }] as never));
+    expect(await lint('cart-widget')).toMatchObject({ checked: true });
+    expect(await lint('nope')).toEqual({ checked: false, reason: 'no-page' });
   });
 
   it('answers a single-app page exactly as before', async () => {
