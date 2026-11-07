@@ -76,6 +76,7 @@ import {registerPangularPlugin, type PangularPagePlugin} from '@pangular-inspect
 import {FLAGS_PLUGIN_ID, FLAGS_PLUGIN_VERSION} from './ids.ts';
 import type {FlagStore} from './index.ts';
 
+// flagsView(store) builds the PluginView; it is defined just above this in the same file.
 export function flagsPangularPlugin(store: FlagStore): PangularPagePlugin {
   return {
     id: FLAGS_PLUGIN_ID,
@@ -103,7 +104,7 @@ export function registerFlagsPangularPlugin(store: FlagStore): () => void {
 }
 ```
 
-`flagsView()` returns a stats section and a table of flags, and lists the `reset` action while a flag is overridden. An error a page action throws reaches the agent as the tool's answer. The [sections table](./write-a-plugin.md#sections) lists every section kind.
+`flagsView()`, in the same file, returns a stats section and a table of flags, and lists the `reset` action while a flag is overridden. An error a page action throws reaches the agent as the tool's answer. The [sections table](./write-a-plugin.md#sections) lists every section kind.
 
 Keep the plugin id and version in a file both entry points import (`src/ids.ts` in the example), so the page plugin and the server plugin always match.
 
@@ -116,6 +117,10 @@ The server plugin adds agent tools over what the page reports. A tool that runs 
 import {definePangularServerPlugin} from '@pangular-inspector/devtools/plugin';
 import {FLAGS_PLUGIN_ID, FLAGS_PLUGIN_VERSION} from './ids.ts';
 
+const PAGE = {
+  type: 'string',
+  description: 'Page id, when more than one tab reports (see pangular:list-pages).',
+};
 const pageArg = (args: Record<string, unknown>) =>
   typeof args['page'] === 'string' ? args['page'] : undefined;
 
@@ -127,6 +132,7 @@ export const flagsServerPlugin = definePangularServerPlugin({
     {
       name: 'flags',
       description: 'Every flag in the feature flag store on the running page.',
+      inputSchema: {type: 'object', properties: {page: PAGE}},
       handler: (args, ctx) => {
         const page = ctx.page(pageArg(args));
         if (!page?.view) return 'No page runs the feature flag store. Open the app in a browser.';
@@ -139,7 +145,7 @@ export const flagsServerPlugin = definePangularServerPlugin({
       description: 'Turn one flag on or off on the running page until it reloads.',
       inputSchema: {
         type: 'object',
-        properties: {name: {type: 'string'}, value: {type: 'boolean'}},
+        properties: {name: {type: 'string'}, value: {type: 'boolean'}, page: PAGE},
         required: ['name', 'value'],
       },
       handler: async (args, ctx) => {
@@ -160,7 +166,13 @@ The tools register as `pangular:plugin:feature-flags:flags` and `pangular:plugin
 
 ## Use it in an app
 
-Tell the apps that use your library to make two changes.
+Your library lists `@pangular-inspector/devtools` as an optional peer dependency, so an app that wants the tab installs it as its own development dependency first:
+
+```bash
+npm install -D @pangular-inspector/devtools
+```
+
+Then tell the apps that use your library to make two changes.
 
 <ngmd-workflow>
   <ngmd-step title="Register the page plugin in development">
@@ -179,10 +191,23 @@ import {isPlatformBrowser} from '@angular/common';
 import {
   DestroyRef,
   PLATFORM_ID,
+  Service,
   inject,
   provideAppInitializer,
   type EnvironmentProviders,
 } from '@angular/core';
+import {createFlagStore} from 'pangular-plugin-example';
+
+/** The demo's flags, kept in the example library's store. */
+@Service()
+export class FeatureFlags {
+  readonly store = createFlagStore({
+    'promo-banner': {
+      default: false,
+      description: 'Shows the free shipping banner on the home page.',
+    },
+  });
+}
 
 export function provideFeatureFlagsPangularPlugin(): EnvironmentProviders {
   return provideAppInitializer(() => {
@@ -198,19 +223,17 @@ export function provideFeatureFlagsPangularPlugin(): EnvironmentProviders {
 }
 ```
 
-`FeatureFlags` is the demo's service that holds the store, in the same file. Add `provideFeatureFlagsPangularPlugin()` to the app's providers. Then pass the server plugin to the Vite plugin:
+`FeatureFlags` is the demo's service that holds the store; the real one also turns store changes into a signal for templates. Add `provideFeatureFlagsPangularPlugin()` to the app's providers. Then pass the server plugin to the Vite plugin:
 
-```ts {3,9}
+```ts {4,8}
 // examples/analog/vite.config.ts
+import analog from '@analogjs/platform';
 import pangular from '@pangular-inspector/devtools/vite';
 import {flagsServerPlugin} from 'pangular-plugin-example/pangular-server';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => ({
-  plugins: [
-    // analog(...) and other plugins
-    pangular({serverPlugins: [flagsServerPlugin]}),
-  ],
+  plugins: [analog(), pangular({serverPlugins: [flagsServerPlugin]})],
 }));
 ```
 
