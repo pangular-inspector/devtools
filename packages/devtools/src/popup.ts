@@ -877,12 +877,15 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     pillRenders.textContent = `${shortCount(renders)} ${renders === 1 ? 'render' : 'renders'}`;
     pillErrors.textContent = `${shortCount(errors)} ${errors === 1 ? 'error' : 'errors'}`;
     pillErrors.classList.toggle('some', errors > 0);
-    fab.setAttribute(
-      'aria-label',
-      on
-        ? `Toggle Pangular Inspector, ${renders} ${renders === 1 ? 'render' : 'renders'}, ${errors} ${errors === 1 ? 'error' : 'errors'}`
-        : 'Toggle Pangular Inspector',
-    );
+    // While the panel is popped out, the launcher keeps its "bring back" label from applyOutside.
+    if (!fab.classList.contains('outside')) {
+      fab.setAttribute(
+        'aria-label',
+        on
+          ? `Toggle Pangular Inspector, ${renders} ${renders === 1 ? 'render' : 'renders'}, ${errors} ${errors === 1 ? 'error' : 'errors'}`
+          : 'Toggle Pangular Inspector',
+      );
+    }
     // A wider launcher may now cross the window edge.
     if (state.launcher) placeLauncher(state.launcher.x, state.launcher.y);
   }
@@ -1324,11 +1327,15 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
 
   /** Positions the launcher, keeping it fully on screen. */
   function placeLauncher(x: number, y: number) {
+    // The upper bound never drops below MARGIN, so a launcher wider than the window stays at the edge.
     const left = Math.round(
-      Math.min(Math.max(x, MARGIN), window.innerWidth - fab.offsetWidth - MARGIN),
+      Math.min(Math.max(x, MARGIN), Math.max(MARGIN, window.innerWidth - fab.offsetWidth - MARGIN)),
     );
     const top = Math.round(
-      Math.min(Math.max(y, MARGIN), window.innerHeight - fab.offsetHeight - MARGIN),
+      Math.min(
+        Math.max(y, MARGIN),
+        Math.max(MARGIN, window.innerHeight - fab.offsetHeight - MARGIN),
+      ),
     );
     fab.style.inset = `${top}px auto auto ${left}px`;
     launcherAt = { x: left, y: top };
