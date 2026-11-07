@@ -117,12 +117,13 @@ npx @pangular-inspector/devtools dev --no-auth
 
 The server listens on `localhost` only, which the iOS simulator reaches directly and an Android emulator reaches through `adb reverse`. `--no-auth` is needed because the app cannot enter the one-time code the panel asks for. Without it, the overlay logs a warning in the Metro log that names the flag and keeps retrying.
 
-When it is ready, the server prints the Angular Native view on its own line:
+When it is ready, the server prints the Angular Native view on its own line, next to the NativeScript setup view:
 
 ```text
   pangular v<version>
   Panel: http://localhost:9999/
   Angular Native apps: http://localhost:9999/?view=angular-native
+  NativeScript setup: http://localhost:9999/?view=nativescript
   MCP:   http://localhost:9999/__mcp
 ```
 

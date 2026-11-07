@@ -272,6 +272,7 @@ export function startupLines(
     `  Panel: ${panel}`,
     ...(options.proxyUrl ? [`  Panel on your app: ${options.proxyUrl}`] : []),
     `  Angular Native apps: ${panel}?view=angular-native`,
+    `  NativeScript setup: ${panel}?view=nativescript`,
   ];
   if (options.mcp) lines.push(`  MCP:   ${base}/__mcp`);
   if (options.requestedPort === undefined && port !== DEFAULT_PORT) {
