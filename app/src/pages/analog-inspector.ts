@@ -14,9 +14,13 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { plural, time } from '../format';
 import { hostPageId } from '../page-id';
 import { rpcCall, rpcTry as call } from '../rpc';
-import { actionAllowed, actionBlockedMessage } from '../devtools-config';
-import { Select } from '../ui/select';
 import { SourceLink } from '../ui/source-link';
+import { AnalogPlayground, type PlaygroundTarget } from './analog-playground';
+import { AnalogBuild } from './analog-build';
+import { AnalogData } from './analog-data';
+import { AnalogContentPreview } from './analog-content-preview';
+import { AnalogRuntime } from './analog-runtime';
+import { AnalogTransform } from './analog-transform';
 
 interface AnalogRoute {
   id: string;
@@ -43,6 +47,7 @@ interface ContentFile {
   slug: string;
   attributes: Record<string, string>;
   error?: string;
+  schemaErrors?: string[];
 }
 
 interface ServerFn {
@@ -60,6 +65,19 @@ interface AnalogProject {
   middleware: string[];
   content: ContentFile[];
   serverFns?: ServerFn[];
+  contentSchema?: { file: string; error?: string; unsupported?: string[] };
+  contentUsage?: { file: string; api: string; line: number }[];
+}
+
+interface RenderCheck {
+  path: string;
+  configured?: RenderRow['mode'];
+  observed?: RenderRow['mode'];
+  status?: number;
+  ms?: number;
+  matches?: boolean;
+  note?: string;
+  error?: string;
 }
 
 type ActionOutcome = 'success' | 'redirect' | 'invalid' | 'error';
@@ -149,16 +167,7 @@ interface PrerenderPlan {
   notBuilt: string[];
 }
 
-interface ApiResult {
-  ok?: boolean;
-  status?: number;
-  ms?: number;
-  type?: string;
-  body?: string;
-  error?: string;
-}
-
-type View = 'routes' | 'server' | 'render' | 'content' | 'lint';
+type View = 'routes' | 'server' | 'render' | 'content' | 'data' | 'runtime' | 'lint';
 
 interface LintCard {
   rule: string;
@@ -229,6 +238,14 @@ const LINT_TEXT: Record<string, { title: string; summary: string }> = {
   'content-frontmatter': {
     title: 'Broken frontmatter',
     summary: 'The markdown frontmatter cannot be read.',
+  },
+  'content-schema': {
+    title: 'Frontmatter does not match the content schema',
+    summary: 'The keys or values differ from the JSON Schema that analog.contentSchema names.',
+  },
+  'content-schema-unreadable': {
+    title: 'The content schema could not be used',
+    summary: 'analog.contentSchema names a file that is missing, outside the project or not JSON.',
   },
   'duplicate-slug': {
     title: 'Two posts share a slug',
@@ -319,7 +336,15 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
 
 @Component({
   selector: 'app-analog-inspector',
-  imports: [Select, SourceLink],
+  imports: [
+    SourceLink,
+    AnalogPlayground,
+    AnalogBuild,
+    AnalogData,
+    AnalogContentPreview,
+    AnalogRuntime,
+    AnalogTransform,
+  ],
   template: `
     @if (project() === null && loadFailed()) {
       <div class="empty" role="alert">
@@ -384,7 +409,9 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
             (click)="view.set(v.id)"
           >
             {{ v.label }}
-            <span class="count" [attr.data-tone]="v.tone">{{ v.count }}</span>
+            @if (v.count !== null) {
+              <span class="count" [attr.data-tone]="v.tone">{{ v.count }}</span>
+            }
           </button>
         }
       </div>
@@ -482,6 +509,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                     <th scope="col">File</th>
                     <th scope="col">Data</th>
                     <th scope="col">Route meta</th>
+                    <th scope="col"><span class="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -531,10 +559,23 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                           }
                         }
                       </td>
+                      <td class="actions">
+                        @if (row.route.file && row.route.kind !== 'markdown') {
+                          <button
+                            type="button"
+                            class="btn ghost"
+                            [attr.aria-label]="'Show the Vite transform stack of ' + row.route.file"
+                            [attr.aria-pressed]="transformFile() === row.route.file"
+                            (click)="showTransform(row.route.file)"
+                          >
+                            Transform
+                          </button>
+                        }
+                      </td>
                     </tr>
                   } @empty {
                     <tr>
-                      <td colspan="4" class="empty-row">
+                      <td colspan="5" class="empty-row">
                         @if (filter().trim()) {
                           No route matches the filter. Try part of a path or a file name.
                         } @else {
@@ -546,6 +587,14 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 </tbody>
               </table>
             </div>
+            @if (transformFile(); as file) {
+              <app-analog-transform
+                [rpc]="rpc()"
+                [file]="file"
+                [serverFns]="serverFns()"
+                (closed)="closeTransform(file)"
+              />
+            }
           }
 
           @case ('server') {
@@ -850,82 +899,12 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
               </div>
             }
 
-            <form class="card playground" (submit)="$event.preventDefault(); send()">
-              <h2>Request playground</h2>
-              <div class="row">
-                <app-select
-                  class="method-select"
-                  ariaLabel="Method"
-                  [options]="methodOptions"
-                  [value]="method()"
-                  (valueChange)="method.set($event ?? 'GET')"
-                />
-                <label for="api-path" class="sr-only">Path</label>
-                <input
-                  id="api-path"
-                  class="field grow mono"
-                  type="text"
-                  placeholder="/api/v1/products"
-                  [value]="apiPath()"
-                  (input)="apiPath.set($any($event.target).value)"
-                />
-                <button
-                  type="submit"
-                  class="btn primary"
-                  [disabled]="!canSend()"
-                  [attr.aria-describedby]="sendHintId()"
-                >
-                  {{ sending() ? 'Sending…' : 'Send' }}
-                </button>
-              </div>
-              @if (!canCall()) {
-                <p id="analog-calls-off" class="muted">{{ callsOff }}</p>
-              } @else if (needsConfirm()) {
-                <p id="analog-confirm-hint" class="muted">
-                  Tick "This request can change data on the dev server" below to send a
-                  {{ method() }} request.
-                </p>
-              }
-              @if (method() !== 'GET') {
-                <label for="api-body">JSON body</label>
-                <textarea
-                  id="api-body"
-                  class="field mono"
-                  rows="3"
-                  placeholder='{"name": "Ada"}'
-                  [value]="apiBody()"
-                  (input)="apiBody.set($any($event.target).value)"
-                ></textarea>
-                <label class="check confirm-send"
-                  ><input
-                    type="checkbox"
-                    [checked]="confirmSend()"
-                    (change)="confirmSend.set(!confirmSend())"
-                  />
-                  This request can change data on the dev server</label
-                >
-              }
-              @if (sending()) {
-                <p class="muted" role="status">Sending {{ method() }} {{ apiPath().trim() }}…</p>
-              } @else if (response(); as r) {
-                <div class="response" role="status">
-                  @if (r.error) {
-                    <div class="row">
-                      <span class="status" data-status="bad">Refused</span>
-                      <span>{{ r.error }}</span>
-                    </div>
-                  } @else {
-                    <div class="row">
-                      <span class="status" [attr.data-status]="statusClass(r.status ?? 0)">{{
-                        r.status
-                      }}</span>
-                      <span class="muted">{{ r.ms }} ms · {{ r.type || 'no content type' }}</span>
-                    </div>
-                    <pre class="code">{{ pretty(r.body ?? '') }}</pre>
-                  }
-                </div>
-              }
-            </form>
+            <app-analog-playground
+              [rpc]="rpc()"
+              [routes]="project()!.api"
+              [target]="tryTarget()"
+              [origin]="devOrigin()"
+            />
           }
 
           @case ('render') {
@@ -952,6 +931,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                     <th scope="col">Route</th>
                     <th scope="col">Configured</th>
                     <th scope="col">Last request</th>
+                    <th scope="col">Dev server check</th>
                     <th scope="col">File</th>
                   </tr>
                 </thead>
@@ -986,6 +966,40 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                         }
                       </td>
                       <td>
+                        @if (checks()[row.path]; as check) {
+                          @if (check === 'running') {
+                            <span class="muted small" role="status">Checking…</span>
+                          } @else if (check.error) {
+                            <span class="pill" data-tone="bad">{{ check.error }}</span>
+                          } @else {
+                            <div class="meta">
+                              <span class="pill" [attr.data-mode]="check.observed">{{
+                                modeLabel(check.observed!)
+                              }}</span>
+                              <span
+                                class="pill"
+                                [attr.data-tone]="check.matches ? 'good' : 'warn'"
+                                >{{
+                                  check.matches ? 'fits the config' : 'differs from config'
+                                }}</span
+                              >
+                              @if (check.note) {
+                                <span class="muted small">{{ check.note }}</span>
+                              }
+                            </div>
+                          }
+                        }
+                        <button
+                          type="button"
+                          class="btn ghost"
+                          [disabled]="checks()[row.path] === 'running'"
+                          [attr.aria-label]="'Request ' + row.path + ' and check its render mode'"
+                          (click)="checkRender(row.path)"
+                        >
+                          Check
+                        </button>
+                      </td>
+                      <td>
                         @if (row.file) {
                           <app-source-link class="file" [file]="row.file"
                             ><span class="dir">{{ dir(row.file) }}</span
@@ -996,7 +1010,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                     </tr>
                   } @empty {
                     <tr>
-                      <td colspan="4" class="empty-row">
+                      <td colspan="5" class="empty-row">
                         No page routes to render yet. Add a .page.ts file under src/app/pages.
                       </td>
                     </tr>
@@ -1064,6 +1078,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 }
               </div>
             }
+            <app-analog-build [rpc]="rpc()" />
           }
 
           @case ('content') {
@@ -1077,6 +1092,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                       <th scope="col">Slug</th>
                       <th scope="col">Date</th>
                       <th scope="col">File</th>
+                      <th scope="col"><span class="sr-only">Actions</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1094,6 +1110,13 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                               <span class="pill" data-tone="warn">takes over {{ base(page) }}</span>
                             </div>
                           }
+                          @if (f.schemaErrors?.length) {
+                            <div>
+                              <span class="pill" data-tone="warn">{{
+                                plural(f.schemaErrors!.length, 'schema problem')
+                              }}</span>
+                            </div>
+                          }
                         </td>
                         <td class="mono path">{{ contentUrl(f.file) ?? '' }}</td>
                         <td class="mono">{{ f.slug }}</td>
@@ -1103,6 +1126,17 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                             ><span class="dir">{{ dir(f.file) }}</span
                             >{{ base(f.file) }}</app-source-link
                           >
+                        </td>
+                        <td class="actions">
+                          <button
+                            type="button"
+                            class="btn ghost"
+                            [attr.aria-label]="'Preview ' + f.file"
+                            [attr.aria-pressed]="previewFile() === f.file"
+                            (click)="showPreview(f.file)"
+                          >
+                            Preview
+                          </button>
                         </td>
                       </tr>
                     }
@@ -1117,6 +1151,66 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 </p>
               </div>
             }
+            @if (project()!.content.length) {
+              <dl class="facts content-facts">
+                <dt>Schema</dt>
+                <dd>
+                  @if (project()!.contentSchema; as schema) {
+                    @if (schema.error) {
+                      <span class="pill" data-tone="bad">{{ schema.error }}</span>
+                    } @else {
+                      <span class="mono">{{ schema.file }}</span>
+                      @if (schema.unsupported?.length) {
+                        <span class="muted small">
+                          (skips {{ schema.unsupported!.join(', ') }})</span
+                        >
+                      }
+                    }
+                  } @else {
+                    <span class="muted small"
+                      >none; set <code>analog.contentSchema</code> to check frontmatter</span
+                    >
+                  }
+                </dd>
+                <dt>Read by</dt>
+                <dd>
+                  @for (u of project()!.contentUsage ?? []; track u.file + u.line) {
+                    <app-source-link class="chip mono" [file]="u.file" [line]="u.line"
+                      >{{ u.api }} · {{ base(u.file) }}:{{ u.line }}</app-source-link
+                    >
+                  } @empty {
+                    <span class="muted small"
+                      >no injectContentFiles, injectContent or contentFilesSource call under
+                      src</span
+                    >
+                  }
+                </dd>
+              </dl>
+            }
+            @if (previewFile(); as file) {
+              <app-analog-content-preview
+                [rpc]="rpc()"
+                [file]="file"
+                [schema]="
+                  project()!.contentSchema?.error ? undefined : project()!.contentSchema?.file
+                "
+                (closed)="closePreview(file)"
+              />
+            }
+          }
+
+          @case ('data') {
+            <app-analog-data
+              [rpc]="rpc()"
+              [page]="page()"
+              [serverFns]="serverFns()"
+              [duplicates]="state().duplicates ?? []"
+              [refetches]="state().refetches ?? []"
+            />
+          }
+
+          @case ('runtime') {
+            <app-analog-runtime [rpc]="rpc()" />
           }
 
           @case ('lint') {
@@ -2175,12 +2269,8 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
 export class AnalogInspector {
   protected readonly plural = plural;
   rpc = input<DevframeRpcClient | null>(null);
-  readonly canCall = computed(() => actionAllowed(this.rpc(), 'analog'));
-  protected readonly callsOff = actionBlockedMessage('analog');
 
   readonly kinds: Kind[] = ['all', 'page', 'load', 'action', 'fn', 'api'];
-  readonly methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-  readonly methodOptions = this.methods.map((m) => ({ value: m, label: m }));
   readonly view = signal<View>('routes');
   readonly project = signal<AnalogProject | null>(null);
   readonly loadFailed = signal(false);
@@ -2194,21 +2284,32 @@ export class AnalogInspector {
   readonly explainError = signal('');
   readonly explaining = signal(false);
   readonly kind = signal<Kind>('all');
-  readonly method = signal('GET');
-  readonly apiPath = signal('');
-  readonly apiBody = signal('');
-  /** Confirms one request: cleared when the method or path changes, and after it is sent. */
-  readonly confirmSend = linkedSignal({
-    source: () => `${this.method()} ${this.apiPath().trim()}`,
-    computation: () => false,
+  /** The dev server origin for copied requests: the open page's, or the panel's own. */
+  readonly devOrigin = computed(() => {
+    const url = this.page()?.url ?? '';
+    if (/^https?:\/\//.test(url)) {
+      // A malformed page URL must not break the whole Server view.
+      try {
+        return new URL(url).origin;
+      } catch {
+        return '';
+      }
+    }
+    return /^https?:$/.test(location.protocol) ? location.origin : '';
   });
-  readonly response = signal<ApiResult | null>(null);
-  readonly sending = signal(false);
-  readonly needsConfirm = computed(() => this.method() !== 'GET' && !this.confirmSend());
-  readonly canSend = computed(() => this.canCall() && !this.sending() && !this.needsConfirm());
-  readonly sendHintId = computed(() =>
-    !this.canCall() ? 'analog-calls-off' : this.needsConfirm() ? 'analog-confirm-hint' : null,
-  );
+  /** The page file whose Vite transform stack is open below the routes. */
+  readonly transformFile = signal<string | null>(null);
+  /** The content file open in the preview. */
+  readonly previewFile = signal<string | null>(null);
+  /** Dev server render checks by route. */
+  readonly checks = signal<Record<string, RenderCheck | 'running'>>({});
+  /** The route the last Try button handed to the playground. */
+  // Cleared when the view changes, so coming back to Server doesn't load the last Try again.
+  readonly tryTarget = linkedSignal<View, PlaygroundTarget | null>({
+    source: this.view,
+    computation: () => null,
+  });
+  private tryNonce = 0;
 
   private unsubscribe: (() => void) | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -2353,7 +2454,7 @@ export class AnalogInspector {
   readonly views = computed(() => {
     const { errors, warnings } = this.lintCount();
     return [
-      { id: 'routes' as View, label: 'Routes', count: this.pageCount(), tone: '' },
+      { id: 'routes' as View, label: 'Routes', count: this.pageCount() as number | null, tone: '' },
       { id: 'server' as View, label: 'Server', count: this.tabCalls().length, tone: '' },
       { id: 'render' as View, label: 'Render', count: this.renderRows().length, tone: '' },
       {
@@ -2362,6 +2463,8 @@ export class AnalogInspector {
         count: this.project()?.content.length ?? 0,
         tone: '',
       },
+      { id: 'data' as View, label: 'Data', count: null, tone: '' },
+      { id: 'runtime' as View, label: 'Runtime', count: null, tone: '' },
       { id: 'lint' as View, label: 'Lint', count: errors + warnings, tone: this.lintTone() },
     ];
   });
@@ -2536,12 +2639,44 @@ export class AnalogInspector {
 
   readonly time = time;
 
+  showTransform(file: string) {
+    this.transformFile.set(this.transformFile() === file ? null : file);
+  }
+
+  closeTransform(file: string) {
+    this.transformFile.set(null);
+    this.refocus(`Show the Vite transform stack of ${file}`);
+  }
+
+  showPreview(file: string) {
+    this.previewFile.set(this.previewFile() === file ? null : file);
+  }
+
+  closePreview(file: string) {
+    this.previewFile.set(null);
+    this.refocus(`Preview ${file}`);
+  }
+
+  /** Hands focus back to the row button that opened a detail card. */
+  private refocus(label: string) {
+    queueMicrotask(() =>
+      this.host.nativeElement
+        .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(label)}"]`)
+        ?.focus(),
+    );
+  }
+
+  async checkRender(path: string) {
+    this.checks.update((all) => ({ ...all, [path]: 'running' }));
+    const check = await call<RenderCheck>(this.rpc(), 'analog-render-check', path);
+    this.checks.update((all) => ({
+      ...all,
+      [path]: check ?? { path, error: 'No answer from the devtools server.' },
+    }));
+  }
+
   tryApi(api: ApiRoute) {
-    this.method.set(api.method === 'ANY' ? 'GET' : api.method);
-    this.apiPath.set(api.path.replace(/:(\w+)/g, '1').replace('**', 'x'));
-    this.confirmSend.set(false);
-    this.response.set(null);
-    queueMicrotask(() => document.getElementById('api-path')?.focus());
+    this.tryTarget.set({ route: api, nonce: ++this.tryNonce });
   }
 
   /** A failed call answered with 400 or more, never answered, or ended in an error outcome. */
@@ -2599,34 +2734,6 @@ export class AnalogInspector {
       this.explainError.set(`Could not explain ${url}. ${reason.replace(/\.?$/, '.')}`);
     } finally {
       this.explaining.set(false);
-    }
-  }
-
-  async send() {
-    const path = this.apiPath().trim();
-    if (!path || this.sending() || this.needsConfirm()) return;
-    let body: unknown;
-    if (this.method() !== 'GET' && this.apiBody().trim()) {
-      try {
-        body = JSON.parse(this.apiBody());
-      } catch {
-        this.response.set({ error: 'The body is not valid JSON.' });
-        return;
-      }
-    }
-    this.response.set(null);
-    this.sending.set(true);
-    try {
-      const result = await call<ApiResult>(this.rpc(), 'analog-call-api', {
-        method: this.method(),
-        path,
-        body,
-        confirm: this.confirmSend(),
-      });
-      this.response.set(result ?? { error: 'No answer from the devtools server.' });
-    } finally {
-      this.sending.set(false);
-      this.confirmSend.set(false);
     }
   }
 

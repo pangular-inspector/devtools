@@ -1,0 +1,294 @@
+// Controls shared by the Analog inspector's child views (playground, runtime,
+// build, transform and content preview), matching the parent page's styles.
+@use 'mixins' as m;
+
+@mixin controls {
+  h2,
+  h3 {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 0;
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  h3 {
+    color: var(--text-2);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+  }
+  .card {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    animation: enter 0.35s var(--ease) both;
+  }
+  .mono {
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  .muted {
+    color: var(--text-2);
+  }
+  .small {
+    font-size: 12px;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+  p {
+    margin: 0;
+    line-height: 1.55;
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .grow {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+  .label {
+    @include m.label;
+  }
+  .field {
+    box-sizing: border-box;
+    height: var(--control-h, 34px);
+    padding: 0 12px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--bg);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    transition:
+      border-color 180ms var(--ease),
+      box-shadow 180ms var(--ease);
+  }
+  .field.mono {
+    font-family: var(--mono);
+  }
+  .field::placeholder {
+    color: var(--text-3);
+  }
+  .field:focus,
+  .field:focus-visible {
+    @include m.field-focus;
+  }
+  textarea.field {
+    height: auto;
+    padding: 8px 12px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: var(--control-h, 34px);
+    padding: 0 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 160ms var(--ease),
+      border-color 160ms var(--ease),
+      color 160ms var(--ease);
+  }
+  .btn:hover {
+    background: var(--surface-3);
+  }
+  .btn.primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  .btn.primary:hover {
+    border-color: var(--accent-hover);
+    background: var(--accent-hover);
+  }
+  .btn.ghost {
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+  .btn.danger {
+    @include m.tint(danger);
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn:focus-visible,
+  .table-wrap:focus-visible,
+  summary:focus-visible {
+    @include m.focus-ring;
+  }
+  .check {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+  .check input {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--accent);
+  }
+  .check input:focus-visible {
+    @include m.focus-ring;
+  }
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  table {
+    width: 100%;
+    min-width: 480px;
+    border-collapse: collapse;
+  }
+  th,
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+  }
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+  th {
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .path,
+  .file {
+    overflow-wrap: anywhere;
+  }
+  .file {
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  .pill,
+  .chip,
+  .status {
+    display: inline-block;
+    padding: 1px 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 99px;
+    background: var(--surface-2);
+    color: var(--text-2);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+  .chip {
+    margin: 0 4px 4px 0;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .status {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  [data-tone='good'].pill,
+  [data-status='good'].status {
+    @include m.tint(ok);
+  }
+  [data-tone='warn'].pill,
+  [data-tone='warn'].chip,
+  [data-status='warn'].status {
+    @include m.tint(warn);
+  }
+  [data-tone='bad'].pill,
+  [data-tone='bad'].chip,
+  [data-status='bad'].status {
+    @include m.tint(danger);
+  }
+  .code {
+    margin: 0;
+    padding: 10px 12px;
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .note {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+  .note[data-tone='bad'] {
+    @include m.tint(danger);
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 8px 16px;
+    margin: 0;
+  }
+  .facts dt {
+    padding-top: 2px;
+    @include m.label;
+  }
+  .facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  summary {
+    cursor: pointer;
+    color: var(--text-2);
+  }
+  summary:hover {
+    color: var(--text);
+  }
+  @media (max-width: 560px) {
+    .facts {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation: none;
+    }
+  }
+}
