@@ -16,7 +16,10 @@ Import from `@pangular-inspector/devtools/devframe`. This page is generated from
 Function. Source: [`packages/devtools/src/devframe.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/devframe.ts).
 
 ```ts
-function createPangular(options: PangularConfig = {}, host: PangularHostOptions = {});
+function createPangular(
+  options: PangularConfig = {},
+  host: PangularHostOptions = {},
+): import('devframe').DevframeDefinition;
 ```
 
 ## default
@@ -35,6 +38,30 @@ The popup shortcut when `popup.hotkey` is left out.
 
 ```ts
 const DEFAULT_POPUP_HOTKEY: 'Alt+Shift+P';
+```
+
+## initDevframe
+
+Function. Re-exported from the `devframe` package.
+
+Serve a devframe through one framework-agnostic, web-standard handler:
+the SPA, `__connection.json` discovery, the WebSocket RPC endpoint, the
+auth gate, and the optional MCP route, all under a single mount base.
+Mount `handler` on any framework's catch-all route (or `nodeMiddleware` on
+a connect stack) and the devframe is live inside that app.
+
+The factory is synchronous and kicks off initialization eagerly;
+`handler`/`nodeMiddleware` await readiness internally. Nothing binds a port
+on its own: the WebSocket resolves in precedence order: `ws.port` (pinned
+side-car) > `server` (shared upgrade at `<base>__ws`) > `ws.sidecar`
+(auto-port side-car) > the host driving upgrades itself through
+`DevframeInstance.attach`. Meanwhile `ws.url`, when set, overrides the
+advertised* endpoint (the tunnel pattern) and on its own hands the whole
+transport to an external server. `__connection.json` reflects whichever
+combination is active.
+
+```ts
+function initDevframe(def: DevframeDefinition, options: InitDevframeOptions): DevframeInstance;
 ```
 
 ## PANGULAR_ACTIONS

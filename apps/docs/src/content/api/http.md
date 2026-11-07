@@ -31,5 +31,7 @@ Function. Source: [`packages/devtools/src/http.ts`](https://github.com/pangular-
 `provideHttpClient(withPangular())` registers the DevTools interceptor.
 
 ```ts
-function withPangular();
+function withPangular(): import('@angular/common/http').HttpFeature<
+  import('@angular/common/http').HttpFeatureKind.Interceptors
+>;
 ```

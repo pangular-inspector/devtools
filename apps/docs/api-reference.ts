@@ -27,7 +27,17 @@ interface ApiSymbol {
   summary: string;
   tags: Array<{name: string; text: string}>;
   declaration: string;
+  /** The source file in this repository, or empty for a symbol re-exported from a dependency. */
   file: string;
+  /** The npm package a re-exported symbol comes from. */
+  from?: string;
+}
+
+/** The package a file under `node_modules` belongs to, such as `devframe` or `@scope/name`. */
+function packageOf(filePath: string): string {
+  const rest = filePath.replace(/\\/g, '/').split('/node_modules/').at(-1) ?? '';
+  const parts = rest.split('/');
+  return parts[0].startsWith('@') ? `${parts[0]}/${parts[1]}` : parts[0];
 }
 
 export interface ApiEntry {
@@ -64,7 +74,9 @@ function declarationOf(nodes: Node[]): string {
       .map((n) => {
         const text = n.getText();
         const body = n.getBody();
-        return clean(body ? text.slice(0, body.getStart() - n.getStart()) : text);
+        const head = clean(body ? text.slice(0, body.getStart() - n.getStart()) : text);
+        // Without an annotation, show the return type TypeScript infers, as the published types do.
+        return n.getReturnTypeNode() ? head : `${head}: ${n.getReturnType().getText(n)}`;
       })
       .join('\n');
   }
@@ -108,7 +120,9 @@ export function readApiEntries(repoRoot: string): ApiEntry[] {
     for (const [name, decls] of sourceFile.getExportedDeclarations()) {
       const nodes = decls.filter((d) => kindOf(d));
       const first = nodes[0];
-      if (!first || first.getSourceFile().isInNodeModules()) continue;
+      if (!first) continue;
+      // A symbol re-exported from a dependency is still part of this entry point's API.
+      const external = first.getSourceFile().isInNodeModules();
       const docs = nodes.flatMap(jsDocsOf);
       const tags = docs.flatMap((d) =>
         d.getTags().map((t) => ({name: t.getTagName(), text: (t.getCommentText() ?? '').trim()})),
@@ -120,7 +134,10 @@ export function readApiEntries(repoRoot: string): ApiEntry[] {
         summary: docs.at(-1)?.getDescription().trim() ?? '',
         tags,
         declaration: declarationOf(nodes),
-        file: posix.relative(repoRoot.replace(/\\/g, '/'), first.getSourceFile().getFilePath()),
+        file: external
+          ? ''
+          : posix.relative(repoRoot.replace(/\\/g, '/'), first.getSourceFile().getFilePath()),
+        ...(external ? {from: packageOf(first.getSourceFile().getFilePath())} : {}),
       });
     }
     symbols.sort((a, b) => a.name.localeCompare(b.name));
@@ -174,7 +191,9 @@ export function renderApiPage(entry: ApiEntry, githubUrl: string): string {
   for (const symbol of entry.symbols) {
     out.push(`## ${symbol.name}`, '');
     out.push(
-      `${KIND_LABEL[symbol.kind]}. Source: [\`${symbol.file}\`](${githubUrl}/blob/main/${symbol.file}).`,
+      symbol.from
+        ? `${KIND_LABEL[symbol.kind]}. Re-exported from the \`${symbol.from}\` package.`
+        : `${KIND_LABEL[symbol.kind]}. Source: [\`${symbol.file}\`](${githubUrl}/blob/main/${symbol.file}).`,
       '',
     );
     if (symbol.summary) out.push(prose(symbol.summary), '');

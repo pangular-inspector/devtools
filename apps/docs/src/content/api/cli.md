@@ -19,7 +19,10 @@ The `pangular` command line: `dev` (the default), `build`, `mcp`, `skills`
 and `lint`, with `--root`, `--config` and `--read-only` on each.
 
 ```ts
-function createPangularCli(options: PangularCliOptions = {});
+function createPangularCli(options: PangularCliOptions = {}): {
+  cli: CAC;
+  parse(argv?: string[]): Promise<void>;
+};
 ```
 
 ## PangularCliOptions

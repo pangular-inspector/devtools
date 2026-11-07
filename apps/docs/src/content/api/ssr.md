@@ -33,7 +33,9 @@ Analog's: `export default defineEventHandler(pangularSsrEventHandler())` in
 it returns nothing, so the request goes on to the renderer.
 
 ```ts
-function pangularSsrEventHandler(options: PangularSsrOptions = {});
+function pangularSsrEventHandler(
+  options: PangularSsrOptions = {},
+): (event: NodeEventLike) => true | undefined;
 ```
 
 ## pangularSsrMiddleware
@@ -44,7 +46,9 @@ The Node `(req, res, next)` tracer behind the hub's `ssrMiddleware`, for a
 server that renders on Node without the Express hub, such as Fastify.
 
 ```ts
-function pangularSsrMiddleware(options: PangularSsrOptions = {});
+function pangularSsrMiddleware(
+  options: PangularSsrOptions = {},
+): (req: IncomingMessage, res: ServerResponse, next: (error?: unknown) => void) => void;
 ```
 
 ## PangularSsrOptions

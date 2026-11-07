@@ -20,7 +20,9 @@ loads; without it the panel looks for the hub, then for the devtools alone.
 A later call returns the same handle and applies a new `src`.
 
 ```ts
-function createDevtoolsPopup(options: {src?: string; hotkey?: string | false} = {});
+function createDevtoolsPopup(
+  options: {src?: string; hotkey?: string | false} = {},
+): {toggle: () => void; destroy: () => void} | undefined;
 ```
 
 ## hideDevtools
