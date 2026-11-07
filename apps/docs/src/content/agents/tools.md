@@ -796,7 +796,9 @@ Both tools are action tools and need a development build. They don't write secre
 
 When a write goes through a native `<select>` (`mode: user`, the default for `fill-form`, or any write to a template-driven form), the value must equal the value of one of its options (`[ngValue]` or `value`). A multiple select takes an array. If no option matches, the field is not written and the result says `has no option with the value ...`. A `mode: code` write to a reactive form or Signal Form sets the model directly and does not check the options.
 
-`run-form-action` accepts these actions: `set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore` and `instrument`.
+`run-form-action` accepts these actions: `set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore`, `instrument` and `try-webmcp`.
+
+`try-webmcp` runs the WebMCP tool linked to a Signal Form, with `value` as the tool's input object. The tool fills the form and submits it, so it needs `confirm: true`, and it is refused when `actions.forms` is `false`. `inspect-forms` with `form` returns the tool's input schema under `webMcp.schema`. The answer is the tool's own result text.
 
 `run-form-action` and `fill-form` always act on the form `form` names. `store-as-global` does not overwrite a `$form` or `$control` that the page defined itself, unless you pass `force`.
 

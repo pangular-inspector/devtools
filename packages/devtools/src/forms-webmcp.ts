@@ -1,5 +1,5 @@
 import { redactFormText } from './forms.ts';
-import { redactText } from './serialize.ts';
+import { redactText, serialize } from './serialize.ts';
 import { childPath } from './forms-path.ts';
 import { tokenName, type DebugNg } from './injector-tree.ts';
 
@@ -13,6 +13,8 @@ export interface WebMcpCall {
   outcome: WebMcpOutcome;
   fields?: string[];
   detail?: string;
+  /** Started from the panel's Try this tool, not by an agent. */
+  tried?: boolean;
 }
 
 export interface WebMcpTool {
@@ -27,6 +29,15 @@ export interface WebMcpTool {
   blocking?: { path: string; reason: string }[];
   duplicate?: boolean;
   calls?: WebMcpCall[];
+  /** The input schema agents see, through `serialize` (secret-named properties are masked). */
+  schema?: unknown;
+}
+
+/** The answer of a tool run from the devtools (`try-webmcp`). */
+export interface WebMcpRun {
+  ok: boolean;
+  text?: string;
+  error?: string;
 }
 
 export interface WebMcpPage {
@@ -53,6 +64,8 @@ export interface WebMcpWatcher {
   /** Takes the calls since the last push and says how they touched the form with this root. */
   takeActivity(): (root: object | undefined) => AgentTouch | undefined;
   link(root: object): void;
+  /** Runs the tool linked to the form with this root, as the panel's Try this tool. */
+  run(root: object, args: unknown): Promise<WebMcpRun>;
   describe(
     forms: WebMcpForm[],
     ng?: DebugNg,
@@ -69,6 +82,8 @@ interface ToolRecord {
   schema?: AnyRecord;
   shape?: string;
   calls: (WebMcpCall & { started: number })[];
+  /** Calls the tool: the wrapped `execute`, or the browser's testing API for a listed tool. */
+  execute?: (args: unknown) => unknown;
 }
 
 interface Shape {
@@ -83,6 +98,7 @@ const MAX_KEYS = 200;
 const PROVIDER_CHECK_MS = 5000;
 const SCHEMA_ERROR = /Could not accurately infer WebMCP schema for form "([^"]{1,200})"/;
 const REGISTER_TOKEN = 'REGISTER_WEBMCP_FORM';
+const SCHEMA_LIMITS = { depth: 12, keys: 100, items: 40, text: 300, budget: 4000 };
 
 function read<T>(fn: () => T, fallback: T): T {
   try {
@@ -237,6 +253,7 @@ function parseSchema(value: unknown): AnyRecord | undefined {
 }
 
 function resultText(value: unknown): string {
+  if (typeof value === 'string') return value;
   const content = read(() => (value as AnyRecord)['content'] as AnyRecord[], []);
   return Array.isArray(content)
     ? content.map((part) => (typeof part?.['text'] === 'string' ? part['text'] : '')).join('\n')
@@ -265,6 +282,8 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
   let providerCheckedAt = 0;
   let context: AnyRecord | null = null;
   let restore: (() => void) | null = null;
+  // True while `run` calls a tool, so the call is marked as tried and not counted as the agent's.
+  let trying = false;
 
   const add = (record: ToolRecord) => {
     records.push(record);
@@ -280,26 +299,32 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
 
   function wrapExecute(record: ToolRecord, execute: (...args: unknown[]) => unknown) {
     return function (this: unknown, args: unknown, ...rest: unknown[]) {
+      const tried = trying;
       const call: ToolRecord['calls'][number] = {
         at: Date.now(),
         started: performance.now(),
         outcome: 'running',
         fields: args && typeof args === 'object' ? Object.keys(args).slice(0, MAX_LIST) : undefined,
+        ...(tried ? { tried } : {}),
       };
       record.calls.push(call);
       if (record.calls.length > MAX_CALLS) record.calls.shift();
-      running.set(record, (running.get(record) ?? 0) + 1);
-      wrote.add(record);
-      ran.add(record);
+      if (!tried) {
+        running.set(record, (running.get(record) ?? 0) + 1);
+        wrote.add(record);
+        ran.add(record);
+      }
       const previous = current;
       current = record;
       const settle = (outcome: WebMcpOutcome, detail?: string) => {
         call.outcome = outcome;
         call.ms = Math.round(performance.now() - call.started);
         if (detail) call.detail = detail.slice(0, 300);
-        const left = (running.get(record) ?? 1) - 1;
-        if (left > 0) running.set(record, left);
-        else running.delete(record);
+        if (!tried) {
+          const left = (running.get(record) ?? 1) - 1;
+          if (left > 0) running.set(record, left);
+          else running.delete(record);
+        }
         onChange();
       };
       let out: unknown;
@@ -341,8 +366,9 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
       });
       record.shape = record.schema && shapeKey(record.schema);
       const execute = read(() => tool['execute'], undefined);
-      const forwarded =
-        typeof execute === 'function' ? { ...tool, execute: wrapExecute(record, execute) } : tool;
+      const wrapped = typeof execute === 'function' ? wrapExecute(record, execute) : undefined;
+      const forwarded = wrapped ? { ...tool, execute: wrapped } : tool;
+      if (wrapped) record.execute = (args) => wrapped.call(tool, args);
       const signal = read(() => options?.['signal'] as AbortSignal | undefined, undefined);
       read(
         () => signal?.addEventListener('abort', () => forget(record), { once: true }),
@@ -391,12 +417,22 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
               schema,
               shape: schema && shapeKey(schema),
               calls: [],
+              execute: testingExecute(name),
             });
           }
         })
         .catch(() => undefined);
       break;
     }
+  }
+
+  /** The browser's `modelContextTesting.executeTool`, for a tool registered before the overlay. */
+  function testingExecute(name: string): ToolRecord['execute'] {
+    const nav = typeof navigator === 'undefined' ? undefined : (navigator as unknown as AnyRecord);
+    const testing = read(() => nav?.['modelContextTesting'] as AnyRecord | undefined, undefined);
+    const run = read(() => testing?.['executeTool'], undefined);
+    if (typeof run !== 'function') return undefined;
+    return (args) => run.call(testing, name, JSON.stringify(args ?? {}));
   }
 
   // A polyfill or extension can add `modelContext` after the overlay loads, so `describe`
@@ -449,7 +485,10 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
     };
     if (record.error) tool.error = redact(record.error);
     const schema = record.schema ?? shape?.schema;
-    if (schema) tool.inputs = schemaInputs(schema);
+    if (schema) {
+      tool.inputs = schemaInputs(schema);
+      tool.schema = serialize(schema, SCHEMA_LIMITS);
+    }
     if (record.schema) {
       const then = schemaRequired(record.schema);
       tool.required = then;
@@ -495,6 +534,35 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
     },
     link(root) {
       if (current) linkTo(root, current);
+    },
+    async run(root, args) {
+      const record = links.get(root);
+      if (!record || !records.includes(record)) {
+        return { ok: false, error: 'This form has no WebMCP tool the inspector linked to it.' };
+      }
+      if (record.status !== 'registered') {
+        return { ok: false, error: `The tool ${record.name} is not registered.` };
+      }
+      if (!record.execute) {
+        return {
+          ok: false,
+          error: `The tool ${record.name} was registered before the inspector attached, and the browser offers no way to call it.`,
+        };
+      }
+      let out: unknown;
+      trying = true;
+      try {
+        out = record.execute(args);
+      } catch (error) {
+        return { ok: false, error: messageOf(error) };
+      } finally {
+        trying = false;
+      }
+      try {
+        return { ok: true, text: resultText(await out).slice(0, 2000) };
+      } catch (error) {
+        return { ok: false, error: messageOf(error) };
+      }
     },
     describe(forms, ng) {
       const out = new Map<object, WebMcpTool>();

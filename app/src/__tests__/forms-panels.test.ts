@@ -1150,3 +1150,83 @@ describe('FormsFields inline editing', () => {
     expect(edit.getAttribute('aria-describedby')).toBe('forms-writes-off');
   });
 });
+
+describe('FormsWebMcp Try this tool', () => {
+  const tool = {
+    name: 'sign_up',
+    description: 'Create an account',
+    status: 'registered' as const,
+    seen: 'register' as const,
+    inputs: ['name: string', 'age: number'],
+    schema: {
+      type: 'object',
+      properties: { name: { type: 'string' }, age: { type: 'number' } },
+      required: ['name'],
+    },
+    calls: [{ at: 0, outcome: 'submitted', tried: true }],
+  };
+
+  it('shows the input schema, starts from a sample input and asks before it runs the tool', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', tool);
+    fixture.componentRef.setInput('formId', 'signup@p1');
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_name, arg) => {
+        calls.push(arg);
+        return Promise.resolve({
+          ok: true,
+          message: 'The tool answered: Form submitted successfully',
+        });
+      }),
+    );
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.schema pre')?.textContent).toContain('"required"');
+    expect(text(fixture)).toContain('tried from the panel');
+    const input = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    expect(JSON.parse(input.value)).toEqual({ name: '', age: 0 });
+    expect(host.querySelector(`label[for="${input.id}"]`)?.textContent).toContain('Tool input');
+
+    input.value = '{"name": "Ada", "age": 3}';
+    input.dispatchEvent(new Event('input'));
+    button(fixture, 'Try this tool').click();
+    await settle(fixture);
+    expect(calls).toEqual([]);
+    button(fixture, 'Confirm try').click();
+    await settle(fixture);
+    expect(calls).toEqual([
+      { action: 'try-webmcp', formId: 'signup@p1', value: { name: 'Ada', age: 3 }, confirm: true },
+    ]);
+    expect(text(fixture)).toContain('Form submitted successfully');
+  });
+
+  it('refuses input that is not a JSON object', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', tool);
+    fixture.componentRef.setInput('formId', 'signup@p1');
+    fixture.componentRef.setInput('rpc', fakeClient(fail));
+    await settle(fixture);
+    const input = (fixture.nativeElement as HTMLElement).querySelector('textarea')!;
+    input.value = '[1';
+    input.dispatchEvent(new Event('input'));
+    button(fixture, 'Try this tool').click();
+    await settle(fixture);
+    expect(text(fixture)).toContain('not valid JSON');
+  });
+
+  it('offers no Try for a tool without a form, and turns it off when form writes are off', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', tool);
+    await settle(fixture);
+    expect(text(fixture)).not.toContain('Try this tool');
+    fixture.componentRef.setInput('formId', 'signup@p1');
+    fixture.componentRef.setInput('rpc', {
+      connectionMeta: { configs: { pangular: { actions: { forms: false } } } },
+      scope: () => ({ rpc: {} }),
+    } as unknown as DevframeRpcClient);
+    await settle(fixture);
+    expect(button(fixture, 'Try this tool').disabled).toBe(true);
+  });
+});

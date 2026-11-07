@@ -203,6 +203,8 @@ function countFields(node: FormFieldNode): number {
               [tool]="form.webMcp"
               [page]="webMcpPage(form.id)"
               [signalForm]="form.kind === 'signal'"
+              [formId]="form.id"
+              [rpc]="rpc()"
             />
 
             <app-forms-action-bar

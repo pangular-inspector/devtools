@@ -850,6 +850,7 @@ export function attachForms(
         forms: foundById,
         elements: fieldElements,
         all: knownElements,
+        runTool: (root, args) => webMcp.run(root, args),
       };
       if (request.action === 'instrument') return respond(setInstrumented(request.value !== false));
       if (request.action === 'pick') {

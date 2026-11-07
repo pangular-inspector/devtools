@@ -37,10 +37,16 @@ A Signal Form that sets `experimentalWebMcpTool` (with `provideExperimentalWebMc
 | Blocking fields  | When Angular could not infer a schema, each field that is `null`, `undefined`, an empty array or an unsupported type.            |
 | Required changed | Fields whose `required` changed after registration. Angular reads `required` once, so agents still see the old one.              |
 | Recent calls     | The last 5 agent calls with time, duration, the input names and the result (submitted, submit failed or threw).                  |
+| Input schema     | The JSON schema agents see, under **Input schema**. Properties with secret-looking names show as `[redacted]`.                   |
+| Try this tool    | A JSON input, prefilled with a sample of the schema, and **Try this tool**. Only in the block of a form.                         |
 
 Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin. While a call's submit is still running, only changes to that form count as the agent's, and typing in any form, that one included, shows as **user**.
 
 If the app provides `provideExperimentalWebMcpForms()` but the browser has no `modelContext`, Angular registers no tool. The block says so instead.
+
+#### Try a tool from the panel
+
+Edit the **Tool input (JSON)** and click **Try this tool**, then **Confirm try**. The panel runs the tool in the app the way an agent call does, so the tool fills the form and submits it. The answer of the tool shows under the button, and the call shows in **Recent calls** as **tried from the panel**. Changes it makes show in the timeline with the **devtools** origin. **Try this tool** is turned off when [`actions.forms`](../getting-started/configuration.md#actions) is `false`. A tool registered before the inspector attached can be tried only when the browser offers `modelContextTesting.executeTool`. Agents run it with `pangular:run-form-action` and `action: "try-webmcp"`.
 
 A tool the overlay cannot link to a form, such as a tool the app registers with `modelContext.registerTool` itself, shows under **Other WebMCP tools** below the forms, with the same parts. The section appears only when the page has such a tool, and it follows the **All pages** setting.
 
@@ -237,7 +243,7 @@ Agents can loop: inspect, act, `wait-for` with `condition: "form"`, then `explai
 
 ### Reset, submit and restore ask first
 
-In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Confirm restore**. Click again to run it. If the selected form changes first, for example because the page destroyed it, the confirmation, the snapshot and the open field are cleared. Agents pass `confirm: true` for the same actions, and for `fill-form` with `submit`.
+In the tab, the button turns into **Confirm reset**, **Confirm submit** or **Confirm restore**. Click again to run it. If the selected form changes first, for example because the page destroyed it, the confirmation, the snapshot and the open field are cleared. **Try this tool** asks the same way, with **Confirm try**. Agents pass `confirm: true` for the same actions, for `try-webmcp`, and for `fill-form` with `submit`.
 
 ### Fields that are not written
 

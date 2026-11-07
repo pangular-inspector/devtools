@@ -4487,7 +4487,7 @@ const pangular = defineDevframe({
       id: 'pangular:run-form-action',
       title: 'Run a form action',
       description:
-        'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument. reset, submit and restore need `confirm: true`.',
+        'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument, try-webmcp (runs its WebMCP tool). reset, submit, restore, try-webmcp need confirm.',
       inputSchema: {
         type: 'object',
         required: ['action', 'form'],
@@ -4512,11 +4512,14 @@ const pangular = defineDevframe({
               'snapshot',
               'restore',
               'instrument',
+              'try-webmcp',
             ],
           },
           form: { type: 'string', description: 'Full form id, e.g. Checkout.form@ab12.' },
           path: pathProperty,
-          value: { description: 'New value for set-value.' },
+          value: {
+            description: 'New value for set-value, or the input object for try-webmcp.',
+          },
           mode: { type: 'string', enum: ['code', 'user'] },
           confirm: { type: 'boolean' },
           force: { type: 'boolean' },

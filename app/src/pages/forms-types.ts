@@ -71,7 +71,15 @@ export interface WebMcpTool {
   requiredChanged?: { path: string; now: boolean }[];
   blocking?: { path: string; reason: string }[];
   duplicate?: boolean;
-  calls?: { at: number; ms?: number; outcome: string; fields?: string[]; detail?: string }[];
+  calls?: {
+    at: number;
+    ms?: number;
+    outcome: string;
+    fields?: string[];
+    detail?: string;
+    tried?: boolean;
+  }[];
+  schema?: unknown;
 }
 
 export interface WebMcpPage {
