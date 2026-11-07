@@ -60,6 +60,7 @@ export const PANGULAR_LIMITS = {
   httpCalls: { default: 200, min: 10, max: 2000 },
   changeLog: { default: 200, min: 10, max: 2000 },
   cdCycles: { default: 200, min: 10, max: 2000 },
+  cdSlowMs: { default: 16, min: 1, max: 1000 },
   capacitorCalls: { default: 200, min: 10, max: 2000 },
   idleAfterMs: { default: 60_000, min: 0, max: 600_000 },
 } as const;
@@ -78,6 +79,7 @@ export const CACHE_SKIP_TEXT = {
   'set-cookie': 'the response sets a cookie',
   error: 'failed responses are not stored',
   mocked: 'a fault rule answered before the transfer cache ran',
+  filter: 'the transferCache filter passed to withPangular() left it out',
   'cache-off-or-filter':
     'the transfer cache is off, or its filter (or another withHttpTransferCacheOptions setting) left it out',
 } as const;
@@ -228,6 +230,12 @@ export interface PangularConfig {
     changeLog?: number;
     /** Change detection cycles kept per page while recording. Default 200. */
     cdCycles?: number;
+    /**
+     * A change detection cycle longer than this, in ms, counts as slow: the
+     * recording flags it and the chart draws it over the line. Default 16
+     * (about one frame at 60 frames per second), from 1 to 1000.
+     */
+    cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
     /**
@@ -1624,6 +1632,8 @@ export const SHARED_RPC: readonly string[] = [
   'audit-session',
   'request-axe-run',
   'axe-result',
+  // Auth and access settings for the Dashboard, for trusted clients; no inspector owns them.
+  'security-status',
 ];
 
 /**
@@ -2070,6 +2080,7 @@ const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
   httpCalls: (value) => `${value} HTTP calls`,
   changeLog: (value) => `${value} NgRx changes`,
   cdCycles: (value) => `${value} change detection cycles`,
+  cdSlowMs: (value) => `slow cycles over ${value} ms`,
   capacitorCalls: (value) => `${value} Capacitor plugin calls`,
   idleAfterMs: (value) =>
     value ? `idle ${value / 1000} s after the last agent call` : 'never idle',
@@ -2187,6 +2198,8 @@ export interface CdCycle {
   refreshed?: number;
   /** Refreshed checks where nothing the component renders changed. */
   unchanged?: number;
+  /** True when the cycle took longer than the recording's `slowMs`. */
+  slow?: boolean;
 }
 
 /**
@@ -2350,6 +2363,8 @@ export interface CdRecording {
   cycles: CdCycle[];
   /** Older cycles removed at `limits.cdCycles`. */
   dropped: number;
+  /** Cycles longer than this, in ms, are slow (`limits.cdSlowMs`). Missing from older pages: read it as 16. */
+  slowMs?: number;
   components: CdComponentStat[];
   /**
    * Component classes checked but left out of `components`: past the 100
@@ -2689,4 +2704,44 @@ export function deferNotes(block: DeferNoteBlock, pageNow: number): DeferNote[] 
     notes.push({ kind: 'dehydrated', text: 'still dehydrated', label: 'dehydrated' });
   }
   return notes;
+}
+
+/** Whether the one-time code is off, accepted, or locked after too many wrong codes. */
+export type OneTimeCodeState = 'off' | 'accepting' | 'locked';
+
+/**
+ * The answer of the `security-status` RPC (`security-status.ts`), for trusted
+ * clients: how the server lets clients in. It never carries a token, a
+ * pairing token or the one-time code.
+ */
+export interface SecurityStatus {
+  /** False when the host did not say how it is set up; the access fields are then defaults. */
+  reported: boolean;
+  /** Whether clients need the one-time code, a trusted token or a pairing token. */
+  auth: boolean;
+  /** Whether the server checks the `Origin` of requests and WebSocket upgrades. */
+  originCheck: boolean;
+  /** Origins allowed beyond this machine and the Chrome extension, at most 20. */
+  allowedOrigins: string[];
+  /** Whether a custom origin registry decides beyond `allowedOrigins`. */
+  customOrigins: boolean;
+  /** `Host` names allowed beyond loopback, or `any`. */
+  allowedHosts: string[] | 'any';
+  /** Whether the server answers other machines, not only this one. */
+  network: boolean;
+  /** Trusted tokens from the one-time code: how many, and when they expire. */
+  tokens: {
+    count: number;
+    nextExpiresAt: number | null;
+    lastExpiresAt: number | null;
+    /** How long a token stays trusted. */
+    ttlMs: number;
+  };
+  /** Pairing tokens the server accepts instead of the code. Only their count. */
+  pairingTokens: number;
+  oneTimeCode: {
+    state: OneTimeCodeState;
+    /** When the current code expires; only while it is accepting codes. */
+    expiresAt?: number;
+  };
 }

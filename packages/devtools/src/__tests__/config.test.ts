@@ -205,6 +205,7 @@ describe('resolvePangularConfig', () => {
       httpCalls: 200,
       changeLog: 200,
       cdCycles: 200,
+      cdSlowMs: 16,
       capacitorCalls: 200,
       idleAfterMs: 60_000,
     });
@@ -228,6 +229,7 @@ describe('resolvePangularConfig', () => {
       httpCalls: 200,
       changeLog: 200,
       cdCycles: 10,
+      cdSlowMs: 16,
       capacitorCalls: 2000,
       idleAfterMs: 0,
     });

@@ -276,3 +276,38 @@ export function expireAuthTokens(
   });
   prune(context, storage);
 }
+
+/** How many tokens the store trusts and when they expire. Never the tokens themselves. */
+export interface TrustedTokenSummary {
+  count: number;
+  /** When the first of them expires, in ms since the epoch, or null with none. */
+  nextExpiresAt: number | null;
+  /** When the last of them expires, or null with none. */
+  lastExpiresAt: number | null;
+}
+
+/** Counts the store's tokens that are not yet expired, with their expiry. */
+export function summarizeTrustedTokens(
+  storage: Pick<AuthStorage, 'value'>,
+  now = Date.now(),
+  ttl = AUTH_TOKEN_TTL_MS,
+): TrustedTokenSummary {
+  const expiries = Object.values(storage.value().trusted ?? {})
+    .filter((record) => !isExpired(record, now, ttl))
+    .map((record) => (record.timestamp as number) + ttl);
+  return {
+    count: expiries.length,
+    nextExpiresAt: expiries.length ? Math.min(...expiries) : null,
+    lastExpiresAt: expiries.length ? Math.max(...expiries) : null,
+  };
+}
+
+/** The context's trusted token summary, or null when it has no token store (a static build). */
+export function trustedTokenSummary(ctx: unknown, now = Date.now()): TrustedTokenSummary | null {
+  try {
+    const storage = getInternalContext(ctx as never).storage.auth as unknown as AuthStorage;
+    return summarizeTrustedTokens(storage, now);
+  } catch {
+    return null;
+  }
+}

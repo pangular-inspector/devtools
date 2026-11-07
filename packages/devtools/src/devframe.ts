@@ -312,6 +312,8 @@ export {
 import { registerAuthTokens } from './auth-tokens.ts';
 import { registerCodeGuard } from './auth-guard.ts';
 import { expireAuthTokens, protectAuthFile, scopeAuthStore } from './auth-store.ts';
+import { securityStatusHandler, type PangularSecurityHost } from './security-status.ts';
+import { watchTokenRotation } from './auth-rotate.ts';
 import {
   BROWSER_TOOLS_CHANGED,
   BROWSER_TOOLS_STATE,
@@ -381,6 +383,9 @@ type SetupInfo = DevframeSetupInfo & {
   notAProject?: string;
   /** Library inspectors the given config leaves to the project (`autoLibraries`). */
   autoLibraries?: readonly PangularInspector[];
+  /** How the host lets clients in, and how many pairing tokens it took, for `security-status`. */
+  security?: PangularSecurityHost;
+  pairingTokens?: number;
 };
 
 const pangular = defineDevframe({
@@ -5235,6 +5240,15 @@ const pangular = defineDevframe({
         components: componentTree,
       }),
     );
+    // Auth and access for the Dashboard, trusted clients only (`security-status.ts`).
+    if (pageTools) {
+      register({
+        name: 'security-status',
+        type: 'query',
+        jsonSerializable: true,
+        handler: securityStatusHandler(ctx, info?.security, info?.pairingTokens ?? 0),
+      });
+    }
     // The panel says which dock it shows, which clears that dock's unseen count.
     register({
       name: 'hub-dock-seen',
@@ -5258,6 +5272,8 @@ export interface PangularHostOptions {
   authTokens?: string[];
   /** Server plugins: agent tools and shared state of Pangular plugins (`plugin.ts`). */
   serverPlugins?: readonly PangularServerPlugin[];
+  /** How the host lets clients in, for the Dashboard's security status (`security-status.ts`). */
+  security?: PangularSecurityHost;
   /**
    * The folder the server scans, when it holds no Angular project (a wrong
    * `--root`). Source scan tools then refuse and name it, so the agent sees
@@ -5280,6 +5296,8 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
         serverPlugins: host.serverPlugins,
         notAProject: host.notAProject,
         autoLibraries: autoLibraries(options),
+        security: host.security,
+        pairingTokens: host.authTokens?.length ?? 0,
       };
       // First, so devframe opens its token store in the private folder.
       // The stdio MCP server (no page tools) has no clients to trust.
@@ -5305,6 +5323,8 @@ function guardAuth(ctx: Parameters<typeof pangular.setup>[0]): void {
     console.warn('[pangular] The one-time code guard could not be registered.');
   }
   expireAuthTokens(ctx, protect);
+  // `pangular token --rotate` asks through the token folder (`auth-rotate.ts`).
+  if (dir) watchTokenRotation(ctx, dir);
 }
 
 /**
