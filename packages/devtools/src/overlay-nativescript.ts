@@ -48,6 +48,9 @@ import {
   type NativeView,
 } from './overlay-nativescript-views.ts';
 import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
+import { lanDevtoolsURL } from './lan-url.ts';
+
+export { lanDevtoolsURL };
 
 type DebugNg = SignalDebugNg<NativeView> & ComponentDebugNg<NativeView> & NativeScriptDebugNg;
 
@@ -60,7 +63,10 @@ const FLASH_MS = 2000;
 class UntrustedError extends Error {}
 
 export interface NativeScriptOverlayOptions {
-  /** Absolute URL of the devtools server. Defaults to `defaultDevtoolsBaseURL()`. */
+  /**
+   * Absolute URL of the devtools server. Defaults to the LAN address the build
+   * injected (`lanDevtoolsURL()`), then to `defaultDevtoolsBaseURL()`.
+   */
   baseURL?: string;
   /** How often the app reports, in milliseconds. Defaults to the server's `limits.refreshMs`. */
   intervalMs?: number;
@@ -79,7 +85,7 @@ export function defaultDevtoolsBaseURL(port = 9999): string {
 }
 
 export function initNativeScriptOverlay(options: NativeScriptOverlayOptions = {}): () => void {
-  const baseURL = options.baseURL ?? defaultDevtoolsBaseURL();
+  const baseURL = options.baseURL ?? lanDevtoolsURL() ?? defaultDevtoolsBaseURL();
   gateInjectorProfiler();
   installWebShims(baseURL);
   // Before the app starts, so stores that look for the Redux DevTools extension find the stand-in.

@@ -27,6 +27,7 @@ import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from '
 import { overlayTags } from './vite-overlay.ts';
 import { signalPrimitivesAlias } from './vite-signals-stub.ts';
 import { terminalsEnabled } from './hub-terminals.ts';
+import { lanAllowed, viteLanAddress } from './vite-lan.ts';
 
 export type { PangularConfig } from './config.ts';
 import type { PangularServerPlugin } from './plugin.ts';
@@ -57,6 +58,14 @@ export interface PangularViteOptions extends PangularConfig {
    * default. Ignored with `allowLan`.
    */
   terminals?: boolean;
+  /**
+   * Inject the dev server's LAN address into the app as `__PANGULAR_LAN_URL__`,
+   * so a phone app (Capacitor, NativeScript) built in development mode finds
+   * the devtools. `true` picks this machine's address; a string names one,
+   * such as `'192.168.1.20'`. Off by default. Needs `allowLan` in effect and
+   * `server.host` on the network; it changes nothing about who may connect.
+   */
+  lanAddress?: boolean | string;
   /** Pangular plugins' server sides: their agent tools and shared state. */
   serverPlugins?: readonly PangularServerPlugin[];
 }
@@ -72,37 +81,10 @@ export {
   isAllowedHubOrigin,
   isAllowedHubRequest,
   isHubPath,
+  lanAllowed,
   normalizeAllowedOrigins,
   type HubOriginPolicy,
 };
-
-/** Whether `allowLan` takes effect: only with the one-time code on and a remote origin listed. */
-export function lanAllowed(
-  allowLan: unknown,
-  authOn: boolean,
-  policy: HubOriginPolicy,
-  warn: (message: string) => void = () => undefined,
-): boolean {
-  if (allowLan !== true) {
-    if (allowLan !== undefined && allowLan !== false) {
-      warn(`[pangular] Ignoring allowLan: ${JSON.stringify(allowLan)}. Pass true to turn it on.`);
-    }
-    return false;
-  }
-  if (!authOn) {
-    warn(
-      '[pangular] Ignoring allowLan: it needs the one-time code, and auth is false. Only this machine can reach the devtools.',
-    );
-    return false;
-  }
-  if (!allowsRemoteOrigins({ allowedOrigins: policy.allowedOrigins })) {
-    warn(
-      '[pangular] allowLan has no effect without a network origin in allowedOrigins, such as http://192.168.1.20:5173.',
-    );
-    return false;
-  }
-  return true;
-}
 
 /** The one-time code is on unless `auth` is `false`. */
 export function hubAuthFor(auth?: boolean): boolean {
@@ -126,19 +108,32 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
   const base = normalizeHubBase(options.base ?? PANGULAR_HUB_BASE);
   const { config } = pickPangularConfig(options);
   const analog = resolvePangularConfig(config).inspectors.analog;
+  const lan = viteLanAddress(options, base);
+  let serving = true;
   return {
     name: 'pangular',
-    apply: 'serve',
+    // A development build also gets the plugin when it injects the LAN address,
+    // for an app bundled into a phone app. Then only the `define` applies.
+    apply: lan.enabled
+      ? (_config, env) => env.command === 'serve' || lan.appliesToBuild(env.mode)
+      : 'serve',
     enforce: 'pre',
-    config(user) {
+    config(user, env) {
+      serving = env?.command !== 'build';
+      const define = lan.define(user);
+      if (!serving) return define ? { define } : undefined;
       // Vite allows a relative `root`, and `createRequire` needs an absolute path.
       const alias = signalPrimitivesAlias(resolve(process.cwd(), user.root ?? ''));
-      return alias.length ? { resolve: { alias } } : undefined;
+      if (!alias.length && !define) return undefined;
+      return { ...(alias.length ? { resolve: { alias } } : {}), ...(define ? { define } : {}) };
+    },
+    configResolved(resolved) {
+      lan.report(resolved.logger);
     },
     // `pre`, so Vite's own HTML pass resolves the injected import like any other.
     transformIndexHtml: {
       order: 'pre',
-      handler: (html) => (options.overlay === false ? [] : overlayTags(html, base)),
+      handler: (html) => (options.overlay === false || !serving ? [] : overlayTags(html, base)),
     },
     configureServer(server) {
       const logger = server.config.logger;
@@ -182,6 +177,7 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
       server.middlewares.use(devtools.nodeMiddleware);
       httpServer?.once('listening', () => {
         setDevOrigin(server.resolvedUrls?.local[0]);
+        lan.checkPort(httpServer.address(), logger);
       });
       // Add the devtools URL to the URLs Vite prints at startup.
       const printUrls = server.printUrls?.bind(server);
@@ -190,6 +186,7 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
           printUrls();
           const url = devtoolsUrl(server.resolvedUrls?.local[0], base);
           if (url) logger.info(`  \u279C  Pangular Inspector: ${url}`);
+          if (lan.url) logger.info(`  \u279C  Pangular Inspector (LAN): ${lan.url}`);
         };
       }
       httpServer?.once('close', () => {
