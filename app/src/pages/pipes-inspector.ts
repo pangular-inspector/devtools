@@ -18,6 +18,7 @@ import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 import { SourceLink } from '../ui/source-link';
 import { plural } from '../format';
+import { SearchField } from '../ui/search-field';
 
 interface UsageSite {
   file: string;
@@ -155,7 +156,7 @@ const SORT_OPTIONS: readonly SelectOption<PipeSort>[] = [
 
 @Component({
   selector: 'app-pipes-inspector',
-  imports: [Select, SourceLink],
+  imports: [SearchField, Select, SourceLink],
   template: `
     <p class="intro">
       Pipes declared in your source, the built-in pipes your templates use and library pipes seen on
@@ -164,23 +165,13 @@ const SORT_OPTIONS: readonly SelectOption<PipeSort>[] = [
     </p>
 
     <div class="toolbar">
-      <div class="search">
-        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
-        <input
-          #filterInput
-          type="search"
-          placeholder="Find a pipe, class or file…"
-          aria-label="Find a pipe, class or file"
-          autocomplete="off"
-          spellcheck="false"
-          [value]="filter()"
-          (input)="filter.set($any($event.target).value)"
-          (keydown.escape)="filter.set('')"
-        />
-      </div>
+      <app-search-field
+        #filterInput
+        class="search"
+        placeholder="Filter by pipe, class or file"
+        saveKey="pipes"
+        [(value)]="filter"
+      />
       <app-select ariaLabel="Show pipes" [options]="kindOptions" [(value)]="kind" />
       <app-select ariaLabel="Sort pipes" [options]="sortOptions" [(value)]="sort" />
       <span class="total" aria-live="polite"
@@ -1292,7 +1283,7 @@ export class PipesInspector {
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
-  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
+  private readonly filterInput = viewChild<SearchField>('filterInput');
 
   rpc = input<DevframeRpcClient | null>(null);
   /** A pipe name to select, from another tab such as Components. */
@@ -1582,7 +1573,7 @@ export class PipesInspector {
   clearFilters() {
     this.filter.set('');
     this.kind.set('all');
-    this.filterInput()?.nativeElement.focus();
+    this.filterInput()?.focus();
   }
 
   highlightPipe(live: LivePipeInfo | undefined) {

@@ -856,7 +856,7 @@ export class FormsInspector {
   }
 
   /** Resets the path search and the chips, then hands focus back to the search field. */
-  clearFilters(search: HTMLInputElement) {
+  clearFilters(search: { focus(): void }) {
     this.filter.set('');
     this.active.set(new Set());
     const count = this.rows().length;

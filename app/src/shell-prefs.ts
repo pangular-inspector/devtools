@@ -82,6 +82,15 @@ export function storePassive(value: boolean) {
   write('passive', value ? 'true' : null);
 }
 
+/** The counts launcher, as the panel last set it. The popup on the page keeps its own copy. */
+export function storedPill(): boolean {
+  return read('pill') === 'true';
+}
+
+export function storePill(value: boolean) {
+  write('pill', value ? 'true' : null);
+}
+
 /** `ids` in the viewer's order: pinned first, then the rest, each in `layout.order`. */
 export function orderedTabIds(all: readonly string[], layout: TabLayout): string[] {
   const rank = (id: string) => {

@@ -25,6 +25,7 @@ import {
 import { SourceLink } from '../ui/source-link';
 import { RoutePreviewCard } from './route-preview';
 import { plural } from '../format';
+import { SearchField } from '../ui/search-field';
 
 /** "3 of 12 routes": the filtered count, worded like the other panel pages. */
 export function routeCountText(matches: number, total: number): string {
@@ -54,7 +55,7 @@ interface TestedUrl {
 
 @Component({
   selector: 'app-route-tree',
-  imports: [JsonPipe, RoutePreviewCard, SourceLink],
+  imports: [SearchField, JsonPipe, RoutePreviewCard, SourceLink],
   template: `
     <form class="test" (submit)="$event.preventDefault(); predict()">
       <label for="test-url">Test a URL</label>
@@ -116,15 +117,13 @@ interface TestedUrl {
     }
 
     <div class="filter-row">
-      <input
+      <app-search-field
         #filterInput
-        class="field filter"
-        type="search"
-        aria-label="Filter routes"
+        class="filter"
         placeholder="Filter by path, component or file"
+        saveKey="router-config"
         [value]="filter()"
-        (input)="setFilter($any($event.target).value)"
-        (keydown.escape)="setFilter('')"
+        (valueChange)="setFilter($event)"
       />
       @if (page().config) {
         <p class="muted summary">
