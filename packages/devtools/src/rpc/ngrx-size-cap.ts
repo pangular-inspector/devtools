@@ -25,12 +25,14 @@ const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
  * Caps one stored NgRx state at `max` bytes of JSON. A state under the cap is
  * returned as it is. For an object, the largest top-level slices are replaced
  * with `[too large: N KB]` until the rest fits, so the small slices stay
- * readable. Any other value past the cap becomes the marker itself.
+ * readable. Any other value past the cap becomes the marker itself, and so
+ * does an object that still doesn't fit, such as one with many small fields.
  */
 export function capNgrxState(value: unknown, max = NGRX_STATE_MAX_BYTES): unknown {
-  let total = jsonBytes(value);
+  const whole = jsonBytes(value);
+  let total = whole;
   if (total <= max) return value;
-  if (!isPlainRecord(value)) return tooLargeText(total);
+  if (!isPlainRecord(value)) return tooLargeText(whole);
   const out: Record<string, unknown> = { ...value };
   const sizes = Object.keys(out)
     .map((key) => ({ key, bytes: jsonBytes(out[key]) }))
@@ -44,16 +46,23 @@ export function capNgrxState(value: unknown, max = NGRX_STATE_MAX_BYTES): unknow
     out[key] = marker;
     total -= saved;
   }
-  return out;
+  return total <= max ? out : tooLargeText(whole);
 }
+
+/** The field a signal store's state holds when even its fields together don't fit. */
+export const NGRX_TOO_LARGE_FIELD = '[state]';
 
 /**
  * Caps a signal store's fields as one state: the largest fields give way to
- * the marker until the whole record fits.
+ * the marker until the whole record fits. When they never fit, the record
+ * holds only `[state]` with the marker, so it stays a record.
  */
 export function capNgrxFields(
   fields: Record<string, unknown>,
   max = NGRX_STATE_MAX_BYTES,
 ): Record<string, unknown> {
-  return capNgrxState(fields, max) as Record<string, unknown>;
+  const capped = capNgrxState(fields, max);
+  return typeof capped === 'string'
+    ? { [NGRX_TOO_LARGE_FIELD]: capped }
+    : (capped as Record<string, unknown>);
 }

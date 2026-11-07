@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { NgrxPageReport } from '../ngrx-shared.ts';
 import {
   NGRX_STATE_MAX_BYTES,
+  NGRX_TOO_LARGE_FIELD,
   capNgrxFields,
   capNgrxState,
   tooLargeText,
@@ -54,13 +55,20 @@ describe('NgRx state size cap', () => {
     const fn = () => undefined;
     const capped = capNgrxState(
       { a: 'x'.repeat(30), b: 1, c: fn, d: 'y'.repeat(30) },
-      10,
+      60,
     ) as Record<string, unknown>;
     // The 30-character strings shrink to the marker; the number and the function stay.
     expect(capped['a']).toBe('[too large: 1 KB]');
     expect(capped['d']).toBe('[too large: 1 KB]');
     expect(capped['b']).toBe(1);
     expect(capped['c']).toBe(fn);
+  });
+
+  it('turns a state of many small fields that still does not fit into the marker', () => {
+    const many = Object.fromEntries(Array.from({ length: 30_000 }, (_, i) => [`k${i}`, i]));
+    const capped = capNgrxState(many);
+    expect(capped).toMatch(/^\[too large: \d+ KB\]$/);
+    expect(capNgrxFields(many)).toEqual({ [NGRX_TOO_LARGE_FIELD]: capped });
   });
 
   it('caps the fields of a signal store as one state', () => {

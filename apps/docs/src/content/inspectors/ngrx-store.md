@@ -314,7 +314,7 @@ The log keeps the last 200 entries, and the page keeps the states of the same en
 
 ### State size
 
-The server keeps at most 256 KB of JSON for each store's state: the classic Store's state, and the state and computed fields of each signal store. Past that, the largest top-level slices or fields show `[too large: N KB]` instead of their value, until the rest fits. The smaller slices stay readable. The **Store** tab, the `pangular:ngrx-inspect-store` tool and the `pangular:ngrx-store` resource all read the capped state.
+The server keeps at most 256 KB of JSON for each store's state: the classic Store's state, and the state and computed fields of each signal store. Past that, the largest top-level slices or fields show `[too large: N KB]` instead of their value, until the rest fits. The smaller slices stay readable. If the state still doesn't fit, such as one with thousands of small fields, the whole state shows the marker, under a `[state]` field for a signal store. The **Store** tab, the `pangular:ngrx-inspect-store` tool and the `pangular:ngrx-store` resource all read the capped state.
 
 ### Past states assume immutable state
 
