@@ -132,7 +132,7 @@ const NATIVESCRIPT_SETUP: ComingSoonInfo = {
   ],
   link: {
     label: 'NativeScript setup guide',
-    href: 'https://pangular-inspector.dev/guides/nativescript/',
+    href: 'https://pangular-inspector.dev/getting-started/nativescript/',
   },
 };
 
@@ -187,7 +187,7 @@ const NO_ANGULAR_NATIVE: ComingSoonInfo = {
   ],
   link: {
     label: 'Set up Angular Native',
-    href: 'https://pangular-inspector.dev/guides/angular-native/',
+    href: 'https://pangular-inspector.dev/getting-started/angular-native/',
   },
 };
 

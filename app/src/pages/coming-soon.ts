@@ -12,6 +12,9 @@ export interface ComingSoonInfo {
   link?: { label: string; href: string };
 }
 
+/** The docs page that lists the supported platforms and the planned ones, with their issues. */
+export const PLATFORMS_URL = 'https://pangular-inspector.dev/getting-started/platforms/';
+
 @Component({
   selector: 'app-coming-soon',
   host: { '[style.--brand]': 'info().color' },
@@ -111,6 +114,14 @@ export interface ComingSoonInfo {
           <li [style.animation-delay.ms]="200 + i * 120">{{ plan }}</li>
         }
       </ul>
+
+      @if (info().id !== 'analog') {
+        <p class="platforms">
+          <a [href]="platformsUrl" target="_blank" rel="noopener noreferrer"
+            >Supported and planned platforms<span class="sr-only"> (opens in a new tab)</span></a
+          >
+        </p>
+      }
     </section>
   `,
   styles: `
@@ -352,6 +363,24 @@ export interface ComingSoonInfo {
       background: var(--brand);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent);
     }
+    .platforms {
+      width: 100%;
+      max-width: 440px;
+      margin: 16px auto 0;
+      font-size: 13px;
+      text-align: left;
+    }
+    .platforms a {
+      color: var(--accent-text);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .platforms a:hover {
+      color: var(--text-strong);
+    }
+    .platforms a:focus-visible {
+      @include m.focus-ring;
+    }
     @media (max-height: 640px) {
       .soon {
         padding-top: 12px;
@@ -449,6 +478,7 @@ export interface ComingSoonInfo {
 })
 export class ComingSoon {
   readonly info = input.required<ComingSoonInfo>();
+  protected readonly platformsUrl = PLATFORMS_URL;
   readonly plansTitle = computed(() => {
     const info = this.info();
     return info.plansTitle ?? (info.link ? `In an ${info.name} app` : 'On the roadmap');

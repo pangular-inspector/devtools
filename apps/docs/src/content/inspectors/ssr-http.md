@@ -52,7 +52,7 @@ app.use(devtools.ssrMiddleware);
 
 If the server uses `compression()`, mount `ssrMiddleware` after it. Mounted the other way round, the body is already compressed when `ssrMiddleware` sees it, so the render mode can't be read and **Edit TransferState** can't apply. The request detail then says so.
 
-If your server takes web-standard handlers, as Hono, h3 and Nitro do, wrap the Angular handler with `withPangularSsr()` from `@pangular-inspector/devtools/ssr` instead. It records the same data. For Fastify and Analog, the same entry point has a Node tracer. See [Trace SSR renders](../getting-started/other-servers.md#trace-ssr-renders) and [Set up Analog](../guides/analog.md#trace-server-renders).
+If your server takes web-standard handlers, as Hono, h3 and Nitro do, wrap the Angular handler with `withPangularSsr()` from `@pangular-inspector/devtools/ssr` instead. It records the same data. For Fastify and Analog, the same entry point has a Node tracer. See [Trace SSR renders](../getting-started/other-servers.md#trace-ssr-renders) and [Trace server renders](../getting-started/vite.md#trace-server-renders).
 
 ### Transfer cache options
 
@@ -98,7 +98,7 @@ The request that served the selected page opens on its own. Click another row to
 
 The middleware gives each request an id. The id reaches the render in the `x-pangular-ssr-id` request header, so the interceptor tags each server call with it. It goes back to the browser in a `Server-Timing` header (`pangular;desc="<id>"`, `render;dur=...`, `fetch;dur=...`, and `guards;dur=...` and `resolve;dur=...` when the router ran them), so the overlay links the page to the render, and the browser's own Network panel shows the same times. Each server HttpClient call also gets its own entry, `fetch-1;desc="GET /api/products";dur=12` and so on, so the **Timing** tab of the document request in Chrome lists the calls one by one. The description is the method and the masked path, without the origin or the query, which can carry secrets. The first 20 calls of a render get an entry; the `fetch` total still counts them all.
 
-A render without the `REQUEST` token from `@angular/core`, as in Analog, has no header to read. The tracer keeps the id in the request's async context instead (Node's `AsyncLocalStorage`), so each server call is linked to the request it ran under, even when several renders run at the same time. The calls of a render that is not traced are not linked to any request. A traced request with no activity for five minutes no longer counts as in flight. See [Set up Analog](../guides/analog.md#trace-server-renders).
+A render without the `REQUEST` token from `@angular/core`, as in Analog, has no header to read. The tracer keeps the id in the request's async context instead (Node's `AsyncLocalStorage`), so each server call is linked to the request it ran under, even when several renders run at the same time. The calls of a render that is not traced are not linked to any request. A traced request with no activity for five minutes no longer counts as in flight. See [Trace server renders](../getting-started/vite.md#trace-server-renders).
 
 #### Render modes
 

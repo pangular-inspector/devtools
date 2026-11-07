@@ -19,7 +19,7 @@ The Analog dock is always in the rail. In other apps it shows a **This app doesn
 
 ### Add the plugin
 
-Add the Vite plugin next to `analog()` and load the overlay. See [Vite and Analog](../getting-started/vite.md) and the [Analog guide](../guides/analog.md).
+Add the Vite plugin next to `analog()`. It also loads the overlay into your pages. See [Vite and Analog](../getting-started/vite.md).
 
 ```ts {3,7}
 // vite.config.ts
@@ -157,7 +157,7 @@ Checks grouped by rule, each with a fix. The count on the tab adds up errors and
 - A `vite.config` the scan could not read in full (rule `config-partial`). See [Config the scan cannot read](#config-the-scan-cannot-read).
 - Frontmatter errors, duplicate slugs, and content that shadows a page.
 - Frontmatter that does not match the content schema (`content-schema`), and a schema file that can't be used (`content-schema-unreadable`).
-- From the live page: `load()` fetched twice, server function reads called again after hydration, hydration errors, API routes not found, and added pages that need a restart. To catch hydration errors from the first load, add `providePangularHttp()` (see [Set up Analog](../guides/analog.md#catch-hydration-errors-from-the-first-load)).
+- From the live page: `load()` fetched twice, server function reads called again after hydration, hydration errors, API routes not found, and added pages that need a restart. To catch hydration errors from the first load, add `providePangularHttp()` (see [Catch hydration errors from the first load](../getting-started/vite.md#catch-hydration-errors-from-the-first-load)).
 
 ## Where the data comes from
 
@@ -307,11 +307,8 @@ The server keeps the last 200 calls of all tabs, and the **Server** tab renders 
 ## Where to next
 
 <ngmd-card-grid columns="2">
-  <ngmd-card icon="wrench" title="Set up Analog" link="/guides/analog" cta="Guide">
-    Install, add the plugin and load the overlay.
-  </ngmd-card>
   <ngmd-card icon="rocket" title="Vite and Analog" link="/getting-started/vite" cta="Set up">
-    The Vite plugin and its options.
+    Install the package, add the Vite plugin and trace server renders.
   </ngmd-card>
   <ngmd-card icon="layers" title="SSR & HTTP" link="/inspectors/ssr-http" cta="Open">
     The TransferState payload, with Analog entries decoded.

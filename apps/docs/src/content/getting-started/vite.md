@@ -15,7 +15,7 @@ For *Analog apps, add the *Vite plugin next to `analog()`. The plugin mounts the
 
 <ngmd-workflow>
   <ngmd-step title="Install the package">
-    Add <code>&#64;pangular-inspector/devtools</code> as a dev dependency. See <a href="./installation.md">Installation</a>.
+    Add <code>&#64;pangular-inspector/devtools</code> as a dev dependency.
   </ngmd-step>
   <ngmd-step title="Add the plugin">
     Register <code>pangular()</code> after <code>analog()</code> in <code>vite.config.ts</code>.
@@ -24,6 +24,40 @@ For *Analog apps, add the *Vite plugin next to `analog()`. The plugin mounts the
     Start the dev server and click the amber button, or open <code>/__devframes/</code>.
   </ngmd-step>
 </ngmd-workflow>
+
+## Install
+
+```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
+pnpm add -D @pangular-inspector/devtools
+```
+
+```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
+npm install -D @pangular-inspector/devtools
+```
+
+```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
+yarn add -D @pangular-inspector/devtools
+```
+
+```bash group="install" name="bun" image="https://bun.sh/logo.svg"
+bun add -D @pangular-inspector/devtools
+```
+
+### If the build fails under pnpm
+
+With pnpm, `vite build` or the dev server can stop with `SyntaxError: The requested module 'h3' does not provide an export named 'createEvent'`. `@analogjs/vite-plugin-nitro` imports `h3` without listing it as a dependency, so pnpm resolves the import to whichever `h3` it hoists. Analog's server needs `h3` 1, and this package brings `h3` 2 through *Devframe.
+
+Declare the missing dependency in `pnpm-workspace.yaml` at the root of your app (create the file if there is none), then run `pnpm install` again:
+
+```yaml
+# pnpm-workspace.yaml
+packageExtensions:
+  '@analogjs/vite-plugin-nitro':
+    dependencies:
+      h3: ^1.15.0
+```
+
+Before pnpm 10, put the same entry under `pnpm.packageExtensions` in `package.json`. Adding `h3` 1 to your own dependencies does not help, because the plugin's import still resolves to the hoisted copy.
 
 ## Add the plugin
 
@@ -53,6 +87,12 @@ The plugin adds a module script to every HTML page the dev server transforms, at
 | HTTP MCP endpoint | `/__devframes/__mcp`                   |
 
 When the dev server starts, Vite prints the full-page viewer URL under its own URLs, on a line labeled `Pangular Inspector`.
+
+The terminal also prints a one-time code. Enter it when the page or the panel asks for it. In an Analog app, open the **Analog** dock to see file routes, server calls, render modes, content and lint. See [the Analog inspector](../inspectors/analog.md) for each view.
+
+<ngmd-callout type="tip" title="Connect your agent">
+  Point your MCP client at <code>http://localhost:5173/__devframes/__mcp</code> with an <code>Origin</code> header and the bearer token. See <a href="../agents/mcp-server.md">MCP server</a>. The <code>analog-list-server-calls</code> and <code>analog-run-api</code> tools only work through the Vite plugin.
+</ngmd-callout>
 
 ## What the plugin does
 
@@ -167,6 +207,83 @@ bootstrapApplication(App, appConfig).then(() => {
 
 `import.meta.env.DEV` is false in `vite build`, so the import stays out of your production bundle. Use the same import when your framework renders HTML without passing it through Vite's `transformIndexHtml`, which is where the plugin adds the script.
 
+## Catch hydration errors from the first load
+
+The overlay can connect after the first render, so it can miss hydration errors (`NG0500` to `NG0506`) logged during the first load. `providePangularHttp()` starts listening for them when the app starts. The Analog dock lists them under **Hydration error** in **Lint**, and the `analog-inspect-page` tool returns them.
+
+Analog's own `load()` fetches and API calls show in the Analog dock without extra setup. `withPangular()` also records `HttpClient` calls in the **SSR & HTTP** tab.
+
+```ts {5,10-11}
+// src/app/app.config.ts
+import {provideHttpClient, withFetch} from '@angular/common/http';
+import {ApplicationConfig} from '@angular/core';
+import {provideFileRouter} from '@analogjs/router';
+import {providePangularHttp, withPangular} from '@pangular-inspector/devtools/http';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideFileRouter(),
+    provideHttpClient(withFetch(), withPangular()),
+    providePangularHttp(),
+  ],
+};
+```
+
+`providePangularHttp()` and `withPangular()` do nothing in production builds. See [Set up SSR & HTTP](../guides/ssr-http.md) for the interceptor order.
+
+## Trace server renders
+
+To fill the **SSR requests** table in the **SSR & HTTP** tab, add a Nitro server middleware that traces each page render. Analog runs files in `src/server/middleware` before it renders the page, on the dev server too. The middleware imports `h3`, so add `h3` 1 to your app first, the version Analog's server uses:
+
+```bash group="install-h3" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
+pnpm add h3@^1.15.0
+```
+
+```bash group="install-h3" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
+npm install h3@^1.15.0
+```
+
+```bash group="install-h3" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
+yarn add h3@^1.15.0
+```
+
+```bash group="install-h3" name="bun" image="https://bun.sh/logo.svg"
+bun add h3@^1.15.0
+```
+
+Then add the middleware:
+
+```ts
+// src/server/middleware/pangular-ssr.ts
+import {pangularSsrEventHandler} from '@pangular-inspector/devtools/ssr';
+import {defineEventHandler} from 'h3';
+
+export default defineEventHandler(pangularSsrEventHandler());
+```
+
+It wraps the Node response of each HTML request, adds the `Server-Timing` header that links the page to its render, and records the render with its render mode. Analog marks its renders `ssr-analog`, which the tab shows as **Server**. It does nothing while the Vite plugin is not running, so it is safe in a production build.
+
+Analog gives the render its own `REQUEST` token, not the one from `@angular/core`, so `withPangular()` can't read the request id from a header. Instead, the tracer keeps the id in the request's async context (Node's `AsyncLocalStorage`), and each server call is linked to the request it ran under. Renders that run at the same time each keep their own calls.
+
+The tracer skips a request that does not accept `text/html`, such as `curl` without an `Accept` header. It also skips a path in `skip`. The calls of a render it skips show in the timeline without a link to a request, even while a traced render runs alongside.
+
+The tracer drops a traced request after five minutes without activity, such as a response nobody reads. A response that keeps sending chunks stays in flight. A server call made after its request was dropped is not linked.
+
+## Try the demo
+
+The repository has an Analog demo in `examples/analog`. It has file routes with route groups, `.server.ts` loads, API routes under `src/server/routes/api/v1`, markdown content, prerendered pages and a client-only `/dashboard`.
+
+```bash
+pnpm install
+pnpm analog:dev
+```
+
+The script builds the devtools package first, then starts the Vite dev server.
+
+<ngmd-alert severity="helpful">
+  The demo aliases <code>@pangular-inspector/devtools/overlay</code> to the built package in its <code>vite.config.ts</code>, and the overlay script the plugin adds resolves through that alias. Your app does not need it.
+</ngmd-alert>
+
 ## Hostnames other than localhost
 
 ### Local hostnames
@@ -254,7 +371,9 @@ The constant reaches the pages the dev server serves and development builds, suc
   The Angular CLI dev server does not accept Vite plugins. For an Angular CLI app, mount the hub in your Express server instead. See <a href="./express.md">Angular CLI and Express</a>.
 </ngmd-alert>
 
-## FAQ
+## Troubleshooting
+
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Does the plugin change my production build?" open>
@@ -264,18 +383,18 @@ The constant reaches the pages the dev server serves and development builds, suc
     The request did not come from your machine, or its origin or the host it was sent to is not trusted. The terminal names a refused origin or host. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why does vite build fail with an h3 error under pnpm?">
-    <code>&#64;analogjs/vite-plugin-nitro</code> imports <code>h3</code> without declaring it, so pnpm can resolve it to the <code>h3</code> 2 that this package brings instead of the <code>h3</code> 1 Analog needs. The build stops with <code>The requested module 'h3' does not provide an export named 'createEvent'</code>. Declare <code>h3</code> for the plugin with <code>packageExtensions</code>, as <a href="../guides/analog.md#if-the-build-fails-under-pnpm">Set up Analog</a> shows.
+    <code>&#64;analogjs/vite-plugin-nitro</code> imports <code>h3</code> without declaring it, so pnpm can resolve it to the <code>h3</code> 2 that this package brings instead of the <code>h3</code> 1 Analog needs. The build stops with <code>The requested module 'h3' does not provide an export named 'createEvent'</code>. Declare <code>h3</code> for the plugin with <code>packageExtensions</code>, as <a href="#if-the-build-fails-under-pnpm">If the build fails under pnpm</a> shows.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The Analog tab shows no server calls">
-    The plugin records server calls made through the Vite dev server. Check that the plugin is registered and that <code>apiPrefix</code> matches your server routes. The <a href="../guides/analog.md">Analog guide</a> walks through a full setup.
+    The plugin records server calls made through the Vite dev server. Check that the plugin is registered and that <code>apiPrefix</code> matches your server routes. To link renders to the <strong>SSR & HTTP</strong> tab too, see <a href="#trace-server-renders">Trace server renders</a>.
   </ngmd-accordion-item>
 </ngmd-accordion>
 
 ## Where to next
 
 <ngmd-card-grid columns="2">
-  <ngmd-card icon="rocket" title="Set up Analog" link="/guides/analog" cta="Read the guide">
-    A full Analog setup, including the demo in this repository.
+  <ngmd-card icon="wrench" title="Troubleshooting" link="/getting-started/troubleshooting" cta="Fix a problem">
+    Symptoms every setup shares, such as no page connected or a 403.
   </ngmd-card>
   <ngmd-card icon="layers" title="Analog inspector" link="/inspectors/analog" cta="Inspector">
     File routes, server calls, render modes, content and lint.

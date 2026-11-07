@@ -20,7 +20,7 @@ npm install -D @pangular-inspector/devtools
 
 An Angular SSR server imports the hub when it starts, so install the package as a dependency there (`npm install @pangular-inspector/devtools`).
 
-For an Angular CLI app with SSR, the [quick start](./apps/docs/src/content/getting-started/quick-start.md) takes you from install to a live panel. For other setups, follow the [installation guide](./apps/docs/src/content/getting-started/installation.md): a client-only Angular CLI app, Vite and Analog, the standalone CLI, [Angular Native](./apps/docs/src/content/guides/angular-native.md), or [Capacitor](./apps/docs/src/content/guides/capacitor.md). For a coding agent, run `npx @pangular-inspector/devtools mcp`.
+For an Angular CLI app with SSR, the [quick start](./apps/docs/src/content/getting-started/quick-start.md) takes you from install to a live panel. For other setups, follow the [installation guide](./apps/docs/src/content/getting-started/installation.md): a client-only Angular CLI app, Vite and Analog, the standalone CLI, [Angular Native](./apps/docs/src/content/getting-started/angular-native.md), or [Capacitor](./apps/docs/src/content/guides/capacitor.md). For a coding agent, run `npx @pangular-inspector/devtools mcp`.
 
 ## Documentation
 
