@@ -104,7 +104,7 @@ export function registerFlagsPangularPlugin(store: FlagStore): () => void {
 }
 ```
 
-`flagsView()`, in the same file, returns a stats section and a table of flags, and lists the `reset` action while a flag is overridden. An error a page action throws reaches the agent as the tool's answer. The [sections table](./write-a-plugin.md#sections) lists every section kind.
+`flagsView()`, in the same file, returns a stats section and a table of flags. Its full source is in [`examples/pangular-plugin-example/src/pangular.ts`](https://github.com/pangular-inspector/devtools/blob/main/examples/pangular-plugin-example/src/pangular.ts). It lists the `reset` action while a flag is overridden. An error a page action throws reaches the agent as the tool's answer. The [sections table](./write-a-plugin.md#sections) lists every section kind.
 
 Keep the plugin id and version in a file both entry points import (`src/ids.ts` in the example), so the page plugin and the server plugin always match.
 
