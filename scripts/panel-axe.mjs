@@ -533,7 +533,22 @@ async function seedPages(context) {
   await context.route(
     '**/__rpc-dump/devframe~rpc~server-state~get.record.*.json',
     async (route) => {
-      const response = await route.fetch();
+      // The static report server can reset a connection under load; retry
+      // before giving up, so one reset doesn't crash the run with an unhandled rejection.
+      let response;
+      for (let attempt = 1; !response; attempt++) {
+        try {
+          response = await route.fetch();
+        } catch (error) {
+          if (attempt >= 3) {
+            // Still a failed run, but one that finishes and reports the other views.
+            console.error(`seed fetch failed for ${route.request().url()}: ${error.message}`);
+            process.exitCode = 1;
+            return route.abort('failed');
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+        }
+      }
       const body = await response.text();
       const key = Object.keys(SEEDS).find((name) => body.includes(`"${name}"`));
       if (!key) return route.fulfill({ response });
