@@ -36,7 +36,8 @@ export function attachNgrx<H extends object = Element>(
   let sentSeq = 0;
   let sentLost = 0;
   let sentMasked = 0;
-  let lastBody = '';
+  /** The collector's report version last sent, or null when nothing was (or the send failed). */
+  let sentVersion: number | null = null;
   let lastPushAt = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pushing = false;
@@ -63,15 +64,16 @@ export function attachNgrx<H extends object = Element>(
     if (pushing) return schedule(rediscover);
     pushing = true;
     try {
-      const { stores, classic } = collector.collect(rediscover);
+      const { stores, classic, version } = collector.collect(rediscover);
       const log = collector.logSince(sentSeq);
       const lost = collector.unrestorableSince(sentLost);
       const masked = collector.argsRedactedSince(sentMasked);
-      if (!stores.length && !classic && !log.length && !lastBody) return;
-      const body = JSON.stringify({ stores, classic });
+      if (!stores.length && !classic && !log.length && sentVersion === null) return;
       const quiet = !log.length && !lost.updates.length && !masked.seqs.length;
-      if (quiet && body === lastBody && !keepaliveAfter(lastPushAt, HEARTBEAT_MS)) return;
-      lastBody = body;
+      // The version goes up only when a store's report changed, so an unchanged
+      // page costs no serialization here (#368).
+      if (quiet && version === sentVersion && !keepaliveAfter(lastPushAt, HEARTBEAT_MS)) return;
+      sentVersion = version;
       lastPushAt = Date.now();
       const page = options.describe?.() ?? {
         url: redactUrl(location.pathname + location.search),
@@ -102,7 +104,7 @@ export function attachNgrx<H extends object = Element>(
       }
     } catch {
       // Not sent: the next push sends it again, as the heartbeat leaves no keepalive.
-      lastBody = '';
+      sentVersion = null;
       return;
     } finally {
       pushing = false;

@@ -181,6 +181,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 - Pages push deltas instead of full snapshots, at most about once a second, and idle pages send only a small heartbeat.
 - NgRx store updates no longer slow down as the store grows (#432).
+- The NgRx collector serializes a signal store or the classic `Store` only when its state, computed values or method stats changed, and the overlay compares a report version instead of the serialized report, so an unchanged store costs no serialization on each check (#368).
 - Collectors schedule their work outside the Angular zone, so an app that writes a signal or logs during change detection settles again on zone.js.
 - Long lists and trees in the panel render only the visible rows.
 - The agent tool list is much smaller: shorter descriptions, and library tools only for apps that use them.
@@ -221,6 +222,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The **Forms** tab shows the forms setup errors Angular logs on the page, such as `NG01203`, in a notice above the list (#368).
 - The **Forms** timeline tags a change as **agent** only when a WebMCP call wrote it, or when it is in the call's own form while the call runs (#368). Typing in any form while a long WebMCP submit is pending is tagged **user**, not **agent**.
 - The **Pipes** tab no longer marks two `| async` usages of a Promise, a Subject, an `asObservable()` view of one or an NgRx store select as duplicates, since their subscribers share one execution (#369). Any other source that two `| async` usages subscribe to shows as **possible duplicate subscription**, and `explain-pipe` says **Possible duplicate subscriptions**, because the page can't see `share()` or `shareReplay()` in a pipe.
+- Browser DevTools show the app's own line as the caller of a `console` call again. The browser entries ship source maps that list the console tap in `x_google_ignoreList`, so its wrapper frame is skipped (#369).
+- The Angular Native overlay gates the injector profiler like the NativeScript overlay: in a development build with no `window`, importing it defines one until Angular publishes its debug utilities, so the **Providers** lists fill (#371).
 
 ### Docs
 

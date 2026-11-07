@@ -24,6 +24,7 @@ import { registeredPatchState, registeredWatchState } from './ngrx-register.ts';
 import { historyRequest, type HistorySource } from './ngrx-history.ts';
 import { markSecretWriter, safeArgs, touchesSecret } from './ngrx-args.ts';
 import { SliceCache } from './ngrx-slice-cache.ts';
+import { ReportMemo, ReportVersion } from './ngrx-report-memo.ts';
 
 /**
  * Angular's `untracked` (16.0+), read at runtime: a named import of it fails
@@ -147,6 +148,9 @@ const MAX_LOG = 200;
 const MAX_DIFF = 50;
 const NOOP_GAP_MS = 1000;
 const SMALL = { depth: 4, maxKeys: 20, maxString: 300, budget: 400 };
+/** A computed that threw when read, and what the report shows for it. */
+const UNREADABLE = Symbol('unreadable');
+const COULD_NOT_READ = { '@type': 'Error', message: 'Could not read' } as const;
 // Entity ids are typically short primitives; allow more of them through than SMALL
 // so `count` (from the raw array) and the sampled `ids` stay close for most stores.
 const ENTITY_IDS_SMALL = { depth: 1, maxKeys: 500, maxString: 200, budget: 3000 };
@@ -293,6 +297,8 @@ export interface NgrxCollector {
   collect(rediscover?: boolean): {
     stores: NgrxSignalStoreInfo[];
     classic: NgrxClassicStoreInfo | null;
+    /** Goes up when `stores` or `classic` changed since the previous collect. */
+    version: number;
   };
   logSince(seq: number): NgrxLogEntry[];
   lastSeq(): number;
@@ -332,6 +338,9 @@ export function createNgrxCollector<H extends object = Element>(
   const saved = new Map<number, Saved>();
   let seq = 0;
   let classic: Classic | null = null;
+  const storeReports = new ReportMemo<NgrxSignalStoreInfo>();
+  const classicReports = new ReportMemo<NgrxClassicStoreInfo>();
+  const reportVersion = new ReportVersion();
   let classicMisses = 0;
   /** Environment injectors already searched for a classic Store. */
   const classicEnvs = new WeakSet<object>();
@@ -909,15 +918,6 @@ export function createNgrxCollector<H extends object = Element>(
     return fromSource !== undefined ? fromSource : syncValue(store);
   };
 
-  /**
-   * The serialized classic state. `last` already holds `serialize(lastRaw)`, so the
-   * state is serialized again only when the store emitted a new object since then.
-   */
-  const classicSnapshot = (c: Classic): unknown => {
-    const raw = classicState(c.store);
-    return Object.is(raw, c.lastRaw) ? c.last : serialize(raw);
-  };
-
   const logClassic = (
     c: Classic,
     type: string,
@@ -1304,27 +1304,53 @@ export function createNgrxCollector<H extends object = Element>(
     return out.length ? out : undefined;
   };
 
-  const report = () => {
-    const stores = [...tracked.values()].map((t): NgrxSignalStoreInfo => {
-      const state: Record<string, unknown> = {};
-      for (const key of t.stateKeys) {
-        state[String(key)] = serializeSlice(key, peek(t.source[key]));
+  /**
+   * One signal store's report, rebuilt only when a raw value it is made of
+   * changed (`ngrx-report-memo.ts`), so an unchanged store is not serialized.
+   */
+  const storeInfo = (t: Tracked): NgrxSignalStoreInfo => {
+    const stateRaw = t.stateKeys.map((key) => peek(t.source[key]));
+    const computedRaw: [string, unknown][] = [];
+    if (t.kind === 'signal-store') {
+      const stateNames = new Set(t.stateKeys.map(String));
+      for (const key of Object.keys(t.instance)) {
+        if (stateNames.has(key)) continue;
+        const member = (t.instance as AnyRecord)[key];
+        if (!isSignal(member)) continue;
+        computedRaw.push([key, read(() => untracked(member as () => unknown), UNREADABLE)]);
       }
+    }
+    const methods = [...t.methods].map(([name, info]) => ({
+      name,
+      calls: info.calls,
+      ...(info.rx ? { rx: true } : {}),
+      ...(info.lastDurationMs !== undefined ? { lastDurationMs: info.lastDurationMs } : {}),
+      ...(info.timedCalls > 0
+        ? { avgDurationMs: Math.round(info.totalDurationMs / info.timedCalls) }
+        : {}),
+    }));
+    const references = [...t.references].sort();
+    const key = [
+      t.stateKeys,
+      t.scope,
+      t.className,
+      t.writable,
+      JSON.stringify(methods),
+      references.join('\n'),
+      ...stateRaw,
+      ...computedRaw.flat(),
+    ];
+    return storeReports.get(t, key, () => {
+      const state: Record<string, unknown> = {};
+      t.stateKeys.forEach((name, i) => {
+        state[String(name)] = serializeSlice(name, stateRaw[i]);
+      });
       const computed: Record<string, unknown> = {};
-      if (t.kind === 'signal-store') {
-        const stateNames = new Set(t.stateKeys.map(String));
-        for (const key of Object.keys(t.instance)) {
-          if (stateNames.has(key)) continue;
-          const member = (t.instance as AnyRecord)[key];
-          if (!isSignal(member)) continue;
-          computed[key] = read(
-            () => serializeSlice(key, untracked(member as () => unknown), { budget: 5000 }),
-            {
-              '@type': 'Error',
-              message: 'Could not read',
-            },
-          );
-        }
+      for (const [name, raw] of computedRaw) {
+        computed[name] =
+          raw === UNREADABLE
+            ? { ...COULD_NOT_READ }
+            : read(() => serializeSlice(name, raw, { budget: 5000 }), { ...COULD_NOT_READ });
       }
       const entities =
         t.kind === 'signal-store' ? entitiesOf(t, new Set(Object.keys(computed))) : undefined;
@@ -1337,36 +1363,47 @@ export function createNgrxCollector<H extends object = Element>(
         state,
         computed,
         ...(entities ? { entities } : {}),
-        methods: [...t.methods].map(([name, info]) => ({
-          name,
-          calls: info.calls,
-          ...(info.rx ? { rx: true } : {}),
-          ...(info.lastDurationMs !== undefined ? { lastDurationMs: info.lastDurationMs } : {}),
-          ...(info.timedCalls > 0
-            ? { avgDurationMs: Math.round(info.totalDurationMs / info.timedCalls) }
-            : {}),
-        })),
-        references: [...t.references].sort(),
+        methods,
+        references,
         writable: t.writable,
       };
     });
+  };
 
+  /** The classic store's report, rebuilt only when its state or flags changed. */
+  const classicInfo = (c: Classic): NgrxClassicStoreInfo => {
+    const raw = classicState(c.store);
+    const paused = isPaused(c.devtools);
+    const key = [raw, c.lastRaw, c.last, !!c.devtools, c.scope, paused];
+    return classicReports.get(c, key, () => ({
+      // `last` already holds `serialize(lastRaw)`, so the state is serialized
+      // again only when the store emitted a new object since then.
+      state: Object.is(raw, c.lastRaw) ? c.last : serialize(raw),
+      devtools: !!c.devtools,
+      scope: c.scope,
+      ...(paused ? { paused: true } : {}),
+    }));
+  };
+
+  const report = () => {
+    const stores = [...tracked.values()].map(storeInfo);
+    const classicReport = classic ? classicInfo(classic) : null;
     return {
       stores,
-      classic: classic
-        ? {
-            state: classicSnapshot(classic),
-            devtools: !!classic.devtools,
-            scope: classic.scope,
-            ...(isPaused(classic.devtools) ? { paused: true } : {}),
-          }
-        : null,
+      classic: classicReport,
+      version: reportVersion.stamp([...stores, classicReport]),
     };
   };
 
   const collect = (rediscover = true) => {
     const ng = getNg();
-    if (!ng?.getInjector) return { stores: [] as NgrxSignalStoreInfo[], classic: null };
+    if (!ng?.getInjector) {
+      return {
+        stores: [] as NgrxSignalStoreInfo[],
+        classic: null,
+        version: reportVersion.stamp([]),
+      };
+    }
     if (rediscover || !discovered) {
       discover(ng);
       discovered = true;
