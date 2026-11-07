@@ -80,6 +80,31 @@ describe('loops of a secondary router app', () => {
     clearRouterNavigations(pages, 'p');
     expect(cart().loops).toEqual([]);
   });
+
+  it('drops loops a page sent and keeps only the ones the server found', () => {
+    const forged = [
+      { kind: 'burst', ids: [9], cycle: ['/x'], hops: [], guards: [], bounces: 9, end: '/x' },
+    ];
+    const pages = new Map<string, RouterPage>();
+    mergeRouterReport(pages, {
+      pageId: 'p',
+      snapshot: null,
+      navigations: [],
+      apps: [
+        { id: 'app-root', name: 'Shell', selector: 'app-root', primary: true, loops: forged },
+        { id: 'cart', name: 'Cart', selector: 'cart-widget', loops: forged },
+        { id: 'list', name: 'List', selector: 'app-list', navigations: [nav(1)], loops: forged },
+      ],
+    } as never);
+    const apps = () => pages.get('p')!.apps!;
+    expect(apps().map((a) => a.loops)).toEqual([undefined, undefined, []]);
+    pages.set('p', {
+      ...pages.get('p')!,
+      apps: apps().map((a) => ({ ...a, loops: forged })),
+    } as never);
+    clearRouterNavigations(pages, 'p');
+    expect(apps().map((a) => a.loops)).toEqual([undefined, undefined, []]);
+  });
 });
 
 describe('detectLoops', () => {

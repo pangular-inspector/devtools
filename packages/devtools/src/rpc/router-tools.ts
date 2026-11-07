@@ -517,8 +517,9 @@ export function clearRouterNavigations(pages: Pages, pageId: string, now = Date.
   delete next.platformNavigations;
   if (page.apps) {
     next.apps = page.apps.map((app) => {
-      if (!app.navigations) return app;
-      const { dropped: _dropped, ...rest } = app;
+      const { loops: _loops, ...fresh } = app;
+      if (!fresh.navigations) return fresh;
+      const { dropped: _dropped, ...rest } = fresh;
       const kept = app.navigations.filter((nav) => nav.outcome === 'pending');
       return { ...rest, navigations: kept, loops: detectLoops(kept, app.config) };
     });
@@ -544,7 +545,8 @@ export function mergeRouterReport(
   next.loops = detectLoops(next.navigations, next.config);
   // Each app of a page that runs several gets its own loops, for the panel's app view.
   if (next.apps) {
-    next.apps = next.apps.map((app) =>
+    // Loops are the server's to compute: whatever a page sent is dropped first.
+    next.apps = next.apps.map(({ loops: _loops, ...app }) =>
       app.primary || !app.navigations
         ? app
         : { ...app, loops: detectLoops(app.navigations, app.config) },
