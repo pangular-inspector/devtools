@@ -309,6 +309,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The `leaks-real` test expects the rows the collector really reports (#430).
 - Pull requests run the security and MCP end-to-end checks, and a weekly job runs the rest.
 - A CI job installs the packed package on Node.js 22.12.0, the `engines.node` floor, and loads its CLI and its `cli`, `hub`, `ssr` and `vite` entry points there (#373).
+- The `Commit message` check fails on a commit message that breaks the format, not only on a bad pull request title (#373).
 - The packed `package.json` leaves out `devDependencies`, `scripts` and the `nx` block, and declares `sideEffects`.
 - Dependencies: devframe and `@devframes/*` 1.2.6 (was 1.2.0). `@devframes/plugin-messages`, `@devframes/plugin-terminals` and `axe-core` are added. `h3` is no longer a dependency.
 
