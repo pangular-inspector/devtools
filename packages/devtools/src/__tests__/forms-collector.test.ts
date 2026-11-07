@@ -19,6 +19,9 @@ import type { FormEvent } from '../forms.ts';
 import { LEASED_PUSH_MS } from '../page-lease.ts';
 import { initAngularTestBed } from './angular-version.ts';
 
+/** The page's WebMCP global, which the DOM types don't describe. */
+const webmcp = navigator as unknown as { modelContext?: unknown };
+
 initAngularTestBed();
 
 const stops: (() => void)[] = [];
@@ -509,7 +512,7 @@ describe('forms collector', () => {
 
   it('shows the WebMCP tool of a Signal Form and tags agent calls as agent', async () => {
     const tools = new Map<string, { execute: (args: unknown) => Promise<unknown> }>();
-    (navigator as any).modelContext = {
+    webmcp.modelContext = {
       registerTool: async (tool: {
         name: string;
         execute: (args: unknown) => Promise<unknown>;
@@ -545,7 +548,7 @@ describe('forms collector', () => {
       const agentEvents = h.lastEvents().filter((e) => e.origin === 'agent');
       expect(agentEvents.map((e) => e.type)).toEqual(expect.arrayContaining(['submit', 'value']));
     } finally {
-      delete (navigator as any).modelContext;
+      delete webmcp.modelContext;
     }
   });
 });
@@ -553,7 +556,7 @@ describe('forms collector', () => {
 describe('forms collector WebMCP attribution', () => {
   it('tags user typing as user while a WebMCP call is still pending, in any form', async () => {
     const tools = new Map<string, { execute: (args: unknown) => Promise<unknown> }>();
-    (navigator as any).modelContext = {
+    webmcp.modelContext = {
       registerTool: async (tool: {
         name: string;
         execute: (args: unknown) => Promise<unknown>;
@@ -597,7 +600,7 @@ describe('forms collector WebMCP attribution', () => {
       releaseSlowSubmit();
       await pending;
     } finally {
-      delete (navigator as any).modelContext;
+      delete webmcp.modelContext;
     }
   });
 });
@@ -605,7 +608,7 @@ describe('forms collector WebMCP attribution', () => {
 describe('forms collector and a running WebMCP call', () => {
   it('tags only the outcome of a running call as agent, not values app code writes meanwhile', async () => {
     const tools = new Map<string, { execute: (args: unknown) => Promise<unknown> }>();
-    (navigator as any).modelContext = {
+    webmcp.modelContext = {
       registerTool: async (tool: {
         name: string;
         execute: (args: unknown) => Promise<unknown>;
@@ -632,7 +635,7 @@ describe('forms collector and a running WebMCP call', () => {
       releaseSlowSubmit();
       await pending;
     } finally {
-      delete (navigator as any).modelContext;
+      delete webmcp.modelContext;
     }
   });
 });

@@ -15,7 +15,7 @@ function writable<T>(initial: T) {
     set(v: T): void;
     update(fn: (v: T) => T): void;
   };
-  (getter as any)[SIGNAL] = node;
+  (getter as unknown as Record<symbol, unknown>)[SIGNAL] = node;
   getter.set = (v: T) => {
     node.value = v;
   };
@@ -25,8 +25,11 @@ function writable<T>(initial: T) {
   return getter;
 }
 
-function patchState(store: any, patch: Record<string, unknown>) {
-  for (const [key, value] of Object.entries(patch)) store[STATE_SOURCE][key].set(value);
+function patchState(store: unknown, patch: Record<string, unknown>) {
+  const source = (store as Record<symbol, Record<string, { set(value: unknown): void }>>)[
+    STATE_SOURCE
+  ];
+  for (const [key, value] of Object.entries(patch)) source[key].set(value);
 }
 
 class TodoStore {
@@ -55,7 +58,7 @@ function pageWith(store: object, options: { trace?: boolean } = {}) {
     ɵgetInjectorResolutionPath: () => [node, rootEnv],
     ɵgetInjectorProviders: () => [],
   };
-  const collector = createNgrxCollector(() => ng as any, vi.fn(), domTree(), 200, options);
+  const collector = createNgrxCollector(() => ng as never, vi.fn(), domTree(), 200, options);
   collector.collect();
   return collector;
 }
@@ -102,7 +105,7 @@ function fakeClassic(options: { trace?: boolean } = {}) {
     ɵgetInjectorProviders: () => [],
   };
   const collector = createNgrxCollector(
-    () => ng as any,
+    () => ng as never,
     () => {},
     domTree(),
     200,
@@ -265,7 +268,7 @@ describe('withDevtools() stores', () => {
         ɵgetInjectorProviders: () => [],
       };
       const collector = createNgrxCollector(
-        () => ng as any,
+        () => ng as never,
         () => {},
       );
       collector.collect();
