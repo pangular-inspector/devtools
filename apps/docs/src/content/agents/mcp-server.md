@@ -102,7 +102,7 @@ The stdio server reads the [devtools options](../getting-started/configuration.m
 
 ### What stdio can answer
 
-Over stdio, the source scan tools work: `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `ngrx-scan`, `scan-pipes` and `scan-build`. So do the tools that read files only, like `scan-pipe-usage`, `explain-pipe`, `scan-render-mode`, `analog-scan-routes` and `analog-lint`.
+Over stdio, the source scan tools work: `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `ngrx-scan`, `scan-pipes` and `scan-build`. So do the tools that read files only, like `scan-pipe-usage`, `explain-pipe`, `suggest-pipe-migrations`, `scan-render-mode`, `analog-scan-routes` and `analog-lint`.
 
 The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `run-form-action`, `fill-form`, the forms and router tools, `analog-inspect-page`, `analog-list-server-calls`, `analog-inspect-transform`, `analog-inspect-render-mode`, `analog-run-nitro-task` and `analog-run-api`. Use HTTP for those.
 

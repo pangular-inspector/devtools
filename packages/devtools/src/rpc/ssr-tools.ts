@@ -193,6 +193,19 @@ export function ssrRequestStory(
   return { request, serverCalls: own, page, refetched };
 }
 
+/**
+ * One hydration mismatch for the agent text. The page names it by the
+ * component class its node hosts when it could read one (`isClass`); otherwise
+ * `component` is the node name (`app-card`, `#text`), so it is shown as a node,
+ * not as a component.
+ */
+export function mismatchLine(m: { component: string; isClass?: boolean }): string {
+  if (m.isClass) return `Mismatch in component ${code(m.component)}`;
+  return m.component.startsWith('#')
+    ? `Mismatch at a ${code(m.component)} node`
+    : `Mismatch at element ${code(`<${m.component}>`)}`;
+}
+
 function ms(value: number): string {
   return `${value} ms`;
 }
@@ -348,9 +361,7 @@ export function explainSsrRequestText(
             : `${h.nodes?.skipped ?? 0} nodes skipped`
         }.`,
       );
-      for (const m of h.mismatches.slice(0, 10)) {
-        lines.push(`  - Mismatch in ${code(m.component)}`);
-      }
+      for (const m of h.mismatches.slice(0, 10)) lines.push(`  - ${mismatchLine(m)}`);
       for (const w of h.warnings.slice(0, 5)) lines.push(`  - ${code(w)}`);
     }
     if (h?.stableMs !== undefined) {

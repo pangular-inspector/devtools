@@ -37,6 +37,7 @@ Pangular Inspector reads a running Angular app through Angular's debug APIs and 
 | Why is the form invalid or the submit dead?           | `explain-invalid-forms`, `explain-field`, `explain-submit` (see `pangular-forms`) |
 | What errors and console messages happened?            | `list-errors`, `explain-error`, `list-console` (see `pangular-errors`)            |
 | Which HTTP calls ran, and what did SSR do?            | `list-http-calls`, `list-ssr-requests`, `explain-ssr-request`                     |
+| Are requests repeated or run one after another?       | `lint-http`                                                                       |
 | Why is it slow, or why does it re-render?             | `change-detection`, `diagnose-change-detection` (see `pangular-performance`)      |
 | What does the NgRx store or a Signal Store hold?      | `ngrx-store` resource, `ngrx-inspect-store`, `ngrx-history`                       |
 | What is declared in the source?                       | `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `scan-pipes`  |
