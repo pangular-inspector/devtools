@@ -190,7 +190,7 @@ pnpm commit:check                   # Commit messages on your branch
   </ngmd-step>
 </ngmd-workflow>
 
-A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows.
+A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows. A `windows` job (**Package tests on Windows**) runs `pnpm test:devtools` on `windows-latest`, so a path built with `/` or a file name reported with `\` fails there. It runs package scripts with Git Bash, because pnpm uses `cmd.exe` on Windows and the root `prepare` script needs a POSIX shell. In a test, build expected paths with `join()` or `resolve()` from `node:path`, and in a source scan, report file names with `relativeFile()` from `packages/devtools/src/rpc/source-scan.ts`.
 
 The source tests can't run on Node.js 22.12 itself: Node.js runs `.ts` files only from 22.18, and the build tools need newer versions too. So when a pull request or push changes `packages/devtools`, `app`, the root manifests, the lockfile, `.nvmrc` or the CI setup, the `engines-floor` job (**Packed package on Node.js 22.12**) packs the package on the `.nvmrc` version, switches to Node.js 22.12.0 and installs the tarball into an empty project with npm. It then runs `npx pangular --version`, imports the `cli`, `hub`, `ssr` and `vite` entry points, and loads the `hub` entry with `require()`. When `engines.node` changes, change the version in that job too.
 

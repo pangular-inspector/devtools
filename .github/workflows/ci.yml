@@ -95,6 +95,29 @@ jobs:
       - name: Test devtools package
         run: pnpm test:devtools
 
+  windows:
+    name: Package tests on Windows
+    # The CLI, the hub and the source scans run on developers' Windows machines too, where paths
+    # use `\` and a drive letter.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      # pnpm runs package scripts with cmd.exe on Windows, and the root `prepare` script is
+      # written for a POSIX shell. Git Bash, not the WSL `bash` that comes first on PATH.
+      npm_config_script_shell: C:\Program Files\Git\bin\bash.exe
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Test devtools package
+        run: pnpm test:devtools
+
   axe:
     runs-on: ubuntu-latest
     timeout-minutes: 15
