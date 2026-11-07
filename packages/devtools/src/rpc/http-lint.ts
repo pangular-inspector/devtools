@@ -1,4 +1,9 @@
-import { lintHttp, type HttpLintFinding, type HttpLintKind } from '../http-data.ts';
+import {
+  HTTP_LINT_DEFAULTS,
+  lintHttp,
+  type HttpLintFinding,
+  type HttpLintKind,
+} from '../http-data.ts';
 import { redactCall } from '../http-redact.ts';
 import type { HttpPage, HttpState } from '../types.ts';
 import { code } from './forms-tools.ts';
@@ -61,7 +66,7 @@ export function lintHttpText(
     [
       UNTRUSTED,
       '',
-      `${findings.length} finding${findings.length === 1 ? '' : 's'} in the ${scope}. Transfer cache hits, mocked and cancelled calls are left out. A duplicate is the same GET again within 2000 ms; a waterfall is 3 or more calls where each starts within 50 ms after the previous one ended.`,
+      `${findings.length} finding${findings.length === 1 ? '' : 's'} in the ${scope}. Transfer cache hits, mocked and cancelled calls are left out. A duplicate is the same GET again within ${HTTP_LINT_DEFAULTS.duplicateWindowMs} ms; a waterfall is ${HTTP_LINT_DEFAULTS.minChain} or more calls where each starts within ${HTTP_LINT_DEFAULTS.chainGapMs} ms after the previous one ended.`,
       ...section('duplicate', findings),
       ...section('waterfall', findings),
       ...section('refetch', findings),

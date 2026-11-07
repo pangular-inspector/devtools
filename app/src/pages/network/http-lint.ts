@@ -32,7 +32,7 @@ const KIND_LABEL: Record<HttpLintKind, string> = {
       <p class="none ok">No duplicate requests, waterfalls or repeated server calls.</p>
     } @else {
       <ul class="findings">
-        @for (finding of findings(); track finding.kind + finding.callIds.join()) {
+        @for (finding of findings(); track finding.kind + ':' + finding.callIds.join(',')) {
           <li>
             <span class="kind" [attr.data-kind]="finding.kind">{{ kindLabel(finding.kind) }}</span>
             <p class="message">

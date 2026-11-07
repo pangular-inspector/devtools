@@ -109,7 +109,7 @@ export class HarExport {
     link.href = url;
     link.download = harFileName(this.pageUrl());
     link.click();
-    setTimeout(() => URL.revokeObjectURL(url));
+    setTimeout(() => this.document.defaultView?.URL?.revokeObjectURL?.(url));
     const count = har.log.entries.length;
     this.done.emit(`Saved ${count} request${count === 1 ? '' : 's'} as ${link.download}.`);
   }
