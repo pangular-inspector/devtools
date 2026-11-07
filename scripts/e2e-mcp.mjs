@@ -2936,6 +2936,7 @@ function runDocs(state) {
   for (const m of toolsMd.matchAll(/^\| `([a-z][a-z0-9-]+)`\s+\|/gm)) documented.add(m[1]);
   const notTools = new Set([
     'page',
+    'app',
     'components',
     'route',
     'navigations',
