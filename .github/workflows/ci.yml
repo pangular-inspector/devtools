@@ -61,6 +61,20 @@ jobs:
             exit 1
           fi
 
+      # The zip step of `pnpm extension:zip`, on the bundle built above. Without
+      # PANGULAR_EXTENSION_KEY it holds no key.pem, so the artifact is only for loading and
+      # checking by hand: nothing here uploads it to the Chrome Web Store.
+      - name: Zip the Chrome extension
+        run: node scripts/extension-zip.mjs
+
+      - name: Keep the extension zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-extension
+          path: dist/pangular-inspector-extension.zip
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Smoke-test the CLI
         run: node bin.mjs --help
 

@@ -80,6 +80,8 @@ pnpm extension:zip
 
 This runs `extension:build`, then writes `dist/pangular-inspector-extension.zip`. The zip leaves out `.DS_Store` files and drops `key` from the manifest, because the Chrome Web Store refuses a manifest with a `key`.
 
+CI builds the same zip, without a key, on every pull request and push to `main`. Download it from the run's `chrome-extension` artifact to try a branch without building it.
+
 For the first upload of a new store item, give the script the private key so the store keeps the ID `dcogniffeelebaolkkfbopmjcblhblfk`:
 
 ```bash

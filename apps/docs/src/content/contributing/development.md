@@ -182,6 +182,9 @@ pnpm commit:check                   # Commit messages on your branch
   <ngmd-step title="Build the extension and check it is committed">
     <code>pnpm extension:build</code>. The job fails when <code>extension/ui</code> differs from the committed copy.
   </ngmd-step>
+  <ngmd-step title="Zip the extension">
+    The zip step of <code>pnpm extension:zip</code>, kept for 14 days as the <code>chrome-extension</code> artifact of the run. It has no <code>key.pem</code> and nothing uploads it to the Chrome Web Store.
+  </ngmd-step>
   <ngmd-step title="Smoke-test the CLI">
     <code>node bin.mjs --help</code>.
   </ngmd-step>
