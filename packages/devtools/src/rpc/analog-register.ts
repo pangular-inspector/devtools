@@ -1,6 +1,8 @@
 import {
   DEVTOOLS_HEADER,
+  bindRenderCalls,
   clearCalls,
+  dropCalls,
   devOrigin,
   duplicateLoads,
   onCalls,
@@ -12,6 +14,7 @@ import {
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { redactAnalogReport } from '../analog-redact.ts';
+import { forgetRenders, setPagesAtPath } from '../analog-call-pages.ts';
 import type { PayloadSummary } from '../http-payload.ts';
 import {
   explainUrl,
@@ -40,13 +43,14 @@ import {
   type AnalogState,
   UNTRUSTED,
 } from './analog-tools.ts';
+import type { AnalogRuntimeReport } from '../analog-runtime.ts';
+import { createScanCache } from './analog-scan-cache.ts';
 import type { PageOwners } from './page-owners.ts';
 import { fixedTtl, PAGE_TTL_MS, type PageTtl } from './page-ttl.ts';
 import { refusal } from './refusal.ts';
 
 type AnyRecord = Record<string, any>;
 
-const SCAN_CACHE_MS = 2000;
 const CALL_TIMEOUT_MS = 10_000;
 const MAX_BODY = 2000;
 
@@ -280,9 +284,15 @@ export async function registerAnalog(
   const seenAt = new Map<string, number>();
   const dropPages = (ids: string[]) => {
     if (!ids.length) return;
-    for (const id of ids) seenAt.delete(id);
+    for (const id of ids) {
+      seenAt.delete(id);
+      reports.delete(id);
+    }
     const now = current();
     apply({ ...now, pages: now.pages.filter((p) => !ids.includes(p.pageId)) });
+    // A page's calls leave with it.
+    forgetRenders(ids);
+    dropCalls((call) => !!call.pageId && ids.includes(call.pageId));
   };
   const expiry = setInterval(() => {
     const now = Date.now();
@@ -291,25 +301,45 @@ export async function registerAnalog(
         .pages.map((p) => p.pageId)
         .filter((id) => now - (seenAt.get(id) ?? 0) > ttl(id)),
     );
+    // Calls tagged with a page that never reported Analog data expire on the same clock.
+    const live = new Set(current().pages.map((p) => p.pageId));
+    dropCalls(
+      (call) => !!call.pageId && !live.has(call.pageId) && now - call.at > ttl(call.pageId),
+    );
   }, 5000);
+  setPagesAtPath((path) =>
+    current()
+      .pages.filter((p) => p.url.split(/[?#]/)[0] === path)
+      .map((p) => p.pageId),
+  );
   expiry.unref?.();
   disposeAnalog = () => {
     clearInterval(expiry);
     stopCalls();
+    stopRefresh();
+    scans.dispose();
+    setPagesAtPath(undefined);
     findServerFn = undefined;
     reportingPages = undefined;
   };
   reportingPages = () =>
     current().pages.map((p) => ({ pageId: p.pageId, reportedAt: seenAt.get(p.pageId) ?? 0 }));
 
-  let cache: { at: number; project: AnalogProject } | null = null;
-  const project = () => {
-    if (!cache || Date.now() - cache.at > SCAN_CACHE_MS) {
-      cache = { at: Date.now(), project: scanAnalog(servedAnalogRoot(ctx.cwd)) };
-    }
-    return cache.project;
-  };
-  findServerFn = (id) => project().serverFns.find((fn) => fn.id === id);
+  // The scan is kept until a file it reads changes. Queries and tools read it fresh;
+  // pushes take the last one and the rescan runs on a later tick.
+  const scans = createScanCache(() => scanAnalog(servedAnalogRoot(ctx.cwd)));
+  const project = () => scans.get();
+  /** Each page's last report before it was checked against the project, to check it again after a rescan. */
+  const reports = new Map<string, AnalogRuntimeReport>();
+  const stopRefresh = scans.onRefresh((next) => {
+    const now = current();
+    const pages = now.pages.map((p) => {
+      const report = reports.get(p.pageId);
+      return report ? resolveAnalogReport(next, report) : p;
+    });
+    apply({ ...now, pages });
+  });
+  findServerFn = (id) => scans.peek().serverFns.find((fn) => fn.id === id);
 
   my.rpc.register({
     name: 'push-analog',
@@ -319,9 +349,12 @@ export async function registerAnalog(
       if (!isAnalogReport(report)) return;
       if (options.owners && !options.owners.write(report.pageId)) return;
       seenAt.set(report.pageId, Date.now());
-      apply(
-        mergeAnalogReport(current(), resolveAnalogReport(project(), redactAnalogReport(report))),
-      );
+      const redacted = redactAnalogReport(report);
+      reports.set(report.pageId, redacted);
+      apply(mergeAnalogReport(current(), resolveAnalogReport(scans.peek(), redacted)));
+      const kept = new Set(current().pages.map((p) => p.pageId));
+      for (const id of reports.keys()) if (!kept.has(id)) reports.delete(id);
+      if (report.renderId) bindRenderCalls(report.renderId, report.pageId);
     },
   });
   my.rpc.register({
@@ -427,16 +460,21 @@ export async function registerAnalog(
     id: 'pangular:analog-list-server-calls',
     title: 'List Analog server calls',
     description:
-      'Recent Analog server calls: page renders, load() fetches, form actions, server functions and API routes, with status, time, size, caller and a masked preview. Flags load() fetched twice and server reads repeated in the browser.',
+      "Recent Analog server calls: page renders, load() fetches, form actions, server functions and API routes, with status, time, size, caller, the tab it came from when known, and a masked preview. Flags load() fetched twice and server reads repeated in the browser. Pass `page` for one tab's calls only.",
     inputSchema: {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: ['page', 'load', 'action', 'fn', 'api'] },
         route: { type: 'string' },
         limit: { type: 'number' },
+        page: {
+          type: 'string',
+          description:
+            'Page id (see pangular:list-pages): only the calls the dev server tied to that tab. Leave it out for every call, including those tied to no tab.',
+        },
       },
     },
-    handler: async (args: { kind?: string; route?: string; limit?: number }) =>
+    handler: async (args: { kind?: string; route?: string; limit?: number; page?: string }) =>
       text(analogServerCallsText(current(), args ?? {}, project().serverFns)),
   });
   ctx.agent.registerTool({

@@ -1,4 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { ANALOG_RENDER_TIMING } from './analog-call-tags.ts';
+import { beginRender, bindRender, tagRequest } from './analog-call-pages.ts';
+import { runInAnalogRender } from './ssr-context.ts';
 import { redactCredentials } from './credential-redact.ts';
 import { isRedactedKey, redactJwt } from './forms-privacy.ts';
 import { redactJsonText } from './json-text-redact.ts';
@@ -54,6 +57,10 @@ export interface AnalogCall {
   location?: string;
   seeded?: boolean;
   preview?: string;
+  /** The tab the call belongs to, when the dev server could tell (see `analog-call-pages.ts`). */
+  pageId?: string;
+  /** The page render the call belongs to: the render itself, or a request it made. */
+  renderId?: string;
 }
 
 const MAX_CALLS = 200;
@@ -78,6 +85,11 @@ export function recordCall(call: Omit<AnalogCall, 'id'>): AnalogCall {
   const full = { ...call, id: ++seq };
   calls.push(full);
   if (calls.length > MAX_CALLS) calls.splice(0, calls.length - MAX_CALLS);
+  notify();
+  return full;
+}
+
+function notify() {
   for (const listener of listeners) {
     try {
       listener(recentCalls());
@@ -85,18 +97,37 @@ export function recordCall(call: Omit<AnalogCall, 'id'>): AnalogCall {
       // a broken listener must not break the dev server
     }
   }
-  return full;
 }
 
 export function clearCalls() {
   calls.length = 0;
-  for (const listener of listeners) {
-    try {
-      listener([]);
-    } catch {
-      // a broken listener must not break the dev server
-    }
-  }
+  notify();
+}
+
+/**
+ * Tags the calls of a render with the page that reported the render's id, and
+ * the calls that render makes from now on. Returns whether a call changed.
+ */
+export function bindRenderCalls(renderId: unknown, pageId: string): boolean {
+  if (!bindRender(renderId, pageId)) return false;
+  let changed = false;
+  calls.forEach((call, i) => {
+    if (call.renderId !== renderId || call.pageId) return;
+    // A copy: the shared state may hold (and freeze) the old object.
+    calls[i] = { ...call, pageId };
+    changed = true;
+  });
+  if (changed) notify();
+  return changed;
+}
+
+/** Drops the calls `drop` picks, such as those of a page that left or expired. */
+export function dropCalls(drop: (call: AnalogCall) => boolean): void {
+  const before = calls.length;
+  const kept = calls.filter((call) => !drop(call));
+  if (kept.length === before) return;
+  calls.splice(0, before, ...kept);
+  notify();
 }
 
 export function setDevOrigin(value: string | undefined) {
@@ -208,6 +239,9 @@ export function analogMiddleware(apiPrefix = 'api') {
     const match = classify(url, req.method ?? 'GET', String(req.headers.accept ?? ''), apiPrefix);
     if (!match) return next();
     const start = performance.now();
+    const render = match.kind === 'page' ? beginRender() : undefined;
+    if (render) noteRenderTiming(res, render);
+    const tag = tagRequest(req.headers, match.kind, render);
     const chunks: Buffer[] = [];
     let captured = 0;
     let bytes = 0;
@@ -257,6 +291,7 @@ export function analogMiddleware(apiPrefix = 'api') {
         ms: Math.round(performance.now() - start),
         bytes,
         from: fromOf(req),
+        ...tag,
       };
       if (match.kind === 'page') {
         call.render =
@@ -272,6 +307,7 @@ export function analogMiddleware(apiPrefix = 'api') {
             ms: 0,
             from: 'ssr',
             seeded: true,
+            ...tag,
           });
         }
       } else {
@@ -289,8 +325,22 @@ export function analogMiddleware(apiPrefix = 'api') {
       }
       recordCall(call);
     });
-    next();
+    // The render's own load() and server function requests name it (`withPangular()`).
+    if (render) runInAnalogRender(render, next);
+    else next();
   };
+}
+
+/** Sends the render id to the browser, which reports it with the page, in Server-Timing. */
+function noteRenderTiming(res: ServerResponse, render: string) {
+  try {
+    const entry = `${ANALOG_RENDER_TIMING};desc="${render}"`;
+    const existing = res.getHeader('server-timing');
+    const before = Array.isArray(existing) ? existing.join(', ') : existing;
+    res.setHeader('server-timing', before ? `${before}, ${entry}` : entry);
+  } catch {
+    // Headers already sent: the page stays untagged.
+  }
 }
 
 export interface DuplicateLoad {

@@ -1,3 +1,4 @@
+import { readRenderId } from './analog-call-tags.ts';
 import { keepaliveDue } from './change-detection.ts';
 import { hasStateScript, scanHydration } from './http-hydration.ts';
 import { isRedactedKey, redactMessage } from './forms-privacy.ts';
@@ -40,6 +41,8 @@ export interface AnalogRuntimeReport {
   transferState: boolean;
   hydrationErrors: string[];
   configPaths: string[];
+  /** The id the Vite plugin gave the render of this document (Server-Timing), so its server calls join this page. */
+  renderId?: string;
 }
 
 const MAX_PREVIEW = 1000;
@@ -272,6 +275,7 @@ export function collectAnalog(
   pageId: string,
   hydrationErrors: string[],
   scanner?: HydrationScanner,
+  renderId?: string,
 ): AnalogRuntimeReport | null {
   const router = routerOf(ng);
   if (!router) return null;
@@ -297,6 +301,7 @@ export function collectAnalog(
     ).map((error) => redactText(error, secrets)),
     configPaths: paths,
   };
+  if (renderId) report.renderId = renderId;
   const context = rootEl?.getAttribute('ng-server-context');
   if (context) report.serverContext = context;
   const load = loadSummary(data);
@@ -330,10 +335,18 @@ export function attachAnalog(
     }
   };
   const stopConsole = tapConsole(['error', 'warn'], (_level, args) => record([...args]));
+  // Read once: the document, and so its render, stays the same for the page's life.
+  const renderId = readRenderId();
+  const registry = httpRegistry();
 
   const push = () => {
-    const report = read(() => collectAnalog(getNg(), pageId, hydrationErrors, scanner), null);
+    const report = read(
+      () => collectAnalog(getNg(), pageId, hydrationErrors, scanner, renderId),
+      null,
+    );
     if (!report || !report.analog) return;
+    // On an Analog page, the app's dev interceptor sends this id on same-origin requests.
+    registry.pageId = pageId;
     const text = JSON.stringify(report);
     if (text === last && !keepaliveDue(lastAt, refreshMs)) return;
     last = text;
@@ -374,5 +387,6 @@ export function attachAnalog(
     clearInterval(interval);
     subscription?.unsubscribe();
     stopConsole();
+    if (registry.pageId === pageId) delete registry.pageId;
   };
 }

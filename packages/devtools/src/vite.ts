@@ -6,6 +6,7 @@ import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { PANGULAR_HUB_BASE, startPangularHub } from './hub.ts';
 import { analogMiddleware, setDevOrigin } from './analog-server-log.ts';
 import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
+import { viteScanWatcher } from './rpc/analog-scan-cache.ts';
 import { releaseServerState } from './server-state.ts';
 import { normalizeAllowedOrigins } from './allowed-origins.ts';
 import {
@@ -157,6 +158,9 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         setAnalogRoot(server.config.root);
         const apiPrefix = options.apiPrefix ?? analogConfig(server.config.root).apiPrefix;
         server.middlewares.use(analogMiddleware(apiPrefix));
+        // The Analog source scan is kept until this watcher sees a change. With
+        // `server.watch: null` Vite's watcher never fires, so the cache watches by itself.
+        if (server.config.server?.watch !== null) server.watcher?.on('all', viteScanWatcher());
       }
       const httpServer = server.httpServer;
       // The plugin runs the gate itself, in front of the whole dev server.

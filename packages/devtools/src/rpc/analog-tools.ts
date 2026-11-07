@@ -1,4 +1,6 @@
 import { defaultPage } from './default-page.ts';
+import { callerPage } from './page-scope.ts';
+import { unknownPageText } from './pages.ts';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
@@ -9,6 +11,7 @@ import type {
 } from '../analog-server-log.ts';
 import { duplicateLoads, refetchedServerFns } from '../analog-server-log.ts';
 import type { AnalogRuntimeReport } from '../analog-runtime.ts';
+import { isRenderId } from '../analog-call-tags.ts';
 import { PARTIAL_HINT } from './analog-config-partial.ts';
 import {
   explainUrl,
@@ -82,6 +85,7 @@ export function isAnalogReport(value: unknown): value is AnalogRuntimeReport {
       (typeof r.loadFrom === 'number' && Number.isInteger(r.loadFrom) && r.loadFrom >= 0)) &&
     typeof r.hydrated === 'number' &&
     typeof r.transferState === 'boolean' &&
+    (r.renderId === undefined || isRenderId(r.renderId)) &&
     isStrings(r.hydrationErrors, 50) &&
     isStrings(r.configPaths, 1000) &&
     (r.load === undefined ||
@@ -337,21 +341,33 @@ function fnLabel(fns: AnalogServerFn[], id: string): string {
 
 export function analogServerCallsText(
   state: AnalogState,
-  args: { kind?: string; route?: string; limit?: number },
+  args: { kind?: string; route?: string; limit?: number; page?: string },
   fns: AnalogServerFn[] = [],
 ): string {
   const limit = Math.min(Math.max(args.limit ?? 30, 1), 200);
   const nameOf = (c: AnalogCall) =>
     c.kind === 'fn' ? (fns.find((f) => f.id === c.route)?.name ?? '') : '';
-  const calls = state.calls.filter(
+  // A page tool answers for its own tab only, whatever `page` says.
+  const page = callerPage() ?? args.page;
+  if (
+    page &&
+    !state.pages.some((p) => p.pageId === page) &&
+    !state.calls.some((c) => c.pageId === page)
+  ) {
+    return unknownPageText(page, state.pages, 'Analog data');
+  }
+  const own = page ? state.calls.filter((c) => c.pageId === page) : state.calls;
+  const calls = own.filter(
     (c) =>
       (!args.kind || c.kind === args.kind) &&
       (!args.route || (c.route ?? c.url).includes(args.route) || nameOf(c).includes(args.route)),
   );
   if (!calls.length) {
-    return state.calls.length
-      ? 'No server call matches.'
-      : 'No server calls recorded yet. Calls are logged by the pangular() Vite plugin while the dev server runs.';
+    if (own.length) return 'No server call matches.';
+    if (page) {
+      return `No server call recorded for page ${code(page)} yet. Calls the dev server could not tie to a tab are left out${callerPage() ? '' : '; call without `page` to see every call'}.`;
+    }
+    return 'No server calls recorded yet. Calls are logged by the pangular() Vite plugin while the dev server runs.';
   }
   const lines = calls.slice(-limit).map((c) => {
     const time = new Date(c.at).toISOString().slice(11, 23);
@@ -364,14 +380,15 @@ export function analogServerCallsText(
       c.outcome ? ACTION_OUTCOME[c.outcome] : '',
       c.location ? `to ${code(c.location)}` : '',
       c.bytes !== undefined ? `${c.bytes} B` : '',
+      !page && c.pageId ? `page ${code(c.pageId)}` : '',
     ]
       .filter(Boolean)
       .join(', ');
     const name = nameOf(c) ? ` ${fnLabel(fns, c.route!)}` : '';
     return `- ${time} ${c.kind}${name} ${c.method} ${code(c.url)} ${c.status} in ${c.ms}ms (${extra})${c.preview ? `\n  ${c.preview.slice(0, 300)}` : ''}`;
   });
-  const dupes = duplicateLoads(state.calls);
-  const refetches = refetchedServerFns(state.calls);
+  const dupes = duplicateLoads(own);
+  const refetches = refetchedServerFns(own);
   const notes = [
     dupes.length
       ? `Fetched twice (server render, then again in the browser): ${dupes.map((d) => code(d.route)).join(', ')}. TransferState did not serve the server result (see analogjs/analog#2525).`
