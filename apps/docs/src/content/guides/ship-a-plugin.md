@@ -195,32 +195,10 @@ Then tell the apps that use your library to make two changes.
   </ngmd-step>
 </ngmd-workflow>
 
-The Analog demo keeps its flags in a service and registers the tab from an app initializer. The dynamic import keeps the page entry out of the main bundle:
+The Analog demo keeps its flags in a `FeatureFlags` service and registers the tab from an app initializer. The dynamic import keeps the page entry out of the main bundle:
 
 ```ts
-// examples/analog/src/app/shared/feature-flags.ts
-import {isPlatformBrowser} from '@angular/common';
-import {
-  DestroyRef,
-  PLATFORM_ID,
-  Service,
-  inject,
-  provideAppInitializer,
-  type EnvironmentProviders,
-} from '@angular/core';
-import {createFlagStore} from 'pangular-plugin-example';
-
-/** The demo's flags, kept in the example library's store. */
-@Service()
-export class FeatureFlags {
-  readonly store = createFlagStore({
-    'promo-banner': {
-      default: false,
-      description: 'Shows the free shipping banner on the home page.',
-    },
-  });
-}
-
+// From examples/analog/src/app/shared/feature-flags.ts
 export function provideFeatureFlagsPangularPlugin(): EnvironmentProviders {
   return provideAppInitializer(() => {
     if (typeof ngDevMode !== 'undefined' && !ngDevMode) return;
@@ -235,7 +213,7 @@ export function provideFeatureFlagsPangularPlugin(): EnvironmentProviders {
 }
 ```
 
-`FeatureFlags` is the demo's service that holds the store; the real one also turns store changes into a signal for templates. `@Service()` needs Angular 22 or later. On an older version, declare the service with `@Injectable({providedIn: 'root'})`. Add `provideFeatureFlagsPangularPlugin()` to the app's providers. Then pass the server plugin to the Vite plugin:
+The complete file, with its imports and the `FeatureFlags` service, is [`examples/analog/src/app/shared/feature-flags.ts`](https://github.com/pangular-inspector/devtools/blob/main/examples/analog/src/app/shared/feature-flags.ts). It needs Angular 22 or later, since it uses `@Service()`, `DestroyRef.destroyed` and `provideAppInitializer()`. Add `provideFeatureFlagsPangularPlugin()` to the app's providers. Then pass the server plugin to the Vite plugin:
 
 ```ts {4,8}
 // examples/analog/vite.config.ts
@@ -249,7 +227,7 @@ export default defineConfig(() => ({
 }));
 ```
 
-An Express app passes the same array to `initPangularHub({serverPlugins})`, as [Add agent tools](./write-a-plugin.md#add-agent-tools) shows.
+An Express app passes the same array to `initPangularHub({serverPlugins})`, as [Add agent tools](./write-a-plugin.md#add-agent-tools) shows. Either way, the app must load the [overlay](../getting-started/overlay.md), or no plugin view appears in the panel.
 
 Run `pnpm analog:dev` and open the panel. The **Plugins** tab lists **Feature flags**. Ask an agent to turn `promo-banner` on, and the banner appears on the home page.
 
