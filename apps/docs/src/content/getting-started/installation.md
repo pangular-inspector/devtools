@@ -29,6 +29,49 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
   Live data comes from Angular's debug API (<code>window.ng</code>). Production builds remove it, so the live tabs stay empty there. Run your app in development mode while you inspect it.
 </ngmd-callout>
 
+## Supported setups
+
+Every setup has a server part, which serves the panel, and the [overlay](./overlay.md), which sends live data from your page. Find your app in the table, then follow its page.
+
+| Your app                                       | Dev server or builder                                 | Server part                                                       | Steps  | Install check |
+| ---------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------- | ------ | ------------- |
+| Angular CLI with SSR                           | `ng serve` or the built SSR server (`@angular/build`) | [`initPangularHub()` in `server.ts`](./express.md)                | 3      | Weekly        |
+| Angular CLI without SSR                        | `ng serve` with a proxy (`@angular/build`)            | [Standalone CLI next to `ng serve`](#client-only-angular-cli-app) | 5      | Weekly        |
+| Analog                                         | Vite                                                  | [Vite plugin](./vite.md)                                          | 2      | Weekly        |
+| Another Angular app with its own `vite.config` | Vite                                                  | [Vite plugin](./vite.md)                                          | 2      | No            |
+| Angular SSR on Hono, h3 or Fastify             | Your server                                           | [`initPangularHub()` handler](./other-servers.md)                 | 3      | No            |
+| Your source files, with no app running         | None                                                  | [Standalone CLI](./cli.md)                                        | 1      | Weekly        |
+| NativeScript, Angular Native or Capacitor      | The platform's own tooling                            | Standalone CLI or a hub                                           | 3 to 4 | No            |
+
+Steps count what you add to the app, from the install to the first **Live** panel. The [Chrome extension](./chrome-extension.md) works on top of any setup with a browser page and adds no server part. [Platforms](./platforms.md) lists the device targets and what is checked on each.
+
+### Builders
+
+The builder bundles your app and the overlay import in `main.ts`. Only the Vite plugin plugs into it. The other server parts run in your server or in the standalone CLI.
+
+| Builder                                                      | Status                                                                                                                                                                                                                |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@angular/build:application` and `@angular/build:dev-server` | Supported. The weekly install check runs it on Angular 20.3, 21 and 22, with and without SSR.                                                                                                                         |
+| Vite, through `@analogjs/platform`                           | Supported. The weekly install check runs a fresh Analog app.                                                                                                                                                          |
+| Vite, with your own `vite.config`                            | Supported through the same plugin, but not tested. The Angular CLI dev server does not accept Vite plugins, so `ng serve` apps use the hub or the CLI instead.                                                        |
+| `@angular-devkit/build-angular:browser` (webpack)            | Supported, but not in the install check. Load the overlay in `main.ts` and run the standalone CLI next to `ng serve`, or the Express hub for an SSR app. See [Setup on Angular 12 to 19](#setup-on-angular-12-to-19). |
+| Nx executors                                                 | Not tested. The standalone CLI reads every `project.json` of the workspace, see [Nx workspaces](./cli.md#nx-workspaces). The rest depends on the builder the executor runs.                                           |
+| Rsbuild and other bundlers                                   | Not tested.                                                                                                                                                                                                           |
+
+### What the install check runs
+
+The weekly E2E workflow packs the package, publishes it to a local registry, installs it into fresh apps the way these pages say. Each cell with an app builds it, starts it, and opens the app and the panel in Chromium until the **Components** tab shows the app root.
+
+| Cell                | App                                                                                            | Package managers | Angular         |
+| ------------------- | ---------------------------------------------------------------------------------------------- | ---------------- | --------------- |
+| `angular-cli`       | `ng new --ssr` with the Express hub, built for development and run on the SSR server           | npm, pnpm        | 20.3, 21 and 22 |
+| `angular-cli-serve` | The same app under `ng serve`                                                                  | npm, pnpm        | 20.3, 21 and 22 |
+| `angular-cli-nossr` | `ng new --ssr=false` with the standalone CLI behind the `ng serve` proxy                       | npm, pnpm        | 20.3, 21 and 22 |
+| `analog`            | `create-analog` with the Vite plugin, built with `vite build`, then run on the Vite dev server | pnpm             | The template's  |
+| `cli`               | The standalone CLI with `npx`, its MCP endpoint and the static report                          | npm, pnpm        | Newest          |
+
+yarn and bun are not in the weekly run. [End-to-end scripts](../contributing/development.md#end-to-end-scripts) shows how to run the cells yourself.
+
 ## Supported Angular versions
 
 The peer range covers Angular 12.2 and later, and CI tests it (see [Tested versions](#tested-versions)). The overlay checks each debug API on the page and sends what it finds with the page's Angular version, so each tab shows the data that version provides. Only the profiler also looks at the version: the overlay uses `ɵsetProfiler` from Angular 20.0, because before that it holds a single profiler.
