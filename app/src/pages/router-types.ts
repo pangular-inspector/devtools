@@ -207,6 +207,58 @@ export interface RouterPage {
   instrumented?: boolean;
   loops?: NavigationLoop[];
   platformNavigations?: PlatformNavigation[];
+  /** Every Angular app on the page with a Router, when there is more than one. */
+  apps?: RouterApp[];
+  /** Set on the view of one app of a page that runs several (`routerAppView`). */
+  appId?: string;
+}
+
+/** One Angular app with its own Router on a page that runs several. */
+export interface RouterApp {
+  id: string;
+  name: string;
+  selector: string;
+  /** The app the top level of the page describes. */
+  primary?: true;
+  snapshot?: RouterPage['snapshot'];
+  navigations?: NavigationRecord[];
+  dropped?: number;
+  generation?: number;
+  config?: RouteNode[];
+  configTruncated?: number;
+  activeIds?: string[];
+  setup?: RouterSetup;
+}
+
+/** The apps of a page that runs more than one Angular app with a Router, else none. */
+export function routerAppsOf(page: RouterPage | null | undefined): RouterApp[] {
+  return page?.apps && page.apps.length > 1 ? page.apps : [];
+}
+
+/**
+ * The page as one of its apps sees it, as the server builds it for the agent
+ * tools: that app's route, navigations, config and setup in place of the first
+ * app's. Outlets, links, preloads and guard recording belong to the first app.
+ */
+export function routerAppView(page: RouterPage, appId: string | null): RouterPage {
+  const app = routerAppsOf(page).find((a) => a.id === appId);
+  if (!app) return page;
+  if (app.primary) return { ...page, appId: app.id };
+  return {
+    pageId: page.pageId,
+    reportedAt: page.reportedAt,
+    changedAt: page.changedAt,
+    snapshot: app.snapshot ?? null,
+    navigations: app.navigations ?? [],
+    dropped: app.dropped,
+    generation: app.generation,
+    config: app.config,
+    configTruncated: app.configTruncated,
+    activeIds: app.activeIds,
+    setup: app.setup,
+    apps: page.apps,
+    appId: app.id,
+  };
 }
 
 export interface LintFinding {
@@ -307,9 +359,12 @@ export async function routerAction(
   client: DevframeRpcClient | null,
   pageId: string | undefined,
   request: Record<string, unknown>,
+  /** One app of a page that runs several (`RouterPage.appId`). */
+  app?: string,
 ): Promise<Record<string, unknown>> {
   const result = await routerCall<Record<string, unknown>>(client, 'request-router-action', {
     pageId,
+    ...(app ? { app } : {}),
     request,
   });
   return result ?? { error: PAGE_UNREACHABLE };

@@ -901,6 +901,7 @@ export class RouteTimeline {
     this.http.update((all) => ({ ...all, [nav.id]: 'loading' }));
     const result = await routerCall<NavigationCalls>(this.rpc(), 'router-http', {
       pageId,
+      app: this.page().appId,
       id: nav.id,
     });
     if (pageId !== this.pageId()) return;
@@ -915,7 +916,12 @@ export class RouteTimeline {
     const on = checkbox.checked;
     const pageId = this.pageId();
     const seq = ++this.instrumentSeq;
-    const result = await routerAction(this.rpc(), pageId, { action: 'instrument', on });
+    const result = await routerAction(
+      this.rpc(),
+      pageId,
+      { action: 'instrument', on },
+      this.page().appId,
+    );
     // A newer toggle owns the checkbox now; this late answer must not undo it.
     if (seq !== this.instrumentSeq) return;
     if (pageId !== this.pageId()) {
@@ -945,10 +951,12 @@ export class RouteTimeline {
   async replay(nav: NavigationRecord) {
     this.message.set(`Replaying #${nav.id}…`);
     const pageId = this.pageId();
-    const result = await routerAction(this.rpc(), pageId, {
-      action: 'replay',
-      id: nav.id,
-    });
+    const result = await routerAction(
+      this.rpc(),
+      pageId,
+      { action: 'replay', id: nav.id },
+      this.page().appId,
+    );
     if (pageId !== this.pageId()) return;
     if (result['error']) {
       this.message.set(String(result['error']));
@@ -962,7 +970,11 @@ export class RouteTimeline {
 
   async copy(nav: NavigationRecord) {
     const pageId = this.pageId();
-    const text = await routerCall<string>(this.rpc(), 'router-export', { pageId, id: nav.id });
+    const text = await routerCall<string>(this.rpc(), 'router-export', {
+      pageId,
+      app: this.page().appId,
+      id: nav.id,
+    });
     if (pageId !== this.pageId()) return;
     if (!text) {
       this.message.set('Could not build the repro.');
