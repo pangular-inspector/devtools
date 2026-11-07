@@ -204,6 +204,14 @@ export interface PangularConfig {
     secretNames?: string[];
     /** Field names to show even when they look secret, like `window.__PANGULAR_FORMS__.unmask`. */
     unmask?: string[];
+    /**
+     * Also mask high-entropy strings that no name or shape rule catches, such
+     * as an opaque token in a harmless-looking field. Off by default. Hex
+     * values (hashes, UUIDs), ULIDs and camelCase identifiers stay readable.
+     * `true` uses runs of 24 characters or more and 4.5 bits per character;
+     * an object sets `minLength` (16 to 512) and `threshold` (2 to 6 bits).
+     */
+    entropy?: boolean | { minLength?: number; threshold?: number };
   };
   limits?: {
     /**
@@ -305,7 +313,8 @@ export interface ResolvedPangularConfig {
     browserTools: boolean;
   };
   actions: Record<PangularAction, boolean>;
-  redaction: { secretNames: string[]; unmask: string[] };
+  /** `entropy` is set only when it is on, so a default config keeps its two lists. */
+  redaction: { secretNames: string[]; unmask: string[]; entropy?: EntropyOptions };
   limits: Record<PangularLimit, number>;
   popup: { hotkey: string | false };
   /** The `plugins` entries that were given, by plugin id. */
@@ -616,6 +625,72 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
+// `redaction.entropy`. Defined here rather than in `entropy-redact.ts`, since
+// the panel type-checks this file, which has no imports.
+
+/** How `redaction.entropy` judges a run, once it is on. */
+export interface EntropyOptions {
+  /** Shortest run that can be masked. */
+  minLength: number;
+  /** The most bits per character a run needs, however long it is. */
+  threshold: number;
+}
+
+/** `redaction.entropy: true`. */
+export const ENTROPY_DEFAULTS: Readonly<EntropyOptions> = Object.freeze({
+  minLength: 24,
+  threshold: 4.5,
+});
+
+/** The `minLength` values `redaction.entropy` takes: whole numbers in this range. */
+export const ENTROPY_MIN_LENGTH = { min: 16, max: 512 } as const;
+/**
+ * The `threshold` values it takes, in bits per character. Six bits is the most
+ * a run over the base64 alphabet can have.
+ */
+export const ENTROPY_THRESHOLD = { min: 2, max: 6 } as const;
+
+/** Whether `value` is a usable `minLength`. */
+export function validEntropyMinLength(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= ENTROPY_MIN_LENGTH.min &&
+    value <= ENTROPY_MIN_LENGTH.max
+  );
+}
+
+/** Whether `value` is a usable `threshold`. */
+export function validEntropyThreshold(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= ENTROPY_THRESHOLD.min &&
+    value <= ENTROPY_THRESHOLD.max
+  );
+}
+
+/**
+ * The options a `redaction.entropy` value turns on, or `undefined` while it
+ * is off: `true` and an object turn it on, anything else leaves it off. A
+ * field that is missing or out of range takes its default.
+ */
+export function resolveEntropy(value: unknown): EntropyOptions | undefined {
+  if (value === true) return { ...ENTROPY_DEFAULTS };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { minLength, threshold } = value as { minLength?: unknown; threshold?: unknown };
+  return {
+    minLength: validEntropyMinLength(minLength) ? minLength : ENTROPY_DEFAULTS.minLength,
+    threshold: validEntropyThreshold(threshold) ? threshold : ENTROPY_DEFAULTS.threshold,
+  };
+}
+
+/** `{entropy}` when `redaction.entropy` turns it on, `{}` while it is off. */
+function entropyOf(value: unknown): { entropy?: EntropyOptions } {
+  const entropy = resolveEntropy(value);
+  return entropy ? { entropy } : {};
+}
+
 function flag(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
@@ -693,6 +768,7 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
     redaction: {
       secretNames: names(redaction['secretNames']),
       unmask: names(redaction['unmask']),
+      ...entropyOf(redaction['entropy']),
     },
     limits: Object.fromEntries(
       (Object.keys(PANGULAR_LIMITS) as PangularLimit[]).map((key) => [
@@ -798,6 +874,11 @@ function describe(value: unknown): string {
   return typeof value === 'string' ? `the string ${JSON.stringify(value)}` : `a ${typeof value}`;
 }
 
+/** A number as it was written, anything else as `describe()` names it. */
+function shown(value: unknown): string {
+  return typeof value === 'number' ? String(value) : describe(value);
+}
+
 const CONFIG_KEYS = [
   'inspectors',
   'agent',
@@ -862,7 +943,27 @@ export function pangularConfigProblems(config: unknown): string[] {
       booleans('actions', actions, PANGULAR_ACTIONS, 'allowed');
     }
   }
-  const redaction = object('redaction', input['redaction'], ['secretNames', 'unmask']);
+  const redaction = object('redaction', input['redaction'], ['secretNames', 'unmask', 'entropy']);
+  const entropy = redaction['entropy'];
+  if (entropy !== undefined && typeof entropy !== 'boolean') {
+    if (!isRecord(entropy)) {
+      problems.push(
+        `\`redaction.entropy\` should be true, false or an object, got ${describe(entropy)}. It was ignored, so it is off.`,
+      );
+    } else {
+      const fields = object('redaction.entropy', entropy, ['minLength', 'threshold']);
+      if (fields['minLength'] !== undefined && !validEntropyMinLength(fields['minLength'])) {
+        problems.push(
+          `\`redaction.entropy.minLength\` should be a whole number from ${ENTROPY_MIN_LENGTH.min} to ${ENTROPY_MIN_LENGTH.max}, got ${shown(fields['minLength'])}. It uses ${ENTROPY_DEFAULTS.minLength}.`,
+        );
+      }
+      if (fields['threshold'] !== undefined && !validEntropyThreshold(fields['threshold'])) {
+        problems.push(
+          `\`redaction.entropy.threshold\` should be a number of bits from ${ENTROPY_THRESHOLD.min} to ${ENTROPY_THRESHOLD.max}, got ${shown(fields['threshold'])}. It uses ${ENTROPY_DEFAULTS.threshold}.`,
+        );
+      }
+    }
+  }
   for (const key of ['secretNames', 'unmask'] as const) {
     const value = redaction[key];
     if (value === undefined) continue;
@@ -1936,6 +2037,19 @@ const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
     value ? `idle ${value / 1000} s after the last agent call` : 'never idle',
 };
 
+/** `On`, with the options that differ from `redaction.entropy: true`, or nothing while it is off. */
+function entropySummary(entropy: EntropyOptions | undefined): string[] {
+  if (!entropy) return [];
+  const parts = ['On'];
+  if (entropy.minLength !== ENTROPY_DEFAULTS.minLength) {
+    parts.push(`${entropy.minLength} characters or more`);
+  }
+  if (entropy.threshold !== ENTROPY_DEFAULTS.threshold) {
+    parts.push(`up to ${entropy.threshold} bits per character`);
+  }
+  return parts;
+}
+
 /** The options that differ from the defaults, as label and value pairs. Empty when nothing is changed. */
 export function summarizePangularConfig(
   config: ResolvedPangularConfig,
@@ -1962,6 +2076,7 @@ export function summarizePangularConfig(
   );
   add('Extra secret names', config.redaction.secretNames);
   add('Unmasked names', config.redaction.unmask);
+  add('Entropy masking', entropySummary(config.redaction.entropy));
   add(
     'Limits',
     (Object.keys(PANGULAR_LIMITS) as PangularLimit[])

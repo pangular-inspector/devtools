@@ -1,4 +1,5 @@
 import { redactCredentials } from './credential-redact.ts';
+import { redactHighEntropy, setEntropyRedaction, type EntropyOptions } from './entropy-redact.ts';
 import { RedactionScope } from './redaction-scope.ts';
 
 export const REDACTED = '[redacted]';
@@ -177,7 +178,14 @@ let secretNames: string[] = [];
 let unmaskNames: string[] = [];
 
 /** Applies the `redaction` devtools config on top of the built-in rules. */
-export function setRedaction(options: { secretNames?: string[]; unmask?: string[] } = {}) {
+export function setRedaction(
+  options: {
+    secretNames?: string[];
+    unmask?: string[];
+    entropy?: boolean | Partial<EntropyOptions>;
+  } = {},
+) {
+  setEntropyRedaction(options.entropy);
   secretNames = (options.secretNames ?? [])
     .map((name) => wordsOf(name).map(singular).join(''))
     .filter(Boolean);
@@ -342,7 +350,7 @@ export function longestFirst(secrets: Iterable<string>): string[] {
 export function redactMessageWith(text: string, ordered: readonly string[]): string {
   let out = redactTokens(text);
   for (const secret of ordered) out = out.split(secret).join(REDACTED);
-  return out;
+  return redactHighEntropy(out, REDACTED);
 }
 
 /** Most earlier secret values a `SecretSet` keeps hiding after they changed. */
