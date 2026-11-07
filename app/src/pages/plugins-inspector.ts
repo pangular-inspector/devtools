@@ -514,8 +514,6 @@ export class PluginsInspector {
   readonly failed = signal(false);
   readonly filter = signal('');
   readonly running = signal(false);
-  readonly result = signal('');
-  readonly confirming = signal<{ name: string; label: string; confirm: string } | null>(null);
 
   /** Every plugin a page reports or the server has, in name order. */
   readonly pluginIds = computed(() => {
@@ -544,6 +542,13 @@ export class PluginsInspector {
       );
     },
   });
+  /** The plugin and page an action runs on; a pending confirm and a result belong to one. */
+  private readonly target = computed(() => `${this.pluginId()}\n${this.pageId()}`);
+  readonly result = linkedSignal({ source: this.target, computation: () => '' });
+  readonly confirming = linkedSignal<
+    string,
+    { name: string; label: string; confirm: string } | null
+  >({ source: this.target, computation: () => null });
   readonly pageOptions = computed<SelectOption[]>(() =>
     this.pages().map((page) => ({
       value: page.pageId,
@@ -619,6 +624,7 @@ export class PluginsInspector {
     const pageId = this.pageId();
     this.confirming.set(null);
     if (!client || !pluginId || !pageId || this.running()) return;
+    if (!this.actions().some((action) => action.name === name)) return;
     this.running.set(true);
     this.result.set('');
     try {

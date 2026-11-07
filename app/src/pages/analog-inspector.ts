@@ -6,6 +6,7 @@ import {
   effect,
   inject,
   input,
+  linkedSignal,
   signal,
   untracked,
 } from '@angular/core';
@@ -2177,7 +2178,11 @@ export class AnalogInspector {
   readonly method = signal('GET');
   readonly apiPath = signal('');
   readonly apiBody = signal('');
-  readonly confirmSend = signal(false);
+  /** Confirms one request: cleared when the method or path changes, and after it is sent. */
+  readonly confirmSend = linkedSignal({
+    source: () => `${this.method()} ${this.apiPath().trim()}`,
+    computation: () => false,
+  });
   readonly response = signal<ApiResult | null>(null);
   readonly sending = signal(false);
   readonly needsConfirm = computed(() => this.method() !== 'GET' && !this.confirmSend());
@@ -2490,6 +2495,7 @@ export class AnalogInspector {
   tryApi(api: ApiRoute) {
     this.method.set(api.method === 'ANY' ? 'GET' : api.method);
     this.apiPath.set(api.path.replace(/:(\w+)/g, '1').replace('**', 'x'));
+    this.confirmSend.set(false);
     this.response.set(null);
     queueMicrotask(() => document.getElementById('api-path')?.focus());
   }
@@ -2576,6 +2582,7 @@ export class AnalogInspector {
       this.response.set(result ?? { error: 'No answer from the devtools server.' });
     } finally {
       this.sending.set(false);
+      this.confirmSend.set(false);
     }
   }
 
