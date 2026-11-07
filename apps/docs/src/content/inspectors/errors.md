@@ -67,6 +67,15 @@ Click **Console** to see the page's `console.log`, `info`, `warn`, `error` and `
 
 The page keeps capturing while nobody watches, and sends its errors and console calls only while a panel is open or an agent called a tool in the last `limits.idleAfterMs`. An agent call to an idle page gets what the page captured meanwhile. See [Performance](../getting-started/configuration.md#performance).
 
+### Server errors
+
+Above the page's errors, **Server errors** lists what the dev server hit that no page can report, most recent first, with a count for repeats:
+
+- **SSR**: a server render that logged an error with `console.error`, such as Angular's `ErrorHandler` on the server (`console.error('ERROR', error)`). Inside a render that `ssrMiddleware` or `withPangularSsr()` traced, any `console.error` counts, and the row names the page it rendered. Outside one, only Angular's `ErrorHandler` format counts, so the server's own logs stay out.
+- **Vite**: the transform, compile and SSR module errors Vite shows in its browser overlay, with the file, line, plugin and code frame. Only with the [Vite plugin](../getting-started/vite.md).
+
+Open **Code frame** or **Stack** for the details. **Clear server errors** empties the list. A group expires 30 minutes after its last repeat, and the list keeps the last 100 groups. Messages, frames and stacks are masked like other live values. The section shows only while there is a server error.
+
 ### Pages
 
 When several tabs report, **Page** picks one, or **All pages** to see them together. The panel of a tab starts on that tab.
@@ -103,12 +112,13 @@ A `RuntimeError` carries its code, and other errors carry it in the message. The
 
 ## Agent tools
 
-| Tool                         | What it does                                                                                                                                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pangular:list-errors`       | The error groups, with count, code link, owning component and source.                                                                                                                            |
-| `pangular:explain-error`     | One error by `id`, or an Angular `code`: the message, the owning component, the stack, the reference page and cause, and the explainer of an NG0100, a hydration mismatch or a missing provider. |
-| `pangular:list-console`      | The console calls, by `level`, `search` or `since`.                                                                                                                                              |
-| `pangular:explain-injection` | Walks the lookup of a token from a component, with `self`, `skipSelf`, `host` and `optional`. Belongs to the [Injectors](./injectors.md#agent-tools) inspector.                                  |
+| Tool                          | What it does                                                                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pangular:list-errors`        | The error groups, with count, code link, owning component and source.                                                                                                                            |
+| `pangular:explain-error`      | One error by `id`, or an Angular `code`: the message, the owning component, the stack, the reference page and cause, and the explainer of an NG0100, a hydration mismatch or a missing provider. |
+| `pangular:list-console`       | The console calls, by `level`, `search` or `since`.                                                                                                                                              |
+| `pangular:list-server-errors` | The dev server's SSR and Vite errors, by `kind`, or one by `id` with its code frame and stack.                                                                                                   |
+| `pangular:explain-injection`  | Walks the lookup of a token from a component, with `self`, `skipSelf`, `host` and `optional`. Belongs to the [Injectors](./injectors.md#agent-tools) inspector.                                  |
 
 The known causes come from Angular's error reference, in a sentence or two. For a code without a reference page, `explain-error` says so. See [Tools](../agents/tools.md#errors).
 

@@ -28,6 +28,7 @@ import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from '
 import { overlayTags } from './vite-overlay.ts';
 import { signalPrimitivesAlias } from './vite-signals-stub.ts';
 import { terminalsEnabled } from './hub-terminals.ts';
+import { watchViteErrors, type ViteErrorSource } from './server-errors.ts';
 
 export type { PangularConfig } from './config.ts';
 import type { PangularServerPlugin } from './plugin.ts';
@@ -132,7 +133,8 @@ export function devtoolsUrl(local: string | undefined, base: string): string | u
 export default function pangularVite(options: PangularViteOptions = {}): Plugin {
   const base = normalizeHubBase(options.base ?? PANGULAR_HUB_BASE);
   const { config } = pickPangularConfig(options);
-  const analog = resolvePangularConfig(config).inspectors.analog;
+  const inspectors = resolvePangularConfig(config).inspectors;
+  const analog = inspectors.analog;
   return {
     name: 'pangular',
     apply: 'serve',
@@ -198,7 +200,12 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
           if (url) logger.info(`  \u279C  Pangular Inspector: ${url}`);
         };
       }
+      // Transform and compile errors Vite shows in its overlay, for the Errors tab.
+      const stopViteErrors = inspectors.errors
+        ? watchViteErrors(server as unknown as ViteErrorSource)
+        : () => {};
       httpServer?.once('close', () => {
+        stopViteErrors();
         void devtools.context
           .then(releaseServerState, () => undefined)
           .finally(() => devtools.close());

@@ -1239,6 +1239,8 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'list-errors': { kind: 'tool', inspectors: ['errors'], page: true },
   'explain-error': { kind: 'tool', inspectors: ['errors'], page: true },
   'list-console': { kind: 'tool', inspectors: ['errors'], page: true },
+  // SSR and Vite errors the server captured in its own process; the stdio MCP server has none.
+  'list-server-errors': { kind: 'tool', inspectors: ['errors'], page: true },
 
   // plugins
   'list-plugins': { kind: 'tool', inspectors: ['plugins'], page: true },
@@ -1467,6 +1469,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'forget-capacitor-page': 'capacitor',
   'push-errors': 'errors',
   'forget-errors-page': 'errors',
+  'clear-server-errors': 'errors',
   'push-analog': 'analog',
   'forget-analog-page': 'analog',
   'analog-clear-calls': 'analog',
@@ -1517,6 +1520,7 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   capacitor: 'capacitor',
   analog: 'analog',
   errors: 'errors',
+  'server-errors': 'errors',
   startup: 'injectors',
   plugins: 'plugins',
 };

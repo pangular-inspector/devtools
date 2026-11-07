@@ -15,6 +15,7 @@ import { time } from '../format';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 import { ErrorExplainView } from './error-explain';
+import { ServerErrorsSection } from './server-errors-section';
 import type { ComponentFocus } from '../types/component-focus.types';
 import {
   ALL_PAGES,
@@ -41,8 +42,9 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
 
 @Component({
   selector: 'app-errors-inspector',
-  imports: [Select, ErrorExplainView],
+  imports: [Select, ErrorExplainView, ServerErrorsSection],
   template: `
+    <app-server-errors-section [rpc]="rpc()" />
     @if (!loaded()) {
       <p class="state" role="status">Loading errors…</p>
     } @else if (failed()) {

@@ -23,6 +23,7 @@ import {
 } from './rpc/hydration-tools.ts';
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { registerErrors } from './rpc/errors-register.ts';
+import { registerServerErrors } from './rpc/server-errors-register.ts';
 import { registerSnapshot } from './rpc/snapshot-tools.ts';
 import { registerLeaks } from './rpc/leaks-register.ts';
 import { registerReduxStores } from './rpc/redux-stores-register.ts';
@@ -944,6 +945,10 @@ const pangular = defineDevframe({
           ttl: liveTtl,
         })
       : null;
+    // SSR and Vite errors of this process (`server-errors.ts`); no page reports them.
+    const serverErrors = on.errors
+      ? await registerServerErrors({ my, register, agent, capture: pageTools })
+      : null;
     const leaksInspector = on.components
       ? await registerLeaks({
           my,
@@ -1475,6 +1480,7 @@ const pangular = defineDevframe({
       if (expireNgrxPages(ngrxPages, now, liveTtl)) applyNgrx();
       if (expireCapacitorPages(capacitorPages, now, liveTtl)) applyCapacitor();
       errorsInspector?.expire(now);
+      serverErrors?.expire(now);
       leaksInspector?.expire(now);
       reduxStores?.expire(now);
       tanstackQuery?.expire(now);
@@ -1497,6 +1503,7 @@ const pangular = defineDevframe({
       clearInterval(expiry);
       clearInterval(interestTick);
       pluginsInspector?.dispose();
+      serverErrors?.dispose();
       interest.stop();
       clearTimeout(flushTimer);
       registry.record = undefined;
@@ -1549,7 +1556,7 @@ const pangular = defineDevframe({
       id: 'pangular:list-http-calls',
       title: 'List HTTP calls',
       description:
-        'HttpClient calls recorded by withPangular() and the page\'s own fetch() calls (flag `native fetch`), newest first: side, method, URL, status, duration, rule and cache flags, and the response preview. `view: "waterfall"` draws a page\'s client calls per navigation instead. `headers` adds headers. Masked. Empty without the interceptor or a page.',
+        'HttpClient calls from withPangular() and native fetch() calls, newest first: side, method, URL, status, duration, flags and response preview. `view: "waterfall"` draws a page\'s client calls per navigation. `headers` adds headers. Masked. Empty without the interceptor or a page.',
       inputSchema: {
         type: 'object',
         properties: {

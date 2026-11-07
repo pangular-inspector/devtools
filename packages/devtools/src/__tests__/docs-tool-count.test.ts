@@ -57,6 +57,27 @@ const WORDS = [
   'Ninety-seven',
   'Ninety-eight',
   'Ninety-nine',
+  'One hundred',
+  'One hundred and one',
+  'One hundred and two',
+  'One hundred and three',
+  'One hundred and four',
+  'One hundred and five',
+  'One hundred and six',
+  'One hundred and seven',
+  'One hundred and eight',
+  'One hundred and nine',
+  'One hundred and ten',
+  'One hundred and eleven',
+  'One hundred and twelve',
+  'One hundred and thirteen',
+  'One hundred and fourteen',
+  'One hundred and fifteen',
+  'One hundred and sixteen',
+  'One hundred and seventeen',
+  'One hundred and eighteen',
+  'One hundred and nineteen',
+  'One hundred and twenty',
 ];
 
 it('states on the tools page how many tools the server registers', async () => {
@@ -77,7 +98,7 @@ it('states on the tools page how many tools the server registers', async () => {
     join(__dirname, '../../../../apps/docs/src/content/agents/tools.md'),
     'utf-8',
   );
-  const stated = /^\s*([A-Z][a-z]+(?:-[a-z]+)?) tools, grouped by inspector/m.exec(page)?.[1];
+  const stated = /^\s*([A-Z][a-z]+(?:[- ][a-z]+)*) tools, grouped by inspector/m.exec(page)?.[1];
   expect(stated).toBeDefined();
   const index = WORDS.indexOf(stated!);
   expect(index).toBeGreaterThanOrEqual(0);
