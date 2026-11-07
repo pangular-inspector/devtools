@@ -229,6 +229,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The **Pipes** tab no longer marks two `| async` usages of a Promise, a Subject, an `asObservable()` view of one or an NgRx store select as duplicates, since their subscribers share one execution (#369). Any other source that two `| async` usages subscribe to shows as **possible duplicate subscription**, and `explain-pipe` says **Possible duplicate subscriptions**, because the page can't see `share()` or `shareReplay()` in a pipe.
 - Browser DevTools show the app's own line as the caller of a `console` call again. The browser entries ship source maps that list the console tap in `x_google_ignoreList`, so its wrapper frame is skipped (#369).
 - The Angular Native overlay gates the injector profiler like the NativeScript overlay: in a development build with no `window`, importing it defines one until Angular publishes its debug utilities, so the **Providers** lists fill (#371).
+- Redaction leaks found by a corpus of fake secrets run through every redaction path are closed: a secret pair after another word and a colon (`Error: password: "…"`), the key after `Authorization: ApiKey` in an Analog server body that is not JSON, secret pairs in the fragment or matrix params of an Analog server message, headers with a camelCase secret name such as `newPassword`, and tokens used as NgRx state keys.
 
 ### Docs
 
