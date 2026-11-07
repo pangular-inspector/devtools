@@ -41,9 +41,17 @@ export interface WebMcpForm {
   element?: Element;
 }
 
+/**
+ * How a WebMCP call touched a form since the last push: `wrote` when its synchronous
+ * `execute` ran on that form, `maybe` when a call wrote to a form it is not linked to yet,
+ * `running` when that form's call was still running (an async submit).
+ */
+export type AgentTouch = 'wrote' | 'maybe' | 'running';
+
 export interface WebMcpWatcher {
   active(): boolean;
-  takeActivity(): boolean;
+  /** Takes the calls since the last push and says how they touched the form with this root. */
+  takeActivity(): (root: object | undefined) => AgentTouch | undefined;
   link(root: object): void;
   describe(
     forms: WebMcpForm[],
@@ -242,9 +250,17 @@ function messageOf(error: unknown): string {
 export function watchWebMcp(onChange: () => void): WebMcpWatcher {
   const records: ToolRecord[] = [];
   const links = new WeakMap<object, ToolRecord>();
-  let running = 0;
   let current: ToolRecord | null = null;
-  let activity = false;
+  // Calls running per tool, the tools whose `execute` ran since the last push, and the
+  // tools that ran at any time since then.
+  const running = new Map<ToolRecord, number>();
+  let wrote = new Set<ToolRecord>();
+  let ran = new Set<ToolRecord>();
+  const linked = new WeakSet<ToolRecord>();
+  const linkTo = (root: object, record: ToolRecord) => {
+    links.set(root, record);
+    linked.add(record);
+  };
   let provided: boolean | undefined;
   let providerCheckedAt = 0;
   let context: AnyRecord | null = null;
@@ -272,15 +288,18 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
       };
       record.calls.push(call);
       if (record.calls.length > MAX_CALLS) record.calls.shift();
-      running++;
-      activity = true;
+      running.set(record, (running.get(record) ?? 0) + 1);
+      wrote.add(record);
+      ran.add(record);
       const previous = current;
       current = record;
       const settle = (outcome: WebMcpOutcome, detail?: string) => {
         call.outcome = outcome;
         call.ms = Math.round(performance.now() - call.started);
         if (detail) call.detail = detail.slice(0, 300);
-        running = Math.max(0, running - 1);
+        const left = (running.get(record) ?? 1) - 1;
+        if (left > 0) running.set(record, left);
+        else running.delete(record);
         onChange();
       };
       let out: unknown;
@@ -461,12 +480,21 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
     // long async submit is pending is not the agent's.
     active: () => current !== null,
     takeActivity() {
-      const was = activity;
-      activity = running > 0;
-      return was;
+      const wroteNow = wrote;
+      const ranNow = ran;
+      wrote = new Set();
+      ran = new Set(running.keys());
+      const unlinkedWrite = [...wroteNow].some((record) => !linked.has(record));
+      return (root) => {
+        const record = root ? links.get(root) : undefined;
+        if (record && wroteNow.has(record)) return 'wrote';
+        if (unlinkedWrite) return 'maybe';
+        if (record && ranNow.has(record)) return 'running';
+        return undefined;
+      };
     },
     link(root) {
-      if (current) links.set(root, current);
+      if (current) linkTo(root, current);
     },
     describe(forms, ng) {
       const out = new Map<object, WebMcpTool>();
@@ -501,7 +529,7 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
         if (candidates.length !== 1 || rivals.length !== 1) continue;
         owner.set(record, candidates[0]);
         taken.add(candidates[0]);
-        links.set(candidates[0].root, record);
+        linkTo(candidates[0].root, record);
       }
       const failed = records.filter((r) => !owner.has(r) && !r.shape && r.status === 'failed');
       const blocked = forms.filter((form) => !taken.has(form) && !shapes.get(form)?.schema);

@@ -38,7 +38,7 @@ A Signal Form that sets `experimentalWebMcpTool` (with `provideExperimentalWebMc
 | Required changed | Fields whose `required` changed after registration. Angular reads `required` once, so agents still see the old one.              |
 | Recent calls     | The last 5 agent calls with time, duration, the input names and the result (submitted, submit failed or threw).                  |
 
-Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin.
+Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin. While a call's submit is still running, only changes to that form count as the agent's, and typing in any form, that one included, shows as **user**.
 
 If the app provides `provideExperimentalWebMcpForms()` but the browser has no `modelContext`, Angular registers no tool. The block says so instead.
 

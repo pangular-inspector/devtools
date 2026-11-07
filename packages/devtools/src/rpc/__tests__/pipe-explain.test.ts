@@ -166,8 +166,11 @@ describe('explainPipeText', () => {
       ),
       1,
     );
-    const line = text.split('\n').find((l) => l.startsWith('**Duplicate subscriptions:**'));
-    expect(line).toContain('**Duplicate subscriptions:** 3 `| async` usage(s)');
+    const line = text
+      .split('\n')
+      .find((l) => l.startsWith('**Possible duplicate subscriptions:**'));
+    expect(line).toContain('**Possible duplicate subscriptions:** 3 `| async` usage(s)');
+    expect(line).toContain('NgRx store selects are left out');
     expect(line).toContain('(CartComponent, HeaderComponent)');
     expect(line).not.toContain('FooterComponent');
     expect(text).not.toContain('**Resubscribing:**');
@@ -184,7 +187,7 @@ describe('explainPipeText', () => {
       ),
       1,
     );
-    expect(text).not.toContain('Duplicate subscriptions');
+    expect(text).not.toContain('uplicate subscriptions');
   });
 });
 

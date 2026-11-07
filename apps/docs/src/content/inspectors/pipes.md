@@ -11,7 +11,7 @@ description: Custom, built-in and library pipes, where they are used, live insta
 
 The Pipes tab lists your `@Pipe` classes, the built-in pipes from `@angular/common` that your templates use, and pipes from libraries that the page uses. It shows the live instances on the page, and records calls when you ask it to.
 
-<ngmd-image src="/images/panel/pipes.png" alt="The Pipes tab listing the demo's custom pipes and the built-in pipes it uses, with chips for live instances, NgModule, pure and impure, and below them the async subscriptions with duplicate subscription warnings"></ngmd-image>
+<ngmd-image src="/images/panel/pipes.png" alt="The Pipes tab listing the demo's custom pipes and the built-in pipes it uses, with chips for live instances, NgModule, pure and impure, and below them the async subscriptions with possible duplicate subscription warnings"></ngmd-image>
 
 ## What it shows
 
@@ -49,7 +49,7 @@ When several tabs report pipes, the panel of a tab shows that tab's pipes and `|
 
 ### Async subscriptions
 
-When templates use `| async`, the tab lists each subscription with its component and latest value. This needs no recording. Each `| async` subscribes on its own. Two on the same source run the work twice, so the tab marks those rows **duplicate subscription**.
+When templates use `| async`, the tab lists each subscription with its component and latest value. This needs no recording. Each `| async` subscribes on its own. Two on the same cold source run the work twice, for example two HTTP requests, so the tab marks those rows **possible duplicate subscription**. Sources whose subscribers share one execution are not marked: Promises, Subjects (`BehaviorSubject`, `ReplaySubject` and the rest), an `asObservable()` or `toObservable()` view of one, and NgRx store selects. The page can't see `share()` or `shareReplay()` in a pipe, so a source shared that way is still marked, and you can leave it as it is.
 
 The list keeps 200 rows per tab. When a page has more, the section says how many it shows out of the total.
 
@@ -129,7 +129,7 @@ Each recording starts from zero, so a second recording measures one interaction 
 
 ### Remove duplicate subscriptions
 
-Open **Async subscriptions** and look for **duplicate subscription** rows. Subscribe once with `@let`, or turn the observable into a signal with `toSignal()`.
+Open **Async subscriptions** and look for **possible duplicate subscription** rows. If the source is not already shared with `share()` or `shareReplay()`, subscribe once with `@let`, or turn the observable into a signal with `toSignal()`.
 
 ### Stop resubscribing
 
