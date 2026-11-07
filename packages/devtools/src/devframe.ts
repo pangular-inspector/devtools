@@ -83,6 +83,7 @@ import {
   storeIdNamed,
   withUntrustedPreamble,
 } from './rpc/ngrx-live-tools.ts';
+import { createNgrxDevtoolsTools } from './rpc/ngrx-devtools-tools.ts';
 import {
   dispatchProblem,
   type NgrxRequest,
@@ -4070,6 +4071,13 @@ const pangular = defineDevframe({
     });
 
     for (const tool of ngrxHistory.tools) agent.registerTool(tool);
+    // Store DevTools history operations and the explain-change read (rpc/ngrx-devtools-tools.ts).
+    for (const tool of createNgrxDevtoolsTools({
+      ask: (page, request) => requestNgrxAction(page, request),
+      pages: () => ngrxPages,
+    })) {
+      agent.registerTool(tool);
+    }
 
     const noForms = `No forms have been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser, on a page that renders a form. The stdio MCP server has no page, so there it always answers this.`;
     /**

@@ -59,6 +59,11 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
   'watch-signal': [{ node: 'count' }, { node: 'count', page: 'gone' }],
   'ngrx-dispatch': [{ type: '[Cart] Add' }, { type: '[Cart] Add', page: 'gone' }],
   'ngrx-restore': [{ seq: 1 }, { latest: true }, { seq: 1, page: 'gone' }],
+  'ngrx-store-devtools': [
+    { op: 'commit' },
+    { op: 'toggle', seq: 1 },
+    { op: 'commit', page: 'gone' },
+  ],
   'tanstack-run-query': [
     { action: 'refetch', id: 'q1' },
     { action: 'refetch', id: 'q1', page: 'gone' },
