@@ -2,6 +2,7 @@
 import '@angular/compiler';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   FormField,
@@ -83,6 +84,13 @@ Component({
   imports: [Login, Profile, SlowSignUp],
   template: `<login-form /><profile-form /><slow-sign-up-form />`,
 })(SlowPage);
+
+class TwoForms {}
+Component({
+  selector: 'two-forms',
+  imports: [Login, Profile],
+  template: `<login-form /><profile-form />`,
+})(TwoForms);
 
 class Tasks {
   model = signal({ name: '', items: [{ n: -1 }] });
@@ -287,6 +295,25 @@ describe('forms collector', () => {
       ['"Ada"', 'user'],
       ['"Bob"', undefined],
     ]);
+  });
+
+  it('tags a change as user only in the form the user typed in', async () => {
+    const fixture = await mount(TwoForms);
+    const h = harness();
+    h.collector.push();
+    await tick();
+    const profile = fixture.debugElement.query(By.directive(Profile)).componentInstance as Profile;
+    const input = document.getElementById('email') as HTMLInputElement;
+    input.value = 'me@x.io';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    profile.form.name().value.set('Bob');
+    h.collector.push();
+    await tick();
+    const events = h.lastEvents().filter((e) => e.type === 'value');
+    expect(events.find((e) => e.path === 'email')).toMatchObject({ origin: 'user' });
+    const bob = events.find((e) => e.formId.startsWith('Profile') && e.detail === '"Bob"');
+    expect(bob).toBeDefined();
+    expect(bob?.origin).not.toBe('user');
   });
 
   it('answers form actions for its own forms only', async () => {

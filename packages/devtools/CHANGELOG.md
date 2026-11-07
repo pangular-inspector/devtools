@@ -153,7 +153,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
-- **Forms:** edit a control's value, touched and dirty state in its row of the **Fields** view (behind `actions.forms`); a WebMCP tool's input schema, and **Try this tool** to run it on its form from the panel (`try-webmcp` in `run-form-action`); a form's history exported as a Playwright test from the **Timeline** view and from `export-form` (`format: "playwright"`).
+- **Forms:** edit a control's value, touched and dirty state in its row of the **Fields** view (behind `actions.forms`); a WebMCP tool's input schema, and **Try this tool** to run it on its form from the panel (`try-webmcp` in `run-form-action`); a form's history exported as a Playwright test from the **Timeline** view and from `export-form` (`format: "playwright"`); timeline origins worked out per form, so typing in one form no longer tags code changes in another form as user.
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.

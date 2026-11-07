@@ -86,7 +86,7 @@ Click a field to open its details below the table. Click the field again, or **C
 
 ### Timeline view
 
-Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `list-form-changes` say how many.
+Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. Origins are per form: typing in one form tags changes in that form as user, and a change that app code makes in another form at the same time stays code. A panel or agent action tags only the form it acts on. When the overlay cannot tell which form an input belongs to, such as a custom control rendered in an overlay outside the form, the input counts for every form. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `list-form-changes` say how many.
 
 Narrow the list with three filters. An event shows only when it passes all of them.
 

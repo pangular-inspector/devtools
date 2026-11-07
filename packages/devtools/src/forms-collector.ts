@@ -92,6 +92,19 @@ function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
+/** Form ids, `ALL_FORMS` for every form, or null for none. */
+type FormSet = Set<string> | typeof ALL_FORMS | null;
+const ALL_FORMS = 'all' as const;
+
+function touches(set: FormSet, formId: string): boolean {
+  return set === ALL_FORMS || !!set?.has(formId);
+}
+
+function addForms(set: FormSet, more: Exclude<FormSet, null>): Exclude<FormSet, null> {
+  if (set === ALL_FORMS || more === ALL_FORMS) return ALL_FORMS;
+  return new Set([...(set ?? []), ...more]);
+}
+
 function isFieldTarget(target: unknown): target is { formId: string; path: string } {
   const t = target as { formId?: unknown; path?: unknown } | null;
   return (
@@ -216,9 +229,11 @@ export function attachForms(
   let foundById = new Map<string, FoundForm>();
   let fieldElements = new WeakMap<object, Element>();
   let eventSeq = 0;
-  let userActive = false;
-  let userSincePush = false;
-  let devtoolsSincePush = false;
+  // Who touched which form: a set of form ids, or `ALL_FORMS` when the event could not be
+  // placed in a form (a custom control in an overlay, say), so every form counts as touched.
+  let userActive: FormSet = null;
+  let userSincePush: FormSet = null;
+  let devtoolsSincePush: FormSet = null;
   let userTimer: ReturnType<typeof setTimeout> | undefined;
   let pushTimer: ReturnType<typeof setTimeout> | undefined;
   // Sends are paced like the other leased reports; reads go on, so the timeline misses nothing.
@@ -239,13 +254,41 @@ export function attachForms(
   const ownerNames = new Set<string>();
   const webMcp = watchWebMcp(() => schedulePush());
 
-  const originNow = (): EventOrigin =>
-    isDevtoolsAction() ? 'devtools' : webMcp.active() ? 'agent' : userActive ? 'user' : 'code';
+  const originNow = (formId: string): EventOrigin =>
+    isDevtoolsAction()
+      ? 'devtools'
+      : webMcp.active()
+        ? 'agent'
+        : touches(userActive, formId)
+          ? 'user'
+          : 'code';
+
+  /** The forms an event target belongs to: the form element around it, or the field it binds. */
+  function formsOf(target: EventTarget | null | undefined): Set<string> | typeof ALL_FORMS {
+    const el = target instanceof Element ? target : null;
+    if (!el) return ALL_FORMS;
+    const ids = new Set<string>();
+    for (const [formId, found] of foundById) {
+      const box = found.formElement ?? found.element;
+      if (box && box !== document.body && box !== document.documentElement && box.contains(el)) {
+        ids.add(formId);
+      }
+    }
+    if (ids.size) return ids;
+    const ng = getNg();
+    if (!ng?.getDirectives) return ALL_FORMS;
+    const located = read(
+      () =>
+        locateElement({ ng, forms: foundById, elements: fieldElements, all: knownElements }, el),
+      null,
+    );
+    return located?.formId ? new Set([located.formId]) : ALL_FORMS;
+  }
 
   function recordFormEvent(input: FormEvent, infer = true) {
     const event: FormEvent = { ...input, seq: ++eventSeq };
     if (event.detail) event.detail = redactFormText(event.formId, event.detail);
-    if (infer) event.origin ??= originNow();
+    if (infer) event.origin ??= originNow(event.formId);
     const key = `${event.formId}:${event.path}`;
     if (pendingCaller?.formId === event.formId && !event.caller && event.origin !== 'devtools') {
       event.caller = redactFormText(event.formId, pendingCaller.text);
@@ -535,11 +578,11 @@ export function attachForms(
           const caller = signalCallers.get(event.formId);
           // The agent's own write wins; user input wins over a call that is merely running.
           const touch = agentTouch(foundById.get(event.formId)?.root);
-          const origin: EventOrigin | undefined = devtoolsSincePush
+          const origin: EventOrigin | undefined = touches(devtoolsSincePush, event.formId)
             ? 'devtools'
             : touch === 'wrote'
               ? 'agent'
-              : userSincePush
+              : touches(userSincePush, event.formId)
                 ? 'user'
                 : touch
                   ? 'agent'
@@ -553,8 +596,8 @@ export function attachForms(
       }
       lastForms = forms;
       for (const form of forms) ownerNames.add(form.owner);
-      userSincePush = false;
-      devtoolsSincePush = false;
+      userSincePush = null;
+      devtoolsSincePush = null;
       signalCallers.clear();
       attachRenders();
       if (instrumentation) {
@@ -725,14 +768,15 @@ export function attachForms(
   }
 
   const onUserEvent = (event: Event) => {
-    if (!isDevtoolsAction()) userSincePush = true;
+    const forms = formsOf(event.composedPath?.()[0] ?? event.target);
+    if (!isDevtoolsAction()) userSincePush = addForms(userSincePush, forms);
     if (renders && renderSince === null && (event.type === 'input' || event.type === 'change')) {
       renderSince = eventSeq;
       renders.start();
     }
-    userActive = true;
+    userActive = addForms(userActive, forms);
     clearTimeout(userTimer);
-    userTimer = setTimeoutOutside(() => (userActive = false), 0);
+    userTimer = setTimeoutOutside(() => (userActive = null), 0);
     if (event.type === 'submit') onSubmit(event);
     if (event.type !== 'click' && event.type !== 'keydown') schedulePush();
   };
@@ -862,7 +906,10 @@ export function attachForms(
         active?.();
         return respond({ ok: true, message: active ? 'Picking cancelled.' : 'No pick to cancel.' });
       }
-      devtoolsSincePush = true;
+      devtoolsSincePush = addForms(
+        devtoolsSincePush,
+        request.formId ? new Set([request.formId]) : ALL_FORMS,
+      );
       runFormAction(ctx, request).then(
         (result) => {
           respond(result);
