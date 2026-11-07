@@ -123,7 +123,7 @@ Every `HttpClient` request, tagged **SSR** or **Client**. Each row shows the met
 - **transfer cache**: the TransferState cache answered it. Only client requests get it, because the server never reads the cache; a server call shows its [transfer cache outcome](#transfer-cache-outcome) instead. A client request counts as a hit only when its method, response type, URL, body and params match the entry Angular stored, and Angular would cache it: no `transferCache: false`, auth headers, credentials or no-cache request.
 - **delayed N ms**: a fault rule held it back.
 - **mocked**: a fault rule answered it with a status below 400.
-- **faulted**: a fault rule failed it with a status of 400 or more.
+- **faulted**: a fault rule failed it with a status of 400 or more, or with a network error (status 0, shown as **ERR**).
 - **rule**: the pattern of the fault rule that matched it.
 
 A request that was unsubscribed before its response, for example by `switchMap`, a route change or a destroyed component, shows **cancelled** as its status. **ERR** marks a request that failed without a status, such as when the browser is offline or CORS blocks it.
@@ -150,10 +150,21 @@ Add a rule with these fields:
   Under the field, a live count says how many of the timeline's calls the pattern matches with the current **Method** and **Apply on**, such as **Matches 3 of the 12 recorded calls**. It counts the calls the timeline holds for the selected page and the server render that served it. Recorded URLs are masked, so a pattern that names a secret query value can match fewer calls here than it does live.
 - **Method**: any, or one method.
 - **Apply on**: SSR + client, SSR only, or client only.
-- **Status**: **None**, or a status from the list. The list has the standard 2xx to 5xx statuses, plus `499` (nginx) and `520` to `524` (Cloudflare). Type the code, for example `503`, to jump to it.
+- **Status**: **None**, or a status from the list. The list has **0 Network error (offline)**, the standard 2xx to 5xx statuses, plus `499` (nginx) and `520` to `524` (Cloudflare). Type the code, for example `503`, to jump to it.
 - **Delay (ms)** up to 10000, and an optional JSON body.
+- **Chance (%)**: optional, a whole percent from 1 to 99. The rule then applies to that share of matching requests, picked at random per request, and the others go on to the next rule. Empty applies it to every request.
 
-A status of 400 or more fails the request with an `HttpErrorResponse`. A lower status returns the body as a mocked response. A body with the status on **None** returns it with status 200. A stored rule with a status outside the list loses that status, and is dropped when nothing else is left to change. A rule with only a delay passes the request through, later. A rule needs a status, a delay or a body, so **Add rule** stays off until it has one. The form clears after each added rule. The first enabled rule that matches wins. After **Remove**, focus moves to the next rule's **Remove** button, the previous one when the last rule went, or the **Rules** heading when none are left. **SSR overrides** work the same way.
+A status of 400 or more fails the request with an `HttpErrorResponse`. Status 0 fails it the way a dropped connection does: an `HttpErrorResponse` with status 0, `Unknown Error` and a `ProgressEvent` as its `error`, and no body. Another status returns the body as a mocked response. A body with the status on **None** returns it with status 200. A stored rule with a status outside the list loses that status, and is dropped when nothing else is left to change. A rule with only a delay passes the request through, later. A rule needs a status, a delay or a body, so **Add rule** stays off until it has one. The form clears after each added rule. The first enabled rule that matches wins. After **Remove**, focus moves to the next rule's **Remove** button, the previous one when the last rule went, or the **Rules** heading when none are left. **SSR overrides** work the same way.
+
+Three presets above the form add ready-made rules for every browser request (pattern `*`, client only):
+
+| Preset      | The rule it adds                                                   |
+| ----------- | ------------------------------------------------------------------ |
+| **Offline** | Status 0: every request fails with a network error.                |
+| **Slow 3G** | A 2000 ms delay before every request is sent.                      |
+| **Flaky**   | Status 503 with a 30% chance, so about one request in three fails. |
+
+They are plain rules, so they show in **Rules**, toggle and remove like any other. Rules added before them match first, so a specific mock still wins. SSR calls are left alone.
 
 To start from a call you already made, open it in the timeline and click **Mock this request**. The form gets the call's method and its path and query as the URL pattern, without the origin, so the rule matches the client and SSR URLs. A relative URL such as `api/heroes` stays as the app wrote it. A redacted value in the URL becomes `*`. When the preview is complete JSON, it becomes the body, with redacted values still masked. Focus moves to **URL pattern**. Nothing is saved until you click **Add rule**, so check the body and pick a status first.
 

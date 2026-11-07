@@ -7,6 +7,7 @@ All notable changes to `@pangular-inspector/devtools` are listed here. The forma
 ### Added
 
 - **Live match count in the fault rule form.** Under **URL pattern**, the SSR & HTTP tab says how many of the recorded calls the pattern matches with the chosen method and side, as you type.
+- **Fault rule presets: Offline, Slow 3G and Flaky.** Each adds plain rules for every browser request: a network error, a 2000 ms delay, or a 503 for 30% of requests. Two rule fields make them possible and work on any rule: status `0` fails a request as a network error (an `HttpErrorResponse` with status 0), and `chance` (1 to 99) applies a rule to that share of matching requests. `set-http-rule` takes both.
 
 ## 1.0.0
 

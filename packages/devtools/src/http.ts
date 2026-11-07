@@ -23,6 +23,7 @@ import {
 import { Observable, throwError, timer, of } from 'rxjs';
 import type { Subscription } from 'rxjs';
 
+import { isFailingRuleStatus } from './config.ts';
 import { redactMessage } from './forms-privacy.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
@@ -176,8 +177,8 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     side,
     pageUrl,
     ...(requestId ? { requestId } : {}),
-    faulted: mocked && status >= 400,
-    ...(mocked && status < 400 ? { mocked: true } : {}),
+    faulted: mocked && isFailingRuleStatus(status),
+    ...(mocked && !isFailingRuleStatus(status) ? { mocked: true } : {}),
     ...(delay ? { delayMs: delay } : {}),
     ...(rule ? { ruleId: rule.id, rulePattern: rule.pattern } : {}),
   };
@@ -200,7 +201,9 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   };
 
   let source: Observable<HttpEvent<unknown>>;
-  if (status !== undefined) {
+  if (status === 0) {
+    source = throwError(() => networkError(url));
+  } else if (status !== undefined) {
     const body = parseBody(rule?.body, req.responseType);
     const headers = new HttpHeaders({ 'content-type': mockContentType(req.responseType) });
     source =
@@ -310,6 +313,18 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     };
   });
 };
+
+/**
+ * The error a request gets when the connection drops: status 0, statusText
+ * `Unknown Error` and a `ProgressEvent` as `error`, as Angular's backends report it.
+ */
+function networkError(url: string): HttpErrorResponse {
+  const error =
+    typeof ProgressEvent === 'function'
+      ? new ProgressEvent('error')
+      : new Error('Network error injected by Pangular Inspector');
+  return new HttpErrorResponse({ status: 0, statusText: 'Unknown Error', url, error });
+}
 
 function textOf(value: unknown): string {
   try {

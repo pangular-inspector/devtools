@@ -72,3 +72,53 @@ export function callsMatchingRule<T extends Pick<CallLike, 'url' | 'method' | 's
   if (!scope.pattern.trim()) return [];
   return calls.filter((call) => ruleScopeMatches(scope, call));
 }
+
+/** The fields of a fault rule a preset fills in; the rest keep their defaults. */
+export interface PresetRule extends RuleScope {
+  status?: number;
+  delayMs?: number;
+  chance?: number;
+}
+
+export interface HttpRulePreset {
+  id: 'offline' | 'slow-3g' | 'flaky';
+  label: string;
+  /** What the rules do, for the button's description. */
+  description: string;
+  rules: readonly PresetRule[];
+}
+
+/**
+ * Built-in sets of fault rules. Each one adds plain rules that apply to every
+ * browser request (`*`, client only); once added, they show, change and
+ * remove like any other rule. Rules added before them match first.
+ */
+export const HTTP_RULE_PRESETS: readonly HttpRulePreset[] = [
+  {
+    id: 'offline',
+    label: 'Offline',
+    description: 'Fails every browser request with a network error (status 0).',
+    rules: [{ pattern: '*', target: 'client', status: 0 }],
+  },
+  {
+    id: 'slow-3g',
+    label: 'Slow 3G',
+    description: 'Holds every browser request back 2000 ms before it is sent.',
+    rules: [{ pattern: '*', target: 'client', delayMs: 2000 }],
+  },
+  {
+    id: 'flaky',
+    label: 'Flaky',
+    description: 'Fails 30% of browser requests with 503 Service Unavailable.',
+    rules: [{ pattern: '*', target: 'client', status: 503, chance: 30 }],
+  },
+];
+
+/** The rules of a preset, each with a new id and turned on. */
+export function presetRules(
+  id: string,
+  newId: () => string,
+): (PresetRule & { id: string; enabled: true })[] {
+  const preset = HTTP_RULE_PRESETS.find((p) => p.id === id);
+  return preset ? preset.rules.map((rule) => ({ ...rule, id: newId(), enabled: true })) : [];
+}

@@ -1,9 +1,10 @@
-import { isHttpRuleStatus } from '../config.ts';
+import { HTTP_RULE_CHANCE, isFailingRuleStatus, isHttpRuleStatus } from '../config.ts';
 import { redactPreview } from '../http-redact.ts';
 import {
   MAX_DELAY_MS,
   MAX_RULES,
   ruleStatus,
+  sanitizeChance,
   sanitizeRules,
   type HttpRule,
 } from '../http-rules.ts';
@@ -24,6 +25,7 @@ export interface SetHttpRuleArgs {
   status?: unknown;
   delayMs?: unknown;
   body?: unknown;
+  chance?: unknown;
   enabled?: unknown;
 }
 
@@ -41,10 +43,14 @@ function targetText(target: HttpRule['target']): string {
 function effectText(rule: HttpRule): string {
   const out: string[] = [];
   const status = ruleStatus(rule);
-  if (status !== undefined) out.push(status >= 400 ? `fails with ${status}` : `answers ${status}`);
+  if (status === 0) out.push('fails with a network error (status 0)');
+  else if (status !== undefined) {
+    out.push(isFailingRuleStatus(status) ? `fails with ${status}` : `answers ${status}`);
+  }
   if (rule.delayMs) out.push(`delays ${rule.delayMs} ms`);
   if (rule.body) out.push(`body ${code(clip(redactPreview(rule.body), BODY_PREVIEW))}`);
-  return out.join(', ');
+  const effect = out.join(', ');
+  return rule.chance === undefined ? effect : `${effect}, for ${rule.chance}% of requests`;
 }
 
 /**
@@ -107,7 +113,10 @@ function ruleProblem(args: SetHttpRuleArgs, body: string | undefined): string | 
     return '`target` must be "client", "server" or "both".';
   }
   if (args.status !== undefined && !isHttpRuleStatus(args.status)) {
-    return '`status` must be a standard HTTP status from 200 to 599, such as 404, 500 or 503.';
+    return '`status` must be a standard HTTP status from 200 to 599, such as 404, 500 or 503, or 0 for a network error.';
+  }
+  if (args.chance !== undefined && sanitizeChance(args.chance) !== args.chance) {
+    return `\`chance\` must be a whole percent from ${HTTP_RULE_CHANCE.min} to ${HTTP_RULE_CHANCE.max}. Leave it out to apply to every request.`;
   }
   if (
     args.delayMs !== undefined &&
@@ -174,6 +183,7 @@ export function upsertHttpRule(
     ...(args.status !== undefined ? { status: args.status as number } : {}),
     ...(args.delayMs ? { delayMs: args.delayMs as number } : {}),
     ...(body ? { body } : {}),
+    ...(args.chance !== undefined ? { chance: args.chance as number } : {}),
   };
   const next = index < 0 ? [...rules, draft] : rules.map((r, i) => (i === index ? draft : r));
   const saved = sanitizeRules(next);

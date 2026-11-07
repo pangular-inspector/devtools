@@ -32,6 +32,8 @@ import { VirtualWindow } from '../ui/virtual-window';
 import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
 import { RuleMatchCount } from './network/rule-match-count';
+import { RulePresets } from './network/rule-presets';
+import { presetRules } from '@pangular-inspector/devtools/internal/http-data';
 
 type HttpSide = 'client' | 'server';
 
@@ -44,6 +46,7 @@ interface HttpRule {
   status?: number;
   delayMs?: number;
   body?: string;
+  chance?: number;
 }
 
 interface HttpCall {
@@ -210,6 +213,7 @@ interface RuleDraft {
   status: string;
   delayMs: string;
   body: string;
+  chance: string;
 }
 
 const EMPTY_DRAFT: RuleDraft = {
@@ -219,7 +223,20 @@ const EMPTY_DRAFT: RuleDraft = {
   status: '',
   delayMs: '',
   body: '',
+  chance: '',
 };
+
+/** A new fault rule id, unique enough for one rule list. */
+function newRuleId(): string {
+  return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** The chance field as a whole percent, null when it is not one from 1 to 99, undefined when empty. */
+function chanceOf(text: string): number | null | undefined {
+  if (!text.trim()) return undefined;
+  const chance = Number(text);
+  return Number.isInteger(chance) && chance >= 1 && chance <= 99 ? chance : null;
+}
 
 function pathOf(url: string): string {
   try {
@@ -304,6 +321,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     NetworkWaterfall,
     RovingList,
     RuleMatchCount,
+    RulePresets,
     Select,
   ],
   template: `
@@ -822,6 +840,11 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
         @if (!canWrite()) {
           <p id="http-writes-off" class="muted small">{{ writesOff }}</p>
         }
+        <app-rule-presets
+          [disabled]="!canWrite()"
+          [describedBy]="canWrite() ? '' : 'http-writes-off'"
+          (add)="addPreset($event)"
+        />
         <form id="rule-form" class="rule-form" (submit)="addRule($event)">
           <label>
             <span
@@ -889,6 +912,20 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             </label>
           </div>
           <label>
+            <span>Chance (%) <span class="hint">(optional, share of matching requests)</span></span>
+            <input
+              id="rule-chance"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="99"
+              step="1"
+              placeholder="100"
+              [value]="draft().chance"
+              (input)="patch('chance', $event)"
+            />
+          </label>
+          <label>
             <span>Mock JSON body <span class="hint">(optional)</span></span>
             <textarea
               rows="3"
@@ -955,6 +992,8 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 <span>{{ targetLabel(rule.target) }}</span>
                 @if (rule.status === undefined) {
                   <span>passthrough</span>
+                } @else if (rule.status === 0) {
+                  <span class="status bad">network error</span>
                 } @else {
                   <span
                     class="status"
@@ -969,6 +1008,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 }
                 @if (rule.body) {
                   <span>mock body</span>
+                }
+                @if (rule.chance) {
+                  <span>{{ rule.chance }}% of requests</span>
                 }
               </span>
               @if (mocksOnServer(rule)) {
@@ -2418,6 +2460,8 @@ export class NetworkInspector {
     const status = draft.status.trim() ? Number(draft.status) : body ? 200 : undefined;
     if (status !== undefined && !isHttpRuleStatus(status)) return null;
     if (status === undefined && !delayMs) return null;
+    const chance = chanceOf(draft.chance);
+    if (chance === null) return null;
     return {
       pattern,
       enabled: true,
@@ -2426,6 +2470,7 @@ export class NetworkInspector {
       ...(status !== undefined ? { status } : {}),
       ...(delayMs ? { delayMs } : {}),
       ...(body ? { body } : {}),
+      ...(chance !== undefined ? { chance } : {}),
     };
   });
 
@@ -2440,6 +2485,7 @@ export class NetworkInspector {
     if (this.bodyError()) return '';
     if (draft.status.trim() && !isHttpRuleStatus(Number(draft.status)))
       return 'Pick a status from the list.';
+    if (chanceOf(draft.chance) === null) return 'Chance is a whole percent from 1 to 99.';
     if (!this.draftRule()) return 'Set a status, a delay or a mock body.';
     if (!draft.status.trim() && draft.body.trim())
       return 'With no status, the mock body returns 200.';
@@ -2637,7 +2683,9 @@ export class NetworkInspector {
   }
 
   mocksOnServer(rule: Pick<HttpRule, 'target' | 'status'>): boolean {
-    return rule.target !== 'client' && rule.status !== undefined && rule.status < 400;
+    return (
+      rule.target !== 'client' && rule.status !== undefined && rule.status > 0 && rule.status < 400
+    );
   }
 
   payloadLabel(entry: PayloadEntry): string | null {
@@ -2688,10 +2736,7 @@ export class NetworkInspector {
     event.preventDefault();
     const draft = this.draftRule();
     if (!draft || this.addingRule()) return;
-    const rule: HttpRule = {
-      id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      ...draft,
-    };
+    const rule: HttpRule = { id: newRuleId(), ...draft };
     this.addingRule.set(true);
     const added = await this.saveRules((rules) => [[...rules, rule], rule], 'Rule added.');
     this.addingRule.set(false);
@@ -2699,6 +2744,20 @@ export class NetworkInspector {
       this.draft.set({ ...EMPTY_DRAFT });
       this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus();
     }
+  }
+
+  /** Adds the rules of a built-in preset after the current ones. */
+  async addPreset(id: string) {
+    const added = presetRules(id, newRuleId);
+    if (!added.length) return;
+    if (this.rules().length + added.length > MAX_RULES) {
+      this.message.set(`You can add up to ${MAX_RULES} rules. Remove one to add the preset.`);
+      return;
+    }
+    await this.saveRules(
+      (rules) => [[...rules, ...added], added[0]],
+      `Added ${added.length === 1 ? 'a rule' : `${added.length} rules`} for every browser request.`,
+    );
   }
 
   toggleRule(id: string) {

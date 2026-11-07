@@ -1666,9 +1666,14 @@ const pangular = defineDevframe({
       status: {
         type: 'integer',
         description:
-          'Status to answer with: 400 or more fails the request, below 400 returns `body`.',
+          'Status to answer with: 400 or more fails the request, 0 fails it as a network error, others return `body`.',
       },
       delayMs: { type: 'integer', description: `Hold the request back (0-${MAX_DELAY_MS} ms).` },
+      chance: {
+        type: 'integer',
+        description:
+          'Apply to this percent of matching requests (1-99), rolled per request; the rest go on to the next rule. Every request when left out.',
+      },
       body: { description: 'Mock response body: JSON text or a JSON value. Alone it answers 200.' },
       enabled: { type: 'boolean', description: 'Default true.' },
     };
