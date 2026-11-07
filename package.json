@@ -19,7 +19,7 @@
     "test:coverage": "pnpm test:devtools --coverage --testTimeout=20000 && pnpm test:panel --coverage --testTimeout=20000",
     "test:axe": "pnpm devtools:build-pkg && node bin.mjs build --outDir dist/panel-axe && node scripts/panel-axe.mjs dist/panel-axe",
     "test:axe:extension": "node scripts/extension-axe.mjs dist/panel-axe",
-    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit && ngc -p app/tsconfig.json --noEmit && ngc -p examples/analog/tsconfig.app.json --noEmit && tsc -p packages/devtools",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit && ngc -p app/tsconfig.json --noEmit && ngc -p examples/analog/tsconfig.app.json --noEmit && tsc -p packages/devtools && tsc -p examples/pangular-plugin-example",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "node scripts/lint-ratchet.mjs",

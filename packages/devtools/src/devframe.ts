@@ -28,6 +28,7 @@ import { registerReduxStores } from './rpc/redux-stores-register.ts';
 import { registerTanstackQuery } from './rpc/query-register.ts';
 import { registerPlugins } from './rpc/plugins-register.ts';
 import { registerStartup } from './rpc/startup-register.ts';
+import { registerIonic } from './rpc/ionic-register.ts';
 import type { PangularServerPlugin } from './plugin.ts';
 import { registerAudit } from './rpc/audit-register.ts';
 import { INJECTOR_TREE_LIMITS, sanitizeInjectorTree } from './rpc/injector-report.ts';
@@ -262,6 +263,7 @@ import { navigationDiffResult } from './rpc/router-diff.ts';
 import { callsForNavigation, nextNavigation } from './rpc/router-http.ts';
 import { NavigationStream } from './rpc/router-stream.ts';
 import { routePreviewResult } from './rpc/router-preview.ts';
+import { routerStateForApp } from './rpc/router-apps.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
@@ -906,6 +908,10 @@ const pangular = defineDevframe({
           ttl: liveTtl,
         })
       : null;
+    // The `ion-router-outlet` stacks of Ionic pages, shown in the Capacitor tab.
+    const ionicInspector = on.capacitor
+      ? await registerIonic({ my, rpcHost: ctx.rpc, register, owns, mayForget, ttl: liveTtl })
+      : null;
     // A plugin tool's tier comes from the plugin; `pluginToolAllowed` checks it against the config.
     const pluginsInspector = on.plugins
       ? await registerPlugins({
@@ -1035,14 +1041,14 @@ const pangular = defineDevframe({
         ?.pageId;
     };
 
-    const requestRouterAction = (page: string | undefined, request: unknown) => {
+    const requestRouterAction = (page: string | undefined, request: unknown, app?: string) => {
       const action = (request as { action?: unknown } | undefined)?.action;
       return !config.actions.router && ROUTER_WRITE_ACTIONS.includes(action as string)
         ? Promise.resolve<unknown>({ error: actionBlockedMessage('router') })
-        : sendRouterAction(page, request);
+        : sendRouterAction(page, request, app);
     };
 
-    const sendRouterAction = (page: string | undefined, request: unknown) =>
+    const sendRouterAction = (page: string | undefined, request: unknown, app?: string) =>
       new Promise<unknown>((resolve) => {
         const pageId = page || defaultPageId();
         // No page could answer: say so now instead of after the 15 s wait.
@@ -1076,7 +1082,8 @@ const pangular = defineDevframe({
         });
         void my.rpc.broadcast({
           method: 'router-action',
-          args: [{ requestId, pageId, request }],
+          // `app` picks one app on a page that runs several (`router-apps.ts`).
+          args: [{ requestId, pageId, request, ...(app ? { app } : {}) }],
           optional: true,
         });
       });
@@ -1096,15 +1103,27 @@ const pangular = defineDevframe({
       name: 'request-router-action',
       type: 'action',
       jsonSerializable: true,
-      handler: (message: { pageId?: string; request?: unknown }) =>
+      handler: (message: { pageId?: string; app?: unknown; request?: unknown }) =>
         requestRouterAction(
           typeof message?.pageId === 'string' ? message.pageId : undefined,
           message?.request,
+          typeof message?.app === 'string' ? message.app.slice(0, 60) : undefined,
         ),
     });
 
-    const pageFor = (pageId: unknown) => {
+    /** The router state with one page shown as one of its apps, for the panel's app picker. */
+    const routerStateFor = (pageId: unknown, app: unknown): RouterState => {
       const state = routerState.value() as RouterState;
+      if (typeof app !== 'string' || !app) return state;
+      const scoped = routerStateForApp(state, {
+        page: typeof pageId === 'string' ? pageId : undefined,
+        app,
+      });
+      // An app the page does not have shows nothing, never the first app under its name.
+      return 'error' in scoped ? { pages: [] } : scoped.state;
+    };
+    const pageFor = (pageId: unknown, app?: unknown) => {
+      const state = routerStateFor(pageId, app);
       return typeof pageId === 'string'
         ? state.pages.find((p) => p.pageId === pageId)
         : (defaultPage(state.pages.filter((p) => p.snapshot)) ?? defaultPage(state.pages));
@@ -1114,19 +1133,25 @@ const pangular = defineDevframe({
       name: 'router-lint',
       type: 'query',
       jsonSerializable: true,
-      handler: (pageId: unknown) =>
-        routerLintResult(pageFor(pageId), {
-          rules: config.lint.rules,
-          httpFor: routerHttpCalls,
-        }),
+      // A page id, or `{ pageId, app }` for one app of a page that runs several.
+      handler: (target: unknown) =>
+        routerLintResult(
+          target && typeof target === 'object'
+            ? pageFor((target as { pageId?: unknown }).pageId, (target as { app?: unknown }).app)
+            : pageFor(target),
+          {
+            rules: config.lint.rules,
+            httpFor: routerHttpCalls,
+          },
+        ),
     });
 
     register({
       name: 'router-match',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; url?: unknown }) => {
-        const page = pageFor(message?.pageId);
+      handler: (message: { pageId?: unknown; app?: unknown; url?: unknown }) => {
+        const page = pageFor(message?.pageId, message?.app);
         if (!page?.config || typeof message?.url !== 'string') return null;
         return matchUrl(page.config, message.url.slice(0, 2000));
       },
@@ -1140,8 +1165,8 @@ const pangular = defineDevframe({
       name: 'router-http',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; id?: unknown }) => {
-        const page = pageFor(message?.pageId);
+      handler: (message: { pageId?: unknown; app?: unknown; id?: unknown }) => {
+        const page = pageFor(message?.pageId, message?.app);
         const nav = page?.navigations.find((n) => n.id === message?.id);
         if (!page || !nav) return null;
         return callsForNavigation(
@@ -1173,10 +1198,10 @@ const pangular = defineDevframe({
       name: 'router-preview',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; url?: unknown }) => {
+      handler: (message: { pageId?: unknown; app?: unknown; url?: unknown }) => {
         const { sources, serverRoutes } = previewScans();
         return routePreviewResult(
-          routerState.value() as RouterState,
+          routerStateFor(message?.pageId, message?.app),
           {
             page: typeof message?.pageId === 'string' ? message.pageId : undefined,
             url: typeof message?.url === 'string' ? message.url : undefined,
@@ -1191,8 +1216,8 @@ const pangular = defineDevframe({
       name: 'router-diff',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; a?: unknown; b?: unknown }) =>
-        navigationDiffResult(routerState.value() as RouterState, {
+      handler: (message: { pageId?: unknown; app?: unknown; a?: unknown; b?: unknown }) =>
+        navigationDiffResult(routerStateFor(message?.pageId, message?.app), {
           page: typeof message?.pageId === 'string' ? message.pageId : undefined,
           a: typeof message?.a === 'number' ? message.a : undefined,
           b: typeof message?.b === 'number' ? message.b : undefined,
@@ -1203,8 +1228,8 @@ const pangular = defineDevframe({
       name: 'router-export',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; id?: unknown }) =>
-        exportNavigationText(routerState.value() as RouterState, {
+      handler: (message: { pageId?: unknown; app?: unknown; id?: unknown }) =>
+        exportNavigationText(routerStateFor(message?.pageId, message?.app), {
           page: typeof message?.pageId === 'string' ? message.pageId : undefined,
           id: typeof message?.id === 'number' ? message.id : undefined,
         }),
@@ -1214,12 +1239,26 @@ const pangular = defineDevframe({
       name: 'clear-router-navigations',
       type: 'action',
       jsonSerializable: true,
-      handler: (pageId: unknown) => {
+      // A page id, or `{ pageId, app }` to clear one app of a page that runs several.
+      handler: (target: unknown) => {
         if (!config.actions.router) throw new Error(actionBlockedMessage('router'));
+        const record =
+          target && typeof target === 'object' ? (target as Record<string, unknown>) : {};
+        const pageId = typeof target === 'string' ? target : record['pageId'];
+        const app = typeof record['app'] === 'string' && record['app'] ? record['app'] : undefined;
         if (typeof pageId !== 'string') throw new Error('Give the id of the page to clear.');
-        if (clearRouterNavigations(routerPages, pageId)) applyRouter(currentRouter(routerPages));
-        navigationStream.clear(pageId);
-        void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
+        const page = routerPages.get(pageId);
+        const secondary = !!app && !!page?.apps?.some((a) => a.id === app && !a.primary);
+        if (clearRouterNavigations(routerPages, pageId, Date.now(), app)) {
+          applyRouter(currentRouter(routerPages));
+        }
+        // The stream follows the first app only.
+        if (!secondary) navigationStream.clear(pageId);
+        void my.rpc.broadcast({
+          method: 'router-clear',
+          args: [app ? { pageId, app } : { pageId }],
+          optional: true,
+        });
       },
     });
 
@@ -1511,6 +1550,7 @@ const pangular = defineDevframe({
       reduxStores?.expire(now);
       tanstackQuery?.expire(now);
       startupInspector?.expire(now);
+      ionicInspector?.expire(now);
       pluginsInspector?.expire(now);
       componentDeltas.prune((id) => componentPages.has(id));
       injectorDeltas.prune((id) => injectorPages.has(id));
@@ -2890,11 +2930,18 @@ const pangular = defineDevframe({
           platforms.set(page.pageId, `capacitor-${page.info.platform}`);
         }
       }
-      const withUrl = <T extends { pageId: string; reportedAt: number }>(pages: Iterable<T>) =>
+      const withUrl = <
+        T extends { pageId: string; reportedAt: number; url?: string; title?: string },
+      >(
+        pages: Iterable<T>,
+      ) =>
         [...pages].map((page) => ({
           pageId: page.pageId,
           // An idle page sends only its heartbeat, which counts as a report here.
           reportedAt: Math.max(page.reportedAt, heartbeats.seenAt(page.pageId) ?? 0),
+          // A page only one inspector reports, such as Ionic, still names its own URL and title.
+          ...(page.url !== undefined ? { url: page.url } : {}),
+          ...(page.title !== undefined ? { title: page.title } : {}),
           ...details.get(page.pageId),
           platform: platforms.get(page.pageId),
           angular: angularPages.get(page.pageId)?.version,
@@ -2913,6 +2960,7 @@ const pangular = defineDevframe({
           capacitor: withUrl(capacitorPages.values()),
           errors: withUrl(errorsInspector?.pages() ?? []),
           startup: withUrl(startupInspector?.pages() ?? []),
+          ionic: withUrl(ionicInspector?.pages() ?? []),
           plugins: withUrl(pluginsInspector?.pages() ?? []),
           analog: withUrl(on.analog ? analogPages() : []),
         },

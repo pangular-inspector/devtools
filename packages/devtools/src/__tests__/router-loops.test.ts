@@ -15,7 +15,12 @@ import { captureDiagnostics, instrument } from '../router-actions.ts';
 import type { RouteNode } from '../router-config.ts';
 import { lintRoutes } from '../rpc/router-config-tools.ts';
 import { detectLoops, redirectCycles } from '../rpc/router-loops.ts';
-import { describeNavigation, type RouterPage } from '../rpc/router-tools.ts';
+import {
+  clearRouterNavigations,
+  describeNavigation,
+  mergeRouterReport,
+  type RouterPage,
+} from '../rpc/router-tools.ts';
 import { angularAtLeast, initAngularTestBed, STANDALONE } from './angular-version.ts';
 import { functionalRouter } from './router-testing.ts';
 
@@ -49,6 +54,58 @@ function redirect(id: number, url: string, to: string, guard: string, from?: num
 function page(navigations: NavigationRecord[], config: RouteNode[] = []): RouterPage {
   return { pageId: 'p', snapshot: null, navigations, config, reportedAt: 1, changedAt: 1 };
 }
+
+describe('loops of a secondary router app', () => {
+  it('are found per app when a report merges, and cleared with its history', () => {
+    const looping = [
+      redirect(1, '/account', '/login', 'authGuard'),
+      redirect(2, '/login', '/account', 'guestGuard', 1),
+      redirect(3, '/account', '/login', 'authGuard', 2),
+      nav(4, { url: '/login', redirectedFrom: 3 }),
+    ];
+    const pages = new Map<string, RouterPage>();
+    const report = {
+      pageId: 'p',
+      snapshot: null,
+      navigations: [],
+      apps: [
+        { id: 'app-root', name: 'Shell', selector: 'app-root', primary: true as const },
+        { id: 'cart', name: 'Cart', selector: 'cart-widget', navigations: looping },
+      ],
+    };
+    mergeRouterReport(pages, report as never);
+    const cart = () => pages.get('p')!.apps!.find((a) => a.id === 'cart')!;
+    expect(cart().loops).toHaveLength(1);
+    expect(cart().loops![0]).toMatchObject({ kind: 'redirect' });
+    clearRouterNavigations(pages, 'p');
+    expect(cart().loops).toEqual([]);
+  });
+
+  it('drops loops a page sent and keeps only the ones the server found', () => {
+    const forged = [
+      { kind: 'burst', ids: [9], cycle: ['/x'], hops: [], guards: [], bounces: 9, end: '/x' },
+    ];
+    const pages = new Map<string, RouterPage>();
+    mergeRouterReport(pages, {
+      pageId: 'p',
+      snapshot: null,
+      navigations: [],
+      apps: [
+        { id: 'app-root', name: 'Shell', selector: 'app-root', primary: true, loops: forged },
+        { id: 'cart', name: 'Cart', selector: 'cart-widget', loops: forged },
+        { id: 'list', name: 'List', selector: 'app-list', navigations: [nav(1)], loops: forged },
+      ],
+    } as never);
+    const apps = () => pages.get('p')!.apps!;
+    expect(apps().map((a) => a.loops)).toEqual([undefined, undefined, []]);
+    pages.set('p', {
+      ...pages.get('p')!,
+      apps: apps().map((a) => ({ ...a, loops: forged })),
+    } as never);
+    clearRouterNavigations(pages, 'p');
+    expect(apps().map((a) => a.loops)).toEqual([undefined, undefined, []]);
+  });
+});
 
 describe('detectLoops', () => {
   it('finds a guard-to-guard loop and names the guard behind each hop', () => {

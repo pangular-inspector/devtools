@@ -170,6 +170,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Timeline:** one time axis with layers for the router, HTTP, NgRx, change detection, forms and signals.
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
+- **Ionic in the Capacitor tab:** an **Ionic page stacks** section with a card per `ion-router-outlet`: the pages in its stack, the active one, the direction of the last navigation and whether it can go back, read from `@ionic/angular`'s outlet directive or from the DOM. Hovering a page outlines it in the app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
 - **Performance:** a tab for LCP, INP, CLS, FCP and TTFB with the element and component behind each, the slowest interactions and long tasks (#372).
 - **Build:** a tab for the Vite dev server's module graph with its lazy boundaries, and the chunk sizes of the last production build (#372, #373).
@@ -230,6 +231,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Three router lint rules.** `always-run-parent` flags `runGuardsAndResolvers: 'always'` on a parent route with guards or resolvers. `lazy-component-eager` flags a `loadComponent` route whose component another route already imports eagerly. The `resolver-refetch` rule is a timing heuristic: from the SSR & HTTP inspector's calls, it flags a `GET` the page made while a navigation's resolvers ran and again after the navigation ended, which suggests the routed component fetches what a resolver already loaded. A guard can make the first `GET` too, so the rule does not prove the resolver made it. Turn any of them off with `lint.rules`.
 - **Follow navigations from an agent.** `pangular:follow-navigations` returns the navigations that are new or changed since a cursor, across pages, and can wait up to 30 seconds for the next one, so an agent can follow a login and redirect flow without polling.
 - **What happens if I go to a URL.** The **Config** view has a **What happens** button, and agents a `pangular:preview-navigation` tool, that predict a navigation from the live route config without navigating: the redirects it follows, the route chain and params, and in order the guards, lazy chunks, resolvers and components that run, with each route's source file and the render mode.
+- **Several apps on one page.** A page that bootstraps more than one Angular app with its own Router, such as several `bootstrapApplication()` roots or micro-frontends, reports each app's route, navigations, config and setup under a stable app id. The Routes tab shows an **App** picker on such a page, and the router agent tools take an optional `app` argument. A page with one app reports and shows exactly what it did before (#485).
 
 #### CLI
 
@@ -306,6 +308,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 - A quick start, and a panel screenshot on every inspector page.
 - Pages for the command palette, settings, terminals, the popup and hub, configuration, other servers (Hono, h3, Fastify), Capacitor, the timeline, errors, audit, TanStack Query, agent skills, browser agents and writing a plugin.
+- A guide to shipping a plugin from a library, built on the example plugin package `examples/pangular-plugin-example` (a feature flag store with its own tab and agent tools), which the Analog demo uses (#404).
 - A roadmap page.
 - The Capacitor and NativeScript guides show the Android network security config and the iOS App Transport Security and local network settings a device needs to reach the devtools over the LAN (#373).
 - The Express and other servers pages say which port the WebSocket side-car uses (the first free one from 9777), how to pin it with `ws: {port}`, and how to serve the socket on the app's own server with `attach(server)` (#426).

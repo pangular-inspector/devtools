@@ -21,6 +21,7 @@ import { attachLeaks } from './leaks-collector.ts';
 import { attachPlugins } from './plugins-collector.ts';
 import { attachStartup } from './startup-timing.ts';
 import { attachPerformance } from './perf-collector.ts';
+import { attachIonic } from './ionic-collector.ts';
 import { attachBrowserTools } from './browser-tools.ts';
 import { attachAxe, axeOwnerNg } from './axe-runner.ts';
 import { createRecentWrites } from './error-explain.ts';
@@ -115,6 +116,7 @@ import { attachChangeDetection } from './cd-overlay.ts';
 import { attachAngularInfo } from './ng-capabilities.ts';
 import { pageDebugApi, type NgDebugApi } from './debug-api.ts';
 import { createScanBackoff } from './router-attach.ts';
+import { RouterApps } from './router-apps.ts';
 import {
   capturePlatformNavigations,
   navigationApi,
@@ -626,6 +628,8 @@ async function startOverlay(
   const startup = on.injectors ? attachStartup(my, pageId, getNg, { tickMs }) : null;
   const perf = on.performance ? attachPerformance(my, pageId, getNg, { tickMs }) : null;
   if (perf) own(perf.stop);
+  // Ionic's `ion-router-outlet` stacks, shown in the Capacitor tab.
+  const ionic = on.capacitor ? attachIonic(my, pageId, getNg, { tickMs }) : null;
   // Runs axe-core only when the panel or an agent asks; it loads axe-core then.
   // The component owning each element is component data: only with that inspector on.
   const axe = attachAxe(my, pageId, axeOwnerNg(on.components, getNg));
@@ -655,6 +659,8 @@ async function startOverlay(
   let setup: RouterSetup | undefined;
   let sentGeneration = -1;
   const routerScan = createScanBackoff();
+  // The other Angular apps on the page that have a Router (`router-apps.ts`).
+  const routerApps = new RouterApps(onRouterChange);
   let lastRouterPayload = '';
   let lastRouterPushAt = 0;
   let routerPushTimer: ReturnType<typeof setTimeout> | undefined;
@@ -714,7 +720,8 @@ async function startOverlay(
     routerScan.reset();
     router = routers[0];
     routerCount = routers.length;
-    routerRoot = candidates[0] ?? null;
+    routerApps.scan(ng, candidates, router);
+    routerRoot = routerApps.primaryRoot(candidates[0] ?? null);
     const stop = watchRouter(router, navigations, onRouterChange);
     if (stop) routerCleanup.push(stop);
     routerCleanup.push(onGuardsCheckStart(router, instrumentLoadedRoutes));
@@ -736,6 +743,7 @@ async function startOverlay(
   function detachRouter() {
     for (const cleanup of routerCleanup) cleanup();
     routerCleanup = [];
+    routerApps.reset();
     stopInstrument?.();
     stopInstrument = null;
     router = null;
@@ -783,6 +791,11 @@ async function startOverlay(
         if (configTruncated) report['configTruncated'] = configTruncated;
         report['activeIds'] = activeIds(router);
         report['setup'] = setup;
+        if (routerDomDirty) {
+          routerApps.scan(ng, Array.from(document.querySelectorAll('[ng-version]')), router, true);
+        }
+        const apps = routerApps.report(ng, routerCount);
+        if (apps) report['apps'] = apps;
         if (routerDomDirty) {
           routerDomDirty = false;
           outlets = outletsOf(router);
@@ -858,6 +871,7 @@ async function startOverlay(
     plugins && paced(() => void plugins.push().catch(() => {})),
     startup && paced(() => void startup.push().catch(() => {})),
     perf && paced(() => void perf.push().catch(() => {})),
+    ionic && paced(() => void ionic.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   // The counts on the launcher pill (`popup.ts`), handed over when they change.
   let renders = 0;
@@ -967,7 +981,12 @@ async function startOverlay(
     name: 'router-action',
     type: 'event',
     jsonSerializable: true,
-    handler: (message: { requestId?: string; pageId?: string; request?: unknown }) => {
+    handler: (message: {
+      requestId?: string;
+      pageId?: string;
+      app?: unknown;
+      request?: unknown;
+    }) => {
       if (!message || typeof message.requestId !== 'string') return;
       if (message.pageId && message.pageId !== pageId) return;
       const respond = (result: unknown) =>
@@ -976,9 +995,20 @@ async function startOverlay(
           .catch(() => {});
       if (!router) return respond({ error: 'This page has no Router.' });
       if (!isRouterAction(message.request)) return respond({ error: 'Unknown action.' });
-      runAction(router, navigations, message.request, setInstrumented).then(respond, (error) =>
-        respond({ error: String((error as Error)?.message ?? error) }),
-      );
+      // An action for another app on the page runs on that app's Router.
+      const app = routerApps.target(message.app);
+      if (!app && !routerApps.isPrimary(message.app)) {
+        return respond({ error: `This page has no app \`${String(message.app).slice(0, 40)}\`.` });
+      }
+      if (app && message.request.action === 'instrument') {
+        return respond({ error: 'Guard recording runs in the first app only.' });
+      }
+      runAction(
+        app?.router ?? router,
+        app?.navigations ?? navigations,
+        message.request,
+        setInstrumented,
+      ).then(respond, (error) => respond({ error: String((error as Error)?.message ?? error) }));
     },
   });
 
@@ -986,9 +1016,19 @@ async function startOverlay(
     name: 'router-clear',
     type: 'event',
     jsonSerializable: true,
-    handler: (message: { pageId?: unknown } | undefined) => {
+    handler: (message: { pageId?: unknown; app?: unknown } | undefined) => {
       if (!on.router || message?.pageId !== pageId) return;
+      const app = typeof message.app === 'string' && message.app ? message.app : undefined;
+      if (app && !routerApps.isPrimary(app)) {
+        // One app of several: only its history.
+        const target = routerApps.target(app);
+        if (target) clearNavigations(target.navigations);
+        lastRouterPayload = '';
+        scheduleRouterPush();
+        return;
+      }
       clearNavigations(navigations);
+      if (!app) routerApps.clearNavigations();
       platformNavigations.length = 0;
       lastRouterPayload = '';
       scheduleRouterPush();
@@ -1173,6 +1213,7 @@ async function startOverlay(
     plugins?.leave();
     startup?.leave();
     perf?.leave();
+    ionic?.leave();
     angularInfo.leave();
     browserTools.leave();
   };
@@ -1188,6 +1229,7 @@ async function startOverlay(
     plugins?.resume();
     startup?.resume();
     perf?.resume();
+    ionic?.resume();
     browserTools.resume();
     void lease.refresh();
     left = false;
@@ -1231,6 +1273,7 @@ async function startOverlay(
     leaks?.stop();
     plugins?.stop();
     startup?.stop();
+    ionic?.stop();
     browserTools.stop();
     axe.stop();
     cd?.stop();
@@ -1238,6 +1281,7 @@ async function startOverlay(
     stopAnalog();
     for (const cleanup of routerCleanup) cleanup();
     routerCleanup = [];
+    routerApps.reset();
     stopInstrument?.();
     stopInstrument = null;
     routerDomObserver?.disconnect();

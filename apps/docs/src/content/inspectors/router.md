@@ -9,7 +9,7 @@ description: The live route, every navigation as a story, the live route config,
 
 # Router
 
-The Routes tab reads the running app's Router. The top section, **Live router**, has six views. The bottom section, **Source route config**, lists the routes your files declare. When more than one page is connected, a **Page** picker chooses which one you see.
+The Routes tab reads the running app's Router. The top section, **Live router**, has six views. The bottom section, **Source route config**, lists the routes your files declare. When more than one page is connected, a **Page** picker chooses which one you see. When the page runs more than one Angular app with a Router, an **App** picker chooses the app; see [Several apps on one page](#several-apps-on-one-page).
 
 <ngmd-image src="/images/panel/router.png" alt="The Routes tab on the Current view after navigating to a user page: the URL and document title, the active routes with their components, params, static and resolved data and the resolver, and the outlets with Show in Components buttons"></ngmd-image>
 
@@ -169,7 +169,24 @@ Components rendered by the router show their route and outlet in the [Components
 
 ### Finding the Router
 
-The overlay reads the helper `provideRouter()` publishes (`ng.ɵgetRouterInstance`). For `RouterModule.forRoot()` apps, and on Angular 20.0 to 20.3.4 (which lack the helper), it looks for the `Router` token in the injectors instead. With several app roots, the router that has routes or has navigated wins. Before Angular 16.2 neither lookup exists; see [On older Angular](#on-older-angular).
+The overlay reads the helper `provideRouter()` publishes (`ng.ɵgetRouterInstance`). For `RouterModule.forRoot()` apps, and on Angular 20.0 to 20.3.4 (which lack the helper), it looks for the `Router` token in the injectors instead. With several app roots that share one Router, the router that has routes or has navigated wins. Before Angular 16.2 neither lookup exists; see [On older Angular](#on-older-angular).
+
+### Several apps on one page
+
+A page can bootstrap more than one Angular app, with several `bootstrapApplication()` calls or micro-frontends. Each app root (an element with `ng-version`) that has its own Router counts as an app. Roots that share one Router count once.
+
+When a page has more than one, the **Live router** heading shows an **App** picker. Each app is listed by its root component and tag, such as `ShellApp <app-root>`. The first app is the router that has routes or has navigated, else the first root. Pick another app to see its route, navigations, config, setup and lint. The buttons that act on the router (**Go**, **Read lazy**, **Abort**, **Probe in app** and **Replay**) run on the app you picked. A page with one app shows no picker.
+
+Each app has an id: the tag of its root, with `-2`, `-3` and so on for a second root with the same tag. The id stays the same while the root is on the page, and a root that replaces a removed one with the same tag gets the same id back. The router agent tools take that id, or the root component name, as `app`.
+
+Some parts stay with the first app:
+
+| What               | Why                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| Outlets and links  | The overlay reads them from the whole page. They show on the first app only.                        |
+| Preloads           | The overlay watches the first app's preloader.                                                      |
+| Guard recording    | It wraps the first app's guards. On another app, **Record each guard and resolver** shows an error. |
+| Follow navigations | `follow-navigations` streams the first app's navigations.                                           |
 
 ### Development builds
 
@@ -251,6 +268,8 @@ Without that recording, the guards listed for a navigation are candidates: the `
 | `pangular:probe-route`        | Runs the matcher and `canMatch` guards for a URL without navigating.                                                                                                                                                                                                      |
 | `pangular:record-guards`      | Turns per-guard and per-resolver recording on or off.                                                                                                                                                                                                                     |
 | `pangular:router` (resource)  | The active route tree and recent navigations of each page.                                                                                                                                                                                                                |
+
+On a page that runs several apps, `inspect-route`, `explain-navigation`, `diff-navigations`, `preview-navigation`, `list-routes`, `lint-routes` and `router-config` take an optional `app`: the app's id or root component name. Without it they answer for the first app and name the others.
 
 `navigate` and `probe-route` only accept same-origin relative URLs that start with `/`. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, the server drops `navigate` and `probe-route`, and keeps `record-guards` and `list-routes` with `resolveLazy`. See [Tools](../agents/tools.md).
 

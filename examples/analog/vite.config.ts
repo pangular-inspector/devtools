@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import analog from '@analogjs/platform';
 import pangular from '@pangular-inspector/devtools/vite';
+import { flagsServerPlugin } from 'pangular-plugin-example/pangular-server';
 
 export default defineConfig(() => ({
   build: {
@@ -40,6 +41,6 @@ export default defineConfig(() => ({
         highlighter: 'prism',
       },
     }),
-    pangular(),
+    pangular({ serverPlugins: [flagsServerPlugin] }),
   ],
 }));

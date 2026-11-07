@@ -1,4 +1,5 @@
 import { diffNavigationsText } from './rpc/router-diff.ts';
+import { APP_ARGUMENT, routerStateForApp } from './rpc/router-apps.ts';
 import { MAX_WAIT_MS, streamText, type NavigationStream } from './rpc/router-stream.ts';
 import { previewNavigationText } from './rpc/router-preview.ts';
 import type { HttpCall } from './http-rules.ts';
@@ -34,7 +35,11 @@ export interface RegisterRouterAgentToolsEnv {
   limits: ResolvedPangularConfig['limits'];
   noRouter: string;
   pageProperty: typeof PAGE_ARGUMENT;
-  requestRouterAction: (page: string | undefined, request: unknown) => Promise<unknown>;
+  requestRouterAction: (
+    page: string | undefined,
+    request: unknown,
+    app?: string,
+  ) => Promise<unknown>;
   routerPages: Map<string, RouterPage>;
   routerState: SharedState<RouterState>;
   withPageUrls: <T extends { pageId: string; reportedAt: number }>(
@@ -69,6 +74,12 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
     previewScans,
     routerHttpCalls,
   } = env;
+  /** The router state for a tool's `page` and `app`, with a line naming the page's other apps. */
+  const routerFor = (args: { page?: string; app?: unknown }) => {
+    const scoped = routerStateForApp(routerState.value() as RouterState, args);
+    if ('error' in scoped) return { error: { markdown: refusal(scoped.error) } };
+    return { state: scoped.state, page: scoped.page ?? args.page, note: scoped.note };
+  };
   agent.registerTool({
     id: 'pangular:inspect-route',
     title: 'Inspect the active route',
@@ -78,6 +89,7 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
       type: 'object',
       properties: {
         page: pageProperty,
+        app: APP_ARGUMENT,
         component: {
           type: 'string',
           description:
@@ -85,10 +97,13 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
         },
       },
     },
-    handler: async (args: { page?: string; component?: string }) => {
-      const state = routerState.value() as RouterState;
-      if (!state.pages.length) return { markdown: noRouter };
-      return { markdown: inspectRouteText(state, args) };
+    handler: async (args: { page?: string; app?: string; component?: string }) => {
+      if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+      const scoped = routerFor(args);
+      if ('error' in scoped) return scoped.error;
+      return {
+        markdown: inspectRouteText(scoped.state, { ...args, page: scoped.page }) + scoped.note,
+      };
     },
   });
 
@@ -101,6 +116,7 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
       type: 'object',
       properties: {
         page: pageProperty,
+        app: APP_ARGUMENT,
         url: {
           type: 'string',
           description: 'Only navigations whose URL or final URL contains this text.',
@@ -126,26 +142,30 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
     },
     handler: async (args: {
       page?: string;
+      app?: string;
       url?: string;
       limit?: number;
       perf?: boolean;
       id?: number;
       format?: 'explain' | 'repro';
     }) => {
-      const state = routerState.value() as RouterState;
-      if (!state.pages.length) return { markdown: noRouter };
+      if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+      const scoped = routerFor(args);
+      if ('error' in scoped) return scoped.error;
+      const { state, page, note } = scoped;
       if (args.format === 'repro') {
         if (args.perf) return { markdown: refusal('Pass either `perf` or `format: "repro"`.') };
-        return { markdown: exportNavigationText(state, { page: args.page, id: args.id }) };
+        return { markdown: exportNavigationText(state, { page, id: args.id }) + note };
       }
       return {
-        markdown: explainNavigationText(
-          state,
-          args,
-          Date.now(),
-          limits.navigations,
-          routerHttpCalls,
-        ),
+        markdown:
+          explainNavigationText(
+            state,
+            { ...args, page },
+            Date.now(),
+            limits.navigations,
+            routerHttpCalls,
+          ) + note,
       };
     },
   });
@@ -159,14 +179,18 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
       type: 'object',
       properties: {
         page: pageProperty,
+        app: APP_ARGUMENT,
         a: { type: 'integer', description: 'Id of the earlier navigation.' },
         b: { type: 'integer', description: 'Id of the later navigation.' },
       },
     },
-    handler: async (args: { page?: string; a?: number; b?: number }) => {
-      const state = routerState.value() as RouterState;
-      if (!state.pages.length) return { markdown: noRouter };
-      return { markdown: diffNavigationsText(state, args) };
+    handler: async (args: { page?: string; app?: string; a?: number; b?: number }) => {
+      if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+      const scoped = routerFor(args);
+      if ('error' in scoped) return scoped.error;
+      return {
+        markdown: diffNavigationsText(scoped.state, { ...args, page: scoped.page }) + scoped.note,
+      };
     },
   });
 
@@ -219,18 +243,28 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
       type: 'object',
       properties: {
         page: pageProperty,
+        app: APP_ARGUMENT,
         url: { type: 'string', description: 'A path such as /admin/users?tab=roles.' },
       },
       required: ['url'],
     },
-    handler: async (args: { page?: string; url?: string }) => {
-      const state = routerState.value() as RouterState;
-      if (!state.pages.length) return { markdown: noRouter };
+    handler: async (args: { page?: string; app?: string; url?: string }) => {
+      if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
       if (typeof args.url !== 'string' || !args.url) {
         return { markdown: refusal('Pass `url`, such as /users/42.') };
       }
+      const scoped = routerFor(args);
+      if ('error' in scoped) return scoped.error;
       const { sources, serverRoutes } = previewScans();
-      return { markdown: previewNavigationText(state, args, sources, serverRoutes) };
+      return {
+        markdown:
+          previewNavigationText(
+            scoped.state,
+            { ...args, page: scoped.page },
+            sources,
+            serverRoutes,
+          ) + scoped.note,
+      };
     },
   });
 
@@ -243,6 +277,7 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
       type: 'object',
       properties: {
         page: pageProperty,
+        app: APP_ARGUMENT,
         match: {
           type: 'string',
           description: 'A URL such as /users/42 to match against the config.',
@@ -261,33 +296,41 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
     },
     handler: async (args: {
       page?: string;
+      app?: string;
       match?: string;
       audit?: boolean;
       filter?: string;
       resolveLazy?: string;
     }) => {
-      let state = routerState.value() as RouterState;
-      if (!state.pages.length) return { markdown: noRouter };
+      if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+      let scoped = routerFor(args);
+      if ('error' in scoped) return scoped.error;
       let resolved = '';
       if (args.resolveLazy !== undefined) {
         const target = routerTarget(args.page);
         if (!('pageId' in target)) return target;
-        const result = await requestRouterAction(target.pageId, {
-          action: 'resolve-lazy',
-          id: args.resolveLazy,
-        });
+        const appId = scoped.state.pages.find((p) => p.pageId === target.pageId)?.appId;
+        const result = await requestRouterAction(
+          target.pageId,
+          { action: 'resolve-lazy', id: args.resolveLazy },
+          appId,
+        );
         const answer = routerActionAnswer('resolve-lazy', target.pageId, result, []);
         if (refusalOf(answer) !== undefined) return { markdown: answer };
         resolved = `${answer}\n\n`;
-        state = routerState.value() as RouterState;
+        scoped = routerFor(args);
+        if ('error' in scoped) return scoped.error;
       }
+      const { state, note } = scoped;
       let sources: ReturnType<typeof extractRoutes> = [];
       try {
         sources = extractRoutes(ctx.cwd);
       } catch {
         sources = [];
       }
-      return { markdown: `${resolved}${listRoutesText(state, args, sources)}` };
+      return {
+        markdown: `${resolved}${listRoutesText(state, { ...args, page: scoped.page }, sources)}${note}`,
+      };
     },
   });
 
@@ -296,15 +339,17 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
     title: 'Lint routes',
     description:
       "Checks the live route config: routes after '**', shadowed params, empty paths without pathMatch full, redirect loops, deprecated guards, title and security issues, and the first 100 RouterLinks on the page.",
-    inputSchema: { type: 'object', properties: { page: pageProperty } },
-    handler: async (args: { page?: string }) => {
-      const state = routerState.value() as RouterState;
-      if (!state.pages.length) return { markdown: noRouter };
+    inputSchema: { type: 'object', properties: { page: pageProperty, app: APP_ARGUMENT } },
+    handler: async (args: { page?: string; app?: string }) => {
+      if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+      const scoped = routerFor(args);
+      if ('error' in scoped) return scoped.error;
       return {
-        markdown: lintRoutesText(state, args, undefined, {
-          rules: config.lint.rules,
-          httpFor: routerHttpCalls,
-        }),
+        markdown:
+          lintRoutesText(scoped.state, { ...args, page: scoped.page }, undefined, {
+            rules: config.lint.rules,
+            httpFor: routerHttpCalls,
+          }) + scoped.note,
       };
     },
   });
@@ -314,11 +359,14 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
     title: 'Show the router setup',
     description:
       'How the router is set up: provideRouter or forRoot, effective options (set or default), features, strategies, base href, hydration and whether guard instrumentation is on.',
-    inputSchema: { type: 'object', properties: { page: pageProperty } },
-    handler: async (args: { page?: string }) => {
-      const state = routerState.value() as RouterState;
-      if (!state.pages.length) return { markdown: noRouter };
-      return { markdown: routerConfigText(state, args) };
+    inputSchema: { type: 'object', properties: { page: pageProperty, app: APP_ARGUMENT } },
+    handler: async (args: { page?: string; app?: string }) => {
+      if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+      const scoped = routerFor(args);
+      if ('error' in scoped) return scoped.error;
+      return {
+        markdown: routerConfigText(scoped.state, { ...args, page: scoped.page }) + scoped.note,
+      };
     },
   });
 
