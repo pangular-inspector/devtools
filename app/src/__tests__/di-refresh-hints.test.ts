@@ -208,4 +208,53 @@ describe('Injectors refresh, inactive route injectors and hints', () => {
     expect(list.textContent).toContain('provideFeature()');
     expect(list.textContent).toContain('helper (unresolved)');
   });
+
+  it('names the caps the server sent with a truncated tree', async () => {
+    const tree = structuredClone(liveTree) as typeof liveTree & {
+      pages: { p1: { truncated?: boolean; limits?: unknown } };
+    };
+    tree.pages.p1.truncated = true;
+    tree.pages.p1.limits = { elements: 300, injectors: 400, depth: 50 };
+    const fixture = await render(tree);
+    const notice = host(fixture).querySelector('.notice')!.textContent!.replace(/\s+/g, ' ');
+    expect(notice).toContain('at most 300 element injectors and 400 in all');
+    expect(notice).toContain('more than 50 levels deep');
+  });
+
+  it('links a live provider to where the source declares it', async () => {
+    const fixture = await render();
+    fixture.componentInstance.setView('environment');
+    await settle(fixture);
+    fixture.componentInstance.select('inj-r');
+    await settle(fixture);
+    const cart = [...host(fixture).querySelectorAll('.providers .provider')].find(
+      (li) => li.querySelector('.token')?.textContent?.trim() === 'CartStore',
+    )!;
+    expect(cart.querySelector('.declared')?.textContent).toContain('src/cart.ts');
+  });
+
+  it('draws how Angular resolves an injected token', async () => {
+    const tree = structuredClone(liveTree);
+    const card = tree.pages.p1.roots[0]!.children[0] as { injector: { path?: string[] } };
+    card.injector.path = ['inj-2', 'inj-1', 'inj-r', 'inj-null'];
+    const fixture = await render(tree);
+    fixture.componentInstance.select('inj-2');
+    await settle(fixture);
+    const toggle = host(fixture).querySelector<HTMLButtonElement>('.resolve-toggle')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    toggle.click();
+    await settle(fixture);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const steps = [...host(fixture).querySelectorAll('.resolve-graph li')].map((li) => [
+      li.className,
+      li.querySelector('.resolve-state')?.textContent?.trim(),
+    ]);
+    // The card asks itself, then app-root, then Root, which provides CartStore.
+    expect(steps).toEqual([
+      ['resolve-asked', 'asked, not here'],
+      ['resolve-asked', 'asked, not here'],
+      ['resolve-provides', 'provides it'],
+      ['resolve-not-asked', 'not asked'],
+    ]);
+  });
 });

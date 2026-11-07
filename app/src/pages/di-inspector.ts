@@ -29,45 +29,14 @@ import type { ComponentFocus } from '../types/component-focus.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
 import { storeFlag, storedFlag } from '../view-prefs';
 import { StartupSection } from './startup-section';
+import type {
+  InjectorTreeLimits,
+  InjectorTreeNode,
+  ProviderInfo as PanelProviderInfo,
+} from '@pangular-inspector/devtools/internal/types';
 
-interface ProviderInfo {
-  token: string;
-  /** The page's id for the token object; two tokens can share a name. Missing in older reports. */
-  tokenId?: string;
-  type: string;
-  isViewProvider: boolean;
-  multi?: boolean;
-  importPath?: string[];
-  framework?: boolean;
-}
-
-interface DependencyInfo {
-  from: string;
-  token: string;
-  tokenId?: string;
-  flags: string[];
-  providedBy: string | null;
-}
-
-interface InjectorNode {
-  injector: {
-    id: string;
-    type: string;
-    name: string;
-    providerCount: number;
-    component?: string;
-    componentId?: string;
-    directives?: string[];
-    selector?: string;
-    path?: string[];
-    framework?: boolean;
-    /** A lazy route's environment injector that no rendered element's lookup path goes through. */
-    inactive?: boolean;
-  };
-  providers: ProviderInfo[];
-  children: InjectorNode[];
-  dependencies?: DependencyInfo[];
-}
+type ProviderInfo = PanelProviderInfo;
+type InjectorNode = InjectorTreeNode;
 
 interface SourceProvider {
   token: string;
@@ -91,6 +60,7 @@ interface InjectorPage {
   roots?: unknown;
   environment?: unknown;
   truncated?: unknown;
+  limits?: unknown;
   zone?: unknown;
   reportedAt?: unknown;
 }
@@ -270,9 +240,10 @@ function isTree(value: unknown): value is InjectorNode[] {
           </svg>
           <span>
             <strong>The page reported only part of its injector tree.</strong>
-            It keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested
-            more than 1000 levels deep, so a lookup path or a provider can point to one that is not
-            listed.
+            It keeps at most {{ limits().elements }} element injectors and
+            {{ limits().injectors }} in all, and leaves out injectors nested more than
+            {{ limits().depth }} levels deep, so a lookup path or a provider can point to one that
+            is not listed.
           </span>
         </p>
       }
@@ -558,6 +529,42 @@ function isTree(value: unknown): value is InjectorNode[] {
                           } @else {
                             <span class="from missing">not provided anywhere</span>
                           }
+                          <button
+                            type="button"
+                            class="link resolve-toggle"
+                            [attr.aria-expanded]="resolvingKey() === depKey(dep, $index)"
+                            [attr.aria-controls]="'di-resolve-' + $index"
+                            (click)="toggleResolve(depKey(dep, $index))"
+                          >
+                            Resolution
+                            <span class="sr-only">of {{ dep.token }}</span>
+                          </button>
+                        </div>
+                        <div
+                          class="resolution"
+                          [id]="'di-resolve-' + $index"
+                          [hidden]="resolvingKey() !== depKey(dep, $index)"
+                        >
+                          @if (resolvingKey() === depKey(dep, $index)) {
+                            <ol
+                              class="resolve-graph"
+                              [attr.aria-label]="'How Angular resolves ' + dep.token"
+                            >
+                              @for (step of resolution(dep); track step.id + $index) {
+                                <li [class]="'resolve-' + step.state">
+                                  <span class="resolve-dot" aria-hidden="true"></span>
+                                  @if (step.id === nullId) {
+                                    <span class="mono">Null injector</span>
+                                  } @else {
+                                    <button type="button" class="step" (click)="reveal(step.id)">
+                                      <span class="mono">{{ step.label }}</span>
+                                    </button>
+                                  }
+                                  <span class="resolve-state">{{ step.text }}</span>
+                                </li>
+                              }
+                            </ol>
+                          }
                         </div>
                       </li>
                     }
@@ -608,6 +615,21 @@ function isTree(value: unknown): value is InjectorNode[] {
                         </div>
                         @if (p.importPath?.length) {
                           <div class="dep-meta">via {{ p.importPath!.join(' › ') }}</div>
+                        }
+                        @if (sourceOf(p.token); as places) {
+                          <div class="dep-meta declared">
+                            <span>Declared in</span>
+                            @for (place of places.shown; track place.file + place.line) {
+                              <app-source-link
+                                class="decl-file"
+                                [file]="place.file"
+                                [line]="place.line"
+                              />
+                            }
+                            @if (places.more) {
+                              <span>+{{ places.more }} more</span>
+                            }
+                          </div>
                         }
                         <app-store-global
                           class="provider-global"
@@ -1519,6 +1541,83 @@ function isTree(value: unknown): value is InjectorNode[] {
       stroke-width: 2;
       stroke-linecap: round;
     }
+    .resolve-toggle {
+      font-size: 12px;
+    }
+    .resolution[hidden] {
+      display: none;
+    }
+    .resolve-graph {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 8px 0 0;
+      padding: 0 0 0 4px;
+      list-style: none;
+    }
+    .resolve-graph li {
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 8px;
+      min-width: 0;
+      padding-left: 18px;
+      font-size: 12px;
+    }
+    .resolve-graph li::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: -6px;
+      bottom: 50%;
+      width: 2px;
+      background: var(--border-strong);
+    }
+    .resolve-graph li:first-child::before {
+      display: none;
+    }
+    .resolve-dot {
+      position: absolute;
+      left: 0;
+      width: 10px;
+      height: 10px;
+      border: 2px solid var(--border-strong);
+      border-radius: 50%;
+      background: var(--surface);
+    }
+    .resolve-provides .resolve-dot {
+      border-color: var(--ok);
+      background: var(--ok);
+    }
+    .resolve-throws .resolve-dot {
+      border-color: var(--danger);
+      background: var(--danger);
+    }
+    .resolve-state {
+      color: var(--text-2);
+    }
+    .resolve-provides .resolve-state {
+      color: var(--ok-text);
+      font-weight: 600;
+    }
+    .resolve-throws .resolve-state {
+      color: var(--danger-text);
+    }
+    .resolve-not-asked .resolve-state,
+    .resolve-skipped .resolve-state {
+      color: var(--text-3);
+    }
+    .declared {
+      color: var(--text-3);
+    }
+    .decl-file {
+      min-width: 0;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
     .refresh {
       display: inline-flex;
       align-items: center;
@@ -1804,6 +1903,17 @@ export class DiInspector {
     return isTree(environment) ? environment : [];
   });
   readonly truncated = computed(() => this.shownPage()?.truncated === true);
+  /** The caps the server names with `truncated`, or the ones it has always used. */
+  readonly limits = computed<InjectorTreeLimits>(() => {
+    const limits = this.shownPage()?.limits as Partial<InjectorTreeLimits> | undefined;
+    const whole = (n: unknown, fallback: number) =>
+      typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : fallback;
+    return {
+      elements: whole(limits?.elements, 2000),
+      injectors: whole(limits?.injectors, 2500),
+      depth: whole(limits?.depth, 1000),
+    };
+  });
   readonly zone = computed(() => {
     const zone = this.shownPage()?.zone;
     return typeof zone === 'string' ? zoneLabel(zone) : null;
@@ -2068,6 +2178,73 @@ export class DiInspector {
     return out;
   });
   readonly orphansOpen = signal(false);
+
+  /**
+   * Where the source scan declares each token: `providers` entries, injectable
+   * classes and known provide*() functions, by token name (the last part of
+   * `Feature.Token`). Joins the live Provides list to the source.
+   */
+  private readonly sourceByToken = computed(() => {
+    const map = new Map<string, SourceProvider[]>();
+    for (const p of this.sourceProviders()) {
+      if (!PROVIDING_TYPES.has(p.type) && p.type !== 'root-provider') continue;
+      const name = p.token.slice(p.token.lastIndexOf('.') + 1);
+      let list = map.get(name);
+      if (!list) map.set(name, (list = []));
+      if (!list.some((q) => q.file === p.file && q.line === p.line)) list.push(p);
+    }
+    return map;
+  });
+
+  /** Up to three source places that declare `token`, and how many more. */
+  sourceOf(token: string): { shown: SourceProvider[]; more: number } | null {
+    const list = this.sourceByToken().get(token);
+    if (!list?.length) return null;
+    return { shown: list.slice(0, 3), more: Math.max(0, list.length - 3) };
+  }
+
+  /** The dependency whose resolution is open in the details. */
+  readonly resolvingKey = signal<string | null>(null);
+
+  depKey(dep: { from: string; token: string; tokenId?: string }, index: number): string {
+    return `${index}|${dep.from}|${dep.tokenId ?? dep.token}`;
+  }
+
+  toggleResolve(key: string) {
+    this.resolvingKey.update((open) => (open === key ? null : key));
+  }
+
+  /**
+   * The lookup path of the selected injector, read for one dependency: the
+   * steps Angular asked before the injector that provides the token, that
+   * injector, and the steps it never reached. `self` stops after the first
+   * step, `skipSelf` skips it, and a token nobody provides goes on to the null
+   * injector, which throws unless the dependency is optional.
+   */
+  resolution(dep: { flags: string[]; providedBy: string | null }) {
+    const steps = this.path();
+    const at = dep.providedBy ? steps.findIndex((step) => step.id === dep.providedBy) : -1;
+    const self = dep.flags.includes('self');
+    const skipSelf = dep.flags.includes('skipSelf');
+    const optional = dep.flags.includes('optional');
+    return steps.map((step, index) => {
+      let state: 'asked' | 'provides' | 'skipped' | 'not-asked' | 'throws' | 'null';
+      if (index === 0 && skipSelf) state = 'skipped';
+      else if (at >= 0) state = index < at ? 'asked' : index === at ? 'provides' : 'not-asked';
+      else if (self && index > (skipSelf ? 1 : 0)) state = 'not-asked';
+      else if (step.id === NULL_ID) state = optional ? 'null' : 'throws';
+      else state = 'asked';
+      const text = {
+        asked: 'asked, not here',
+        provides: 'provides it',
+        skipped: 'skipped (skipSelf)',
+        'not-asked': 'not asked',
+        throws: 'throws NullInjectorError',
+        null: 'gives null (optional)',
+      }[state];
+      return { ...step, state, text };
+    });
+  }
   readonly orphanedText = computed(() => {
     const count = new Set(this.orphaned().map((p) => p.token)).size;
     return count === 1
