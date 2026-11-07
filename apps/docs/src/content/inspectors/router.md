@@ -99,7 +99,12 @@ The live route config. The tab merges lazy children in once they load, and marks
 
 - Filter the routes by path, component or declaring file. While the filter is set, the summary shows the count, for example "2 of 14 routes", and a screen reader announces it as you type. If nothing matches, click **Clear filters**.
 - **Test a URL** and click **Predict** to see which route matches it, or the nearest ones.
-- Click **What happens** for a card that predicts going to the URL from the live config, without navigating or running app code: the redirects it follows, the route chain and params, and then in order the `canMatch` guards, lazy children that download, `canDeactivate` guards of the routes being left, `canActivateChild` and `canActivate` guards, lazy components, resolvers, the components that render and the title. It also names the file each route is declared in and the render mode from `*.routes.server.ts`. Routes already active are marked, since they rerun guards only when their params change. The card stops at a function redirect, a redirect loop or a lazy route that has not loaded, and says why.
+- Click **What happens** for a card that predicts going to the URL from the live config. It does not navigate or run app code. The card shows:
+  - the redirects it follows, and the route chain and params
+  - in order: the `canMatch` guards, lazy children that download, `canDeactivate` guards of the routes being left, `canActivateChild` and `canActivate` guards, lazy components, resolvers, the components that render and the title
+  - the file each route is declared in, and the render mode from `*.routes.server.ts`
+  - routes already active, marked, since they rerun guards only when their params change
+  - why it stopped, when it reaches a function redirect, a redirect loop or a lazy route that has not loaded
 - **Probe in app** runs the real matcher without navigating.
 - Fill in the params of a route and click **Go** to navigate to it. With a param left empty, **Go** marks the empty field and names the params to fill in.
 - **Read lazy** reads the routes of a lazy route that has not loaded.
