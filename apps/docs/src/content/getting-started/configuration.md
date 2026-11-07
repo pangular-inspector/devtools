@@ -275,7 +275,7 @@ It is off by default because it starts processes on your machine. A value other 
 | ------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `lanAddress` | `false` | `true` injects the dev server's devtools URL on this machine's first private IPv4 address as `__PANGULAR_LAN_URL__`. An address such as `'192.168.1.20'` uses that one. Needs `allowLan` in effect. See [Inject the LAN address](./vite.md#inject-the-lan-address). |
 
-A loopback address, `0.0.0.0` or any other value prints a warning and keeps it off. The CLI flag only prints the URL and the define for your build. See [Inject the LAN address](./cli.md#inject-the-lan-address).
+`false` keeps it off with no warning. `true` and a network IPv4 address turn it on. Any other value, such as a loopback address, `0.0.0.0` or a value that is not a boolean or an IPv4 address, prints a warning and keeps it off. The CLI flag only prints the URL and the define for your build. See [Inject the LAN address](./cli.md#inject-the-lan-address).
 
 ### Lint rules
 
