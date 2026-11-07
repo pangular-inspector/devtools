@@ -4,66 +4,36 @@ import { createHostContext } from 'devframe/node';
 import { expect, it } from 'vitest';
 import { createPangular } from '../devframe.ts';
 
-const WORDS = [
-  'Forty-eight',
-  'Forty-nine',
-  'Fifty',
-  'Fifty-one',
-  'Fifty-two',
-  'Fifty-three',
-  'Fifty-four',
-  'Fifty-five',
-  'Fifty-six',
-  'Fifty-seven',
-  'Fifty-eight',
-  'Fifty-nine',
-  'Sixty',
-  'Sixty-one',
-  'Sixty-two',
-  'Sixty-three',
-  'Sixty-four',
-  'Sixty-five',
-  'Sixty-six',
-  'Sixty-seven',
-  'Sixty-eight',
-  'Sixty-nine',
-  'Seventy',
-  'Seventy-one',
-  'Seventy-two',
-  'Seventy-three',
-  'Seventy-four',
-  'Seventy-five',
-  'Seventy-six',
-  'Seventy-seven',
-  'Seventy-eight',
-  'Seventy-nine',
-  'Eighty',
-  'Eighty-one',
-  'Eighty-two',
-  'Eighty-three',
-  'Eighty-four',
-  'Eighty-five',
-  'Eighty-six',
-  'Eighty-seven',
-  'Eighty-eight',
-  'Eighty-nine',
-  'Ninety',
-  'Ninety-one',
-  'Ninety-two',
-  'Ninety-three',
-  'Ninety-four',
-  'Ninety-five',
-  'Ninety-six',
-  'Ninety-seven',
-  'Ninety-eight',
-  'Ninety-nine',
-  'One hundred',
-  'One hundred and one',
-  'One hundred and two',
-  'One hundred and three',
-  'One hundred and four',
-  'One hundred and five',
+const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const TEENS = [
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
 ];
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+
+/** A count from 1 to 999 in words, as the tools page writes it: `Ninety-nine`, `One hundred and four`. */
+function inWords(n: number): string {
+  const below100 = (m: number): string =>
+    m < 10
+      ? ONES[m]
+      : m < 20
+        ? TEENS[m - 10]
+        : TENS[Math.floor(m / 10)] + (m % 10 ? `-${ONES[m % 10]}` : '');
+  const hundreds = Math.floor(n / 100);
+  const rest = n % 100;
+  const text = hundreds
+    ? `${ONES[hundreds]} hundred${rest ? ` and ${below100(rest)}` : ''}`
+    : below100(rest);
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 it('states on the tools page how many tools the server registers', async () => {
   const host = {
@@ -84,8 +54,5 @@ it('states on the tools page how many tools the server registers', async () => {
     'utf-8',
   );
   const stated = /^\s*([A-Z][a-z]+(?:[- ][a-z]+)*) tools, grouped by inspector/m.exec(page)?.[1];
-  expect(stated).toBeDefined();
-  const index = WORDS.indexOf(stated!);
-  expect(index).toBeGreaterThanOrEqual(0);
-  expect(index + 48).toBe(registered);
+  expect(stated).toBe(inWords(registered));
 });

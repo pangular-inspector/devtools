@@ -1184,6 +1184,8 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'scan-pipe-usage': { kind: 'tool', inspectors: ['pipes'] },
   'explain-pipe': { kind: 'tool', inspectors: ['pipes'] },
   'record-pipes': { kind: 'tool', inspectors: ['pipes'], safety: 'action', page: true },
+  'suggest-pipe-migrations': { kind: 'tool', inspectors: ['pipes'] },
+  'pipe-usages': { kind: 'resource', inspectors: ['pipes'] },
 
   // http
   'list-ssr-requests': { kind: 'tool', inspectors: ['http'], page: true },

@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  One hundred and two tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  One hundred and three tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -834,7 +834,7 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 ### Explain a pipe
 
-`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the time spent in `transform` and the errors it threw, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
+`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the time spent in `transform` and the errors it threw, the last input and output, a stale-value warning, a churn warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
 
 | Argument | Required | Value                                           |
 | -------- | -------- | ----------------------------------------------- |
@@ -851,6 +851,27 @@ The **Live** line tells these cases apart:
 | A page is connected, pipe not used  | No rendered component on the page uses the pipe.                   |
 | Pipe in use, recording off          | Instance count and components, plus a hint to start recording.     |
 | Pipe in use, recording on, no calls | Instance count and components, and that no calls are recorded yet. |
+
+A pipe is churning when one of its instances returned an equal result 20 calls in a row while recording: a pure pipe whose input changes reference on every check while its contents stay the same, or an impure pipe that returns an equal object or array as a new reference. An impure pipe that returns the same reference or primitive is how impure pipes run, so it never counts.
+
+### Suggest pipe migrations
+
+`suggest-pipe-migrations` suggests how to move pipes to signals, with the file, line and template text of each use. Reads: source, plus the page for churn and stale findings. It changes no file: apply the suggestions by hand.
+
+| Argument | Required | Value                                                             |
+| -------- | -------- | ----------------------------------------------------------------- |
+| `name`   | no       | Only this pipe, by the name used after `\|`.                      |
+| `page`   | no       | The tab to read live findings from. Defaults to the default page. |
+
+| Suggestion                          | When                                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `\| async` to `toSignal()`          | A template uses `\| async`. If a use pipes a method call, the answer names it and tells you to move the Observable to a field first. |
+| Impure pipe to `computed()`         | A custom pipe is `pure: false`.                                                                                                      |
+| Signal-reading pipe to `computed()` | The `signal-read-in-pure-pipe` lint rule fires for a pure pipe.                                                                      |
+| Churning pipe                       | While recording, the pipe churned (see [Explain a pipe](#explain-a-pipe)).                                                           |
+| Stale pipe                          | While recording, the experimental stale check fired.                                                                                 |
+
+Built-in formatting pipes such as `date` and `currency` are pure and cheap, so it suggests nothing for them. A lint rule set to `false` in `lint.rules` drops its suggestion too.
 
 ### Record pipe calls <ngmd-badge variant="action">Action</ngmd-badge>
 

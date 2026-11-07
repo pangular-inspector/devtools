@@ -17,6 +17,7 @@ import {
 import type { DevframeRpcClient } from 'devframe/client';
 import { ExtensionBridge, type SourceLocation } from '../extension-bridge';
 import { hostPageId } from '../page-id';
+import { ComponentPipesSection } from './component-pipes-section';
 import {
   angularVersionAtLeast,
   lacksCapability,
@@ -220,6 +221,7 @@ function storedDirectiveHosts(): boolean {
     HydrationSection,
     LeaksSection,
     AngularUnavailable,
+    ComponentPipesSection,
   ],
   host: { '(keydown.escape)': 'cancelPick()' },
   template: `
@@ -767,6 +769,16 @@ function storedDirectiveHosts(): boolean {
                   <p class="empty-line">Nothing is injected through the constructor or inject().</p>
                 }
               </div>
+
+              @if (canShowPipes()) {
+                <app-component-pipes
+                  [rpc]="rpc()"
+                  [pageId]="page()?.pageId"
+                  [component]="bareName(sel.name)"
+                  [canShowPipes]="!staticReport()"
+                  (showPipe)="showPipe.emit($event)"
+                />
+              }
             } @else {
               <div class="state compact" role="status">
                 <span class="spinner" aria-hidden="true"></span>
@@ -1763,6 +1775,10 @@ export class ComponentTree {
   readonly commandHandled = output<void>();
   /** Whether the Injectors tab is on, so "Show in Injectors" can open it. */
   readonly canShowInjector = input(false);
+  /** Whether the Pipes inspector is on, so the detail lists the template's pipes. */
+  readonly canShowPipes = input(false);
+  /** Opens the Pipes tab on the pipe with this name. */
+  readonly showPipe = output<string>();
   readonly showInjector = output<InjectorFocus>();
 
   readonly filter = signal('');
