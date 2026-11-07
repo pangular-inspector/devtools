@@ -1,0 +1,9 @@
+{
+  "schematics": {
+    "ng-add": {
+      "description": "Wire Pangular Inspector into the workspace: the Express hub, the Vite plugin or the standalone CLI, and the overlay in main.ts.",
+      "factory": "./ng-add/index.cjs#ngAdd",
+      "schema": "./ng-add/schema.json"
+    }
+  }
+}

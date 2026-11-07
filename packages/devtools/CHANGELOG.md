@@ -140,6 +140,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - A splitter for the docked popup, pop-out into its own window, and the `popup.hotkey` option.
 - Item links (`#tab=&id=&page=`) and the `open-in-panel` agent tool.
 - A **Terminals** dock that runs the project's build and test commands (opt in with `terminals: true`).
+- `ng add @pangular-inspector/devtools` wires the devtools in: the Vite plugin for a Vite or Analog app, `initPangularHub()` in an Express `server.ts`, or the standalone CLI steps otherwise, and the overlay in `main.ts` behind `ngDevMode`. It leaves files it does not recognize alone and prints the snippet, and a second run changes nothing (#373).
+- The Vite plugin's `lanAddress` option (off by default) injects the dev server's LAN address as `__PANGULAR_LAN_URL__` into the app and into development builds, so a Capacitor or NativeScript app on a phone finds the devtools. It needs `allowLan` in effect and `server.host` on the network. `lanDevtoolsURL()` reads it, and the NativeScript overlay connects there when no `baseURL` is given (#373).
 - Hub messages and toasts, a dock group with badges, and an **All tools** dock.
 - New entry points: `/overlay-manual` (starts nothing on import), `/plugin`, `/capacitor-hook`, `/store-hook`, `/startup-hook`, `/ssr` and `/cd-data`.
 - New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup`, `plugins` and `redaction.entropy`.
@@ -230,6 +232,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `pangular lint` runs the source lints and prints JSON or SARIF (#418).
 - `pangular skills` lists or installs the bundled agent skills.
 - `pangular dev` takes `--proxy-origin`, `--allowed-origin` and `--auth-token`.
+- `pangular dev --lan-address` prints the server's LAN URL and the `--define` that injects it into a device build. It needs `--host` on the network and changes no access setting (#373).
 - `pangular build` refuses an `--outDir` that would delete files that are not a previous report, unless `--force` is passed.
 - `buildReport()` from `@pangular-inspector/devtools/cli` writes the static report from a script, with the output folder checks of `pangular build`. Unlike `pangular build`, it resolves `outDir` against the working directory, and `config` takes a config object, not a file path.
 - The source scan reads Nx projects.
@@ -298,6 +301,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - A quick start, and a panel screenshot on every inspector page.
 - Pages for the command palette, settings, terminals, the popup and hub, configuration, other servers (Hono, h3, Fastify), Capacitor, the timeline, errors, audit, TanStack Query, agent skills, browser agents and writing a plugin.
 - A roadmap page.
+- The Capacitor and NativeScript guides show the Android network security config and the iOS App Transport Security and local network settings a device needs to reach the devtools over the LAN (#373).
 - The Express and other servers pages say which port the WebSocket side-car uses (the first free one from 9777), how to pin it with `ws: {port}`, and how to serve the socket on the app's own server with `attach(server)` (#426).
 - A **Renamed tools** table in the agent tools page, and the public API and the supported versions in the publishing guide.
 - Corrected guides and samples from the readiness review: the Vite auth default in the Analog guide and the glossary, JSON samples without a path comment, no separate devframe install in the package README, and `ws: false` for a panel-only devframe host.

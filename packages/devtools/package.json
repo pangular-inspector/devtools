@@ -30,6 +30,7 @@
   "bin": {
     "pangular": "./bin.mjs"
   },
+  "schematics": "./dist/schematics/collection.json",
   "exports": {
     ".": "./src/entries/devframe.ts",
     "./devframe": "./src/entries/devframe.ts",

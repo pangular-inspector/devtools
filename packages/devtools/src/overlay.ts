@@ -9,6 +9,7 @@ import {
 } from './overlay-connection.ts';
 import { createOverlayLink, type LinkClient } from './overlay-link.ts';
 export { registerNgrxSignals } from './ngrx-register.ts';
+export { lanDevtoolsURL } from './lan-url.ts';
 import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
 import { attachPipes } from './pipes-collector.ts';

@@ -139,6 +139,37 @@ The short forms above carry no `configs`, so the overlay uses the default inspec
 
 The standalone CLI and the Express hub accept `capacitor://localhost` and `https://localhost` without an `allowedOrigins` entry, because their host is `localhost`. The Vite plugin accepts `https://localhost` the same way, and `capacitor://localhost` once it is in `allowedOrigins`. A phone on Wi-Fi also needs `allowLan: true`, on the Express hub as on the Vite plugin.
 
+### Use the injected LAN address
+
+Instead of writing your machine's address into `main.ts`, let the development build inject it. The build defines `__PANGULAR_LAN_URL__`, and `lanDevtoolsURL()` returns it, or `undefined` in a build that injected nothing:
+
+```ts {9,11}
+// src/main.ts
+import {bootstrapApplication} from '@angular/platform-browser';
+import {App} from './app/app';
+import {appConfig} from './app/app.config';
+
+bootstrapApplication(App, appConfig)
+  .then(async () => {
+    if (typeof ngDevMode === 'undefined' || ngDevMode) {
+      const {initOverlay, lanDevtoolsURL} =
+        await import('@pangular-inspector/devtools/overlay-manual');
+      await initOverlay({
+        baseURL: lanDevtoolsURL() ?? 'http://localhost:9999/',
+        connectionMeta: {backend: 'websocket', websocket: {path: '__ws'}},
+      });
+    }
+  })
+  .catch((err) => console.error(err));
+```
+
+| Server         | How the build gets the address                                                                                                                                                                                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Standalone CLI | `npx pangular dev --host 0.0.0.0 --lan-address` prints an `ng build --configuration development --define "__PANGULAR_LAN_URL__='http://192.168.1.20:9999/'"` command. Run it, then `npx cap sync`. See [Inject the LAN address](../getting-started/cli.md#inject-the-lan-address). |
+| Vite plugin    | `lanAddress: true`, with `allowLan`, `capacitor://localhost` in `allowedOrigins` and `server.host: true`. `vite build --mode development` injects the hub URL. See [Inject the LAN address](../getting-started/vite.md#inject-the-lan-address).                                    |
+
+With the Vite plugin, pass its `connectionMeta` from the table in [The connection info](#the-connection-info) instead. The address is fixed when you build. If your machine gets another address on the network, build and sync again. Neither option changes who may connect: the device still needs the one-time code or a pairing token.
+
 ### Let the app reach your machine
 
 The page is `https://localhost` on Android and the server is plain HTTP, so the Android WebView can block the connection as mixed content. Android also blocks cleartext traffic, even to `localhost` through `adb reverse`, so without `server.cleartext` the connection fails with `net::ERR_CLEARTEXT_NOT_PERMITTED`. Allow both in a development build:
@@ -162,6 +193,30 @@ If your config already has a `server` or `android` block, add the keys to it ins
 
 With `adb reverse`, the server is at `http://localhost`, which Chromium may not count as mixed content, but cleartext is still blocked, so `server.cleartext` is required. Keep `allowMixedContent` too, for a server on a network address. Capacitor applies both on `npx cap sync`, which `npx cap run` also runs, so set the flag there: `CAPACITOR_DEVTOOLS=1 npx cap run android`. `server.cleartext` sets `android:usesCleartextTraffic` in the manifest of the `capacitor-cordova-android-plugins` module, which Android merges into the app. Setting `server.androidScheme` to `'http'` also avoids mixed content, but it changes the app's origin, so the WebView no longer sees the data the app stored under `https://localhost`.
 
+To allow cleartext only to your dev server instead of to every host, use a network security config in the Android debug build. Save it as `android/app/src/debug/res/xml/network_security_config.xml`, with your machine's address:
+
+```html
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android/app/src/debug/res/xml/network_security_config.xml -->
+<network-security-config>
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">192.168.1.20</domain>
+    <domain includeSubdomains="false">localhost</domain>
+  </domain-config>
+</network-security-config>
+```
+
+Point the debug manifest at it. Android merges `android/app/src/debug/AndroidManifest.xml` into debug builds only, so release builds keep the default:
+
+```html
+<!-- android/app/src/debug/AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>
+```
+
+On Android 7 and later, a network security config replaces `android:usesCleartextTraffic`, which `server.cleartext` sets, so use one of the two. Keep `android.allowMixedContent` either way. When your machine's address changes, update the `domain` entry.
+
 On iOS, App Transport Security can block plain HTTP to a network address. If it does, allow local networking in a development build's `ios/App/App/Info.plist`:
 
 ```html
@@ -171,7 +226,11 @@ On iOS, App Transport Security can block plain HTTP to a network address. If it 
   <key>NSAllowsLocalNetworking</key>
   <true />
 </dict>
+<key>NSLocalNetworkUsageDescription</key>
+<string>Connects to Pangular Inspector on your computer during development.</string>
 ```
+
+`NSAllowsLocalNetworking` exempts local network addresses from App Transport Security and keeps it on for every other host. On iOS 14 and later, the first connection to an address on your network can show a local network permission prompt, with the `NSLocalNetworkUsageDescription` text. If the app was denied, turn it back on in **Settings** > **Privacy & Security** > **Local Network**.
 
 ### Run the server where the device reaches it
 
