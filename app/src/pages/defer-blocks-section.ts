@@ -8,7 +8,11 @@ import {
   output,
   signal,
 } from '@angular/core';
-import { deferNotes, type DeferNote } from '@pangular-inspector/devtools/internal/config';
+import {
+  deferHydrationLabel,
+  deferNotes,
+  type DeferNote,
+} from '@pangular-inspector/devtools/internal/config';
 
 export interface DeferBlock {
   id: string;
@@ -20,6 +24,8 @@ export interface DeferBlock {
   rootIds: string[];
   /** Page clock, ms since epoch, when the state or hydration state last changed. */
   since?: number;
+  /** Page clock, ms since epoch, when the overlay saw the block hydrate. */
+  hydratedAt?: number;
   hasErrorBlock?: boolean;
   /** Times from `@loading (after …; minimum …)`, in ms. */
   loading?: { minimumTime: number | null; afterTime: number | null };
@@ -31,6 +37,8 @@ interface Row {
   block: DeferBlock;
   notes: DeferNote[];
   timings: string;
+  /** `hydrated`, or `hydrated before inspection` when the overlay attached later. */
+  hydrated: string;
 }
 
 /** `500ms`, `1s`, `1.5s`. */
@@ -95,8 +103,16 @@ export function deferTimings(block: DeferBlock): string {
                     }
                   </span>
                 }
-                @if (row.block.hydration === 'hydrated') {
-                  <span class="flag">hydrated</span>
+                @if (row.hydrated) {
+                  <span
+                    class="flag"
+                    [attr.title]="
+                      row.block.hydratedAt === undefined
+                        ? 'The block hydrated before the devtools attached to the page.'
+                        : null
+                    "
+                    >{{ row.hydrated }}</span
+                  >
                 }
                 @if (row.block.hasErrorBlock) {
                   <span class="flag">&#64;error block</span>
@@ -249,6 +265,7 @@ export class DeferBlocksSection {
       // A block without a time (an older page) gets no age notes.
       notes: deferNotes({ ...block, since: block.since || pageNow }, pageNow),
       timings: deferTimings(block),
+      hydrated: block.hydration === 'hydrated' ? deferHydrationLabel(block) : '',
     }));
   });
 

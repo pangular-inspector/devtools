@@ -825,6 +825,7 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'remove-ssr-override',
   'set-component-property',
   'set-signal',
+  'load-defer-block',
   'watch-signal',
   'record-pipes',
   'track-subscriptions',
@@ -1640,6 +1641,21 @@ async function runActions(state) {
     'a computed is refused and left as it was',
     doubledAfter === '84',
     doubledAfter,
+  );
+
+  // load-defer-block
+  await app.go('/examples/defer');
+  await sleep(800);
+  const deferRow = (await read('defer-blocks', {})).match(
+    /\| `(d\d+)` \|[^|\n]*\| placeholder \|[^|\n]*\| on interaction \|/,
+  );
+  r = await act('load-defer-block', { block: deferRow?.[1] ?? 'd0' });
+  await sleep(800);
+  write(
+    'load-defer-block',
+    'the on interaction block shows its content without a click',
+    (await page.getByText('Rendered after the button was used.').count()) > 0,
+    r.markdown.slice(0, 300),
   );
 
   // watch-signal

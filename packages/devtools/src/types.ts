@@ -223,6 +223,11 @@ export interface ComponentDetail {
   name: string;
   tag: string;
   path: string;
+  /**
+   * A CSS selector that finds the host again with `querySelector`, for the
+   * panel's "Copy host path". Left out where the host tree has no selectors.
+   */
+  selector?: string;
   source?: ComponentSource;
   changeDetection?: string;
   encapsulation?: string;

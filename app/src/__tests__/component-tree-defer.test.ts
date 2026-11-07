@@ -58,6 +58,39 @@ describe('defer blocks', () => {
     expect(badge.classList.contains('defer-state-complete')).toBe(true);
   });
 
+  it('says when a block hydrated before the devtools attached', async () => {
+    const fixture = TestBed.createComponent(ComponentTree);
+    const block = (id: string, hydratedAt?: number) => ({
+      id,
+      state: 'complete',
+      hydration: 'hydrated',
+      triggers: ['hydrate on interaction'],
+      rootIds: [],
+      ...(hydratedAt ? { hydratedAt } : {}),
+    });
+    const page = {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      reportedAt: 1000,
+      deferBlocks: [block('d1'), block('d2', 900)],
+    };
+    fixture.componentRef.setInput('rpc', client({ p1: page }));
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+    }
+    const flags = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.defer-row'),
+    ).map((row) =>
+      Array.from(row.querySelectorAll('.flag')).map((flag) => flag.textContent?.trim()),
+    );
+    expect(flags[0]).toContain('hydrated before inspection');
+    expect(flags[1]).toContain('hydrated');
+    expect(flags[1]).not.toContain('hydrated before inspection');
+  });
+
   it('keeps a row without an owner focusable, marked aria-disabled', async () => {
     const fixture = TestBed.createComponent(ComponentTree);
     const page = {

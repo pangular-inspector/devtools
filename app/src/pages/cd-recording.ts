@@ -94,6 +94,9 @@ const SHOWN_CYCLES = 30;
         of it stops with the recording.
         @if (native()) {
           An app on a device has no DOM, so checks that changed nothing are not counted there.
+        } @else {
+          A recording keeps running when the tab reloads, so it catches the next start of the app.
+          The cycles from before the reload are gone with the old page.
         }
       </p>
       @if (page()?.supported === false) {

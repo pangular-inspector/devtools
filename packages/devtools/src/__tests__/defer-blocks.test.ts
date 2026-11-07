@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { deferNotes } from '../config.ts';
+import { deferHydrationLabel, deferNotes } from '../config.ts';
 import { MAX_DEFER_BLOCKS, createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
 import { elementById } from '../element-id.ts';
 import { DEFER_ROWS, deferBlocksText, toComponentPage } from '../rpc/component-tools.ts';
@@ -162,6 +162,8 @@ describe('createDeferTracker', () => {
     expect(second.map((b) => b.id)).toEqual(first.map((b) => b.id));
     expect(second[0].since).toBe(1000);
     expect(second[1]).toMatchObject({ hydration: 'hydrated', since: 5000, hydratedAt: 5000 });
+    expect(tracker.find(second[1].id)).toEqual({ host: lazy, block: second[1] });
+    expect(tracker.find('nope')).toBeUndefined();
   });
 
   it('flags hydrate never blocks and falls back to ɵgetDeferBlocks', () => {
@@ -325,6 +327,30 @@ describe('deferBlocksText', () => {
     expect(text).toMatch(/\| `d6` .*\| waiting for its trigger for 29s \|/);
     expect(text).toContain('`d7` in TripReviews (`c2`): on its placeholder for 29s');
     expect(text).toContain('`d8` in TripReviews (`c2`): on its placeholder for 29s');
+  });
+
+  it('says when a block hydrated before the overlay attached', () => {
+    const text = deferBlocksText(
+      [
+        report([
+          info({ id: 'd1', hydration: 'hydrated' }),
+          info({ id: 'd2', hydration: 'hydrated', hydratedAt: 5000 }),
+        ]),
+      ],
+      30_000,
+    );
+    expect(text).toMatch(/\| `d1` .*\| complete \| hydrated before inspection \|/);
+    expect(text).toMatch(/\| `d2` .*\| complete \| hydrated \|/);
+    expect(text).toContain('"hydrated before inspection" means');
+    expect(deferBlocksText([report([info({ id: 'd3' })])], 30_000)).not.toContain(
+      'before inspection',
+    );
+  });
+
+  it('labels hydration the same way for the panel and the tool', () => {
+    expect(deferHydrationLabel({ hydration: 'hydrated' })).toBe('hydrated before inspection');
+    expect(deferHydrationLabel({ hydration: 'hydrated', hydratedAt: 1 })).toBe('hydrated');
+    expect(deferHydrationLabel({ hydration: 'dehydrated' })).toBe('dehydrated');
   });
 
   it('ages blocks on the page clock, not the server clock', () => {

@@ -111,7 +111,8 @@ import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 import { createDeltaChannel } from './delta-channel.ts';
 import { COMPONENT_TREE_SHAPE, INJECTOR_TREE_SHAPE } from './push-delta.ts';
 import { createDomDirty } from './dom-dirty.ts';
-import { domTree } from './host-tree.ts';
+import { angularRoots, domTree } from './host-tree.ts';
+import { angularDeferInternals, loadDeferBlock, registerDeferLoad } from './defer-load.ts';
 import { LEASED_PUSH_MS, createPageLease, throttle } from './page-lease.ts';
 import { setTimeoutOutside } from './outside-angular.ts';
 import { createPageHeartbeat, keepaliveAfter } from './page-heartbeat.ts';
@@ -1015,6 +1016,16 @@ async function startOverlay(
       getNg,
       allowed: devtoolsConfig.actions.components,
       edited: () => void pushTree(true).catch(() => {}),
+    });
+    registerDeferLoad(my.rpc, pageId, {
+      allowed: devtoolsConfig.actions.components,
+      load: (id) => {
+        const ng = getNg();
+        // A fresh read, so the load acts on the block as it is now.
+        deferTracker.collect(ng, document, controlFlowReader(ng));
+        return loadDeferBlock(ng, angularDeferInternals(), deferTracker.find(id), angularRoots());
+      },
+      loaded: () => void pushTree(true).catch(() => {}),
     });
     // Loaded on the first capture, so pages that never take one don't pay for it.
     my.rpc.register({

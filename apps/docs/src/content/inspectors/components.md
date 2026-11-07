@@ -79,6 +79,15 @@ When a form exists in the same source file, a **Show … in Forms** button opens
 
 **Show in Injectors** opens the [Injectors tab](./injectors.md#links-to-the-components-tab) with the element injector of the selected instance selected and scrolled into view. The button appears when the Injectors inspector is on.
 
+**Show in Signals** opens the [Signals tab](./signals.md) on the signal graph of the selected instance, through the same `#tab=signals&id=` deep link an agent's `open-in-panel` gives. A signal in **Properties** has its own **Show in Signals** button, which also selects that signal's node once the graph arrives. The buttons appear when the Signals inspector is on.
+
+Two buttons copy the selected instance to the clipboard:
+
+| Button             | What it copies                                                                                                                                                                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Copy as JSON**   | The class name, host tag, host path and selector, source, change detection, encapsulation, inputs, outputs, properties, DOM listeners, host directives and injected tokens. Values are the ones the panel shows, so secrets stay `[redacted]` and long values stay cut. |
+| **Copy host path** | A CSS selector that finds the host element with `document.querySelector`. A page without a DOM, such as an app on a device, sends no selector, so the button copies the host path from **Facts** instead.                                                               |
+
 **Store as global** stores the selected instance in the page console as `temp1`, then `temp2` and so on, and shows the name it used, for example **Stored as temp1.** See [Console handles](#console-handles).
 
 ### Facts
@@ -100,6 +109,10 @@ A fact shows **Unknown** when Angular does not report it.
 ### Properties
 
 **Properties** lists the component's other own fields: plain fields, state objects, signals and resources. It leaves out inputs, outputs, methods and injected services. Signals show their current value and a **signal** flag. A field that holds a `resource()` or `httpResource()` shows its status, value and error, with a **resource** flag.
+
+When an input, property or directive input changes between two refreshes, its row gets an outline that fades over one second. With reduced motion, the outline shows for one second without fading. Selecting another instance starts over, so nothing flashes on the first read.
+
+When the component's template holds `@defer` blocks, a **Defer blocks** block lists each one with its state and triggers. The [Defer blocks](#defer-blocks) list below the tree has the full rows.
 
 ### Nested values
 
@@ -141,7 +154,7 @@ Set [`actions.components`](../getting-started/configuration.md#actions) to `fals
 
 ### Defer blocks
 
-When the page renders `@defer` blocks, a **Defer blocks** list follows the tree. Each row shows the component whose template holds the block, its state (`placeholder`, `loading`, `complete` or `error`) and its triggers. With [incremental hydration](https://angular.dev/guide/incremental-hydration), a row also shows `dehydrated` or `hydrated`, and a **hydrate never** flag marks a block that stays as server HTML.
+When the page renders `@defer` blocks, a **Defer blocks** list follows the tree. Each row shows the component whose template holds the block, its state (`placeholder`, `loading`, `complete` or `error`) and its triggers. With [incremental hydration](https://angular.dev/guide/incremental-hydration), a row also shows `dehydrated` or `hydrated`, and a **hydrate never** flag marks a block that stays as server HTML. A block that hydrated before the devtools attached to the page shows **hydrated before inspection**, because no one saw when it hydrated.
 
 A row also carries the notes the [`defer-blocks`](../agents/tools.md#defer-blocks) tool prints. Hover a note to read it in full.
 
@@ -190,6 +203,8 @@ The list needs Angular 22.0 or later in a development build. On an older Angular
 ### Change detection
 
 Below the tree and the defer blocks, the **Change detection** section records change detection cycles with Angular's profiler. Click **Record**, use the app, then click **Stop recording**. A check is a component whose template Angular ran. A clean OnPush component that Angular only walked past is not a check, and neither is the second pass that development builds run to catch `ExpressionChangedAfterItHasBeenChecked` errors. The flash overlay and the Performance panel track count the same way. **Clear** empties the recording. Each new recording starts empty, but a start sent while the page records, such as an agent's `record-change-detection` call with `record: "start"`, keeps the cycles recorded so far. **Record** and **Stop recording** wait up to 3 seconds for the page to report the recording on or off before they announce it. If no report comes, the status says the page did not confirm, and the button keeps the state the page last reported.
+
+A recording keeps running when the tab reloads, so it catches the next start of the app. The page remembers it in `sessionStorage` for its page id, which a reload keeps, so another tab does not start recording. The cycles from before the reload are gone with the old page. **Stop recording** ends it for the reloads that follow too. An app on a device does not resume a recording.
 
 - **Cycles**: a bar chart with one bar per recorded cycle, its height the cycle's duration. A line marks the 16.6 ms frame budget (one frame at 60 frames per second). A cycle over the budget has a striped bar, a triangle under it, and says "over budget" in its tooltip and in the table. Hover or focus a bar to see the cycle number, duration, output trigger, checks and its three slowest components.
 - **Spans in the picked cycles**: when the page reports timed spans, a flame graph of the picked cycles. Time runs left to right, cycle after cycle with the idle time between them left out, and a span nested in another sits one row lower. Each span is a component check (solid), a lifecycle hook (stripes), an `afterRender` callback (dots) or the output listener that triggered the cycle (lines, drawn before the cycle's start), with a key under the graph. Hover or focus a span to read its total and self time. The arrow keys move along a row, **Up** goes to the enclosing span and **Down** to the first nested one. **Enter** or a click on a component, hook or output selects that component in the tree. **Show the spans as a table** lists the same spans. The graph shows at most 30 cycles; pick a smaller range when more are picked.
@@ -467,6 +482,7 @@ Press Escape in the filter box to clear it. When the filter matches nothing, **C
 | `pangular:inspect-component`         | tool     | Selects one instance and returns its live detail: inputs, outputs, properties, listeners, directives and injected services. With `path`, reads one nested value instead, with `depth` and `limit`.                                              |
 | `pangular:list-components`           | tool     | Returns the live tree of one page as an indented outline with routed, directive host and hydration markers. Takes a `filter` with the search syntax, a `depth` and `directiveHosts`.                                                            |
 | `pangular:defer-blocks`              | tool     | Lists the `@defer` blocks of each page, and flags blocks that failed, blocks stuck on their placeholder and blocks still dehydrated.                                                                                                            |
+| `pangular:load-defer-block`          | tool     | Makes one `@defer` block fetch its dependencies and show its main content, as if its trigger fired. Leaves dehydrated server HTML alone. An action.                                                                                             |
 | `pangular:for-blocks`                | tool     | Lists the `@for` blocks of each page with their item count, track kind and `@empty` block.                                                                                                                                                      |
 | `pangular:scan-templates`            | tool     | Lints component templates in source with the project's Angular template parser: parse errors, `@for` tracking objects by `$index`, `<img>` without `alt`, `(click)` without a key handler, `*ngIf`-style directives and `ngClass` or `ngStyle`. |
 | `pangular:hydration`                 | tool     | Returns the hydration status of each page rendered on the server, and turns the outline on the page on or off. Turning the outline on or off is an action.                                                                                      |

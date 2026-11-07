@@ -312,6 +312,7 @@ describe('agent tool and RPC registration', () => {
         'remove-http-rule',
         'remove-ssr-override',
         'ngrx-restore',
+        'load-defer-block',
         'set-component-property',
         'set-http-rule',
         'set-signal',
@@ -436,6 +437,7 @@ describe('agent tool and RPC registration', () => {
         'remove-http-rule',
         'remove-ssr-override',
         'ngrx-restore',
+        'load-defer-block',
         'set-component-property',
         'set-http-rule',
         'set-signal',
@@ -472,6 +474,7 @@ describe('agent tool and RPC registration', () => {
     const components = await boot({ actions: { components: false } });
     expect(components.actionTools).not.toContain('set-component-property');
     expect(components.actionTools).not.toContain('set-signal');
+    expect(components.actionTools).not.toContain('load-defer-block');
     expect(components.tools).toContain('inspect-component');
     const queries = await boot({ actions: { tanstackQuery: false } });
     expect(queries.actionTools).not.toContain('tanstack-run-query');

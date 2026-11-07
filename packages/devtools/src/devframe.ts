@@ -113,6 +113,7 @@ import {
 } from './rpc/component-tools.ts';
 import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import { inspectComponentText } from './rpc/component-detail-text.ts';
+import { createDeferLoads } from './rpc/defer-loads.ts';
 import { createComponentEdits } from './rpc/component-edits.ts';
 import { createSignalRestores } from './rpc/signal-restores.ts';
 import { createComponentValues, valueResultText } from './rpc/component-values.ts';
@@ -2238,6 +2239,29 @@ const pangular = defineDevframe({
         componentEdits.request(message?.pageId, message?.request),
     });
     for (const tool of componentEdits.tools) agent.registerTool(tool);
+
+    // Loads one @defer block when an agent asks: same gate and owner check as the writes above.
+    const deferLoads = createDeferLoads({
+      config,
+      pages: () => componentPages.values(),
+      broadcast: (method, message) => {
+        const pageId = (message as { pageId?: unknown } | null)?.pageId;
+        void (my.rpc.broadcast as (options: OwnerBroadcast) => Promise<void>)({
+          method,
+          args: [message],
+          optional: true,
+          filter: owners.deliversTo(typeof pageId === 'string' ? pageId : undefined),
+        });
+      },
+      answersFor,
+    });
+    register({
+      name: 'defer-load-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: deferLoads.answer,
+    });
+    agent.registerTool(deferLoads.tool);
 
     // Nested levels of component values: the panel opens them, inspect-component reads them.
     const componentValues = createComponentValues({

@@ -51,6 +51,7 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
     { component: 'Card', property: 'count', value: 1 },
     { component: 'Card', property: 'count', value: 1, page: 'gone' },
   ],
+  'load-defer-block': [{ block: 'd1' }, { block: 'd1', page: 'gone' }, { block: '' }],
   'track-subscriptions': [
     { action: 'start' },
     { action: 'stop' },

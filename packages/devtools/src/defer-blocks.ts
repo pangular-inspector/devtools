@@ -71,6 +71,8 @@ export function createDeferTracker(now: () => number = Date.now) {
   const lastHosts = new WeakMap<Element, object[]>();
   let nextId = 0;
   let truncated = false;
+  // The blocks of the last collection by id, for a load the agent asks for.
+  let lastById = new Map<string, { host: object; block: DeferBlockInfo }>();
 
   const positionKey = (root: Element, index: number) => {
     let keys = byPosition.get(root);
@@ -110,6 +112,10 @@ export function createDeferTracker(now: () => number = Date.now) {
     get truncated() {
       return truncated;
     },
+    /** A block of the last `collect` and the host it is known by, or undefined. */
+    find(id: string): { host: object; block: DeferBlockInfo } | undefined {
+      return lastById.get(id);
+    },
     /** Every defer block on the page, or `undefined` when Angular exposes no util for them. */
     collect(
       ng: DeferDebugNg | undefined,
@@ -117,6 +123,7 @@ export function createDeferTracker(now: () => number = Date.now) {
       blocksOf?: (root: Element) => unknown[],
     ): DeferBlockInfo[] | undefined {
       truncated = false;
+      lastById = new Map();
       const util = ng?.ɵgetControlFlowBlocks ?? ng?.ɵgetDeferBlocks;
       if (!ng || typeof util !== 'function') return undefined;
       const hosts = new Set<object>();
@@ -189,6 +196,7 @@ export function createDeferTracker(now: () => number = Date.now) {
           }
           if (record.hydratedAt !== undefined) block.hydratedAt = record.hydratedAt;
           out.push(block);
+          lastById.set(block.id, { host, block });
         }
         lastHosts.set(root, order);
       }

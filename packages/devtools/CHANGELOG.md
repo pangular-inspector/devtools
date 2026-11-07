@@ -141,7 +141,9 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 #### Inspectors
 
 - **Components:** edit inputs, properties and writable signals; `@for` blocks; directive hosts; hydration status per component with an outline on the page; nested values on demand; console handles; expand all and collapse all.
-- **Change detection:** a per-cycle chart, a flame graph, hook timing, export and import of recordings, flash checks on the page, a Pangular track in the Chrome Performance panel, an Angular profiling toggle, and what triggered each check, with wasted checks, OnPush hints and components that need zone.js.
+- **Components:** **Copy as JSON** (the redacted values the panel shows) and **Copy host path** (a CSS selector for `document.querySelector`) in the detail header; an outline that fades over one second on a value that changed since the last refresh; **Show in Signals** for the component and for each signal property, also as a `#tab=signals&id=` deep link and through `open-in-panel`; and the `@defer` blocks of the selected component's template.
+- **Defer blocks:** a block that hydrated before the devtools attached shows **hydrated before inspection** in the panel and in the `defer-blocks` tool.
+- **Change detection:** a recording that keeps running when the tab reloads (until **Stop recording**), a per-cycle chart, a flame graph, hook timing, export and import of recordings, flash checks on the page, a Pangular track in the Chrome Performance panel, an Angular profiling toggle, and what triggered each check, with wasted checks, OnPush hints and components that need zone.js.
 - **Leaks:** live subscriptions and effects per component, and components that stay alive after they are destroyed.
 - **Signals:** the live signal graph drawn, watched signals, and links from components to injectors.
 - **Injectors:** a page picker, a created provider's value, startup timing and the slowest providers.
@@ -159,7 +161,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 #### Agents and MCP
 
-- 98 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
+- 99 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `load-defer-block` (loads one `@defer` block as if its trigger fired, behind `actions.components`), `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.

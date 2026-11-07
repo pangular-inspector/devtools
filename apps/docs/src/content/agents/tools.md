@@ -131,11 +131,11 @@ Each section is also cut at 4,000 characters. When the answer reaches `maxChars`
 
 Gives the user a link that opens the panel on one tab with one item selected, and switches the panels that are open to it. Reads: page. Use it to point the user at what you found.
 
-| Argument | Required | What it is                                                                                                                                                                                                                          |
-| -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `audit`, `components`, `routes`, `signals`, `injectors`, `store`, `queries`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog`, `capacitor` or `plugins`. Only tabs that are on count. |
-| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                                                              |
-| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                                    |
+| Argument | Required | What it is                                                                                                                                                                                                                              |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `audit`, `components`, `routes`, `signals`, `injectors`, `store`, `queries`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog`, `capacitor` or `plugins`. Only tabs that are on count.     |
+| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, the id of the component whose signal graph to show on `signals`, a form id on `forms`. Other tabs ignore it. |
+| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                                        |
 
 The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
@@ -170,14 +170,14 @@ Without `url`, `navigation` holds as soon as no navigation is in progress, which
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                                                 | Tools                                                                                                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                           | Every other tool, and every resource                                                                                                                                                                                                                                                                                                                    |
-| `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records. A reload or the next call undoes it. | `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `run-form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection` and `audit` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                                         | `clear-recordings` and `analog-run-api`                                                                                                                                                                                                                                                                                                                 |
+| Tier          | What the tool can do                                                                                                                 | Tools                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                           | Every other tool, and every resource                                                                                                                                                                                                                                                                                                                                        |
+| `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records. A reload or the next call undoes it. | `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `run-form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `load-defer-block`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection` and `audit` |
+| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                                         | `clear-recordings` and `analog-run-api`                                                                                                                                                                                                                                                                                                                                     |
 
 <ngmd-alert severity="important">
-  The twenty-one <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The twenty-two <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `record-change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `audit` only when it runs axe. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
@@ -263,7 +263,29 @@ It takes only `page`.
 
 Without a development build, the page has no util to read defer blocks, and the answer says so.
 
+A block that hydrated before the devtools attached to the page shows `hydrated before inspection` in the **Hydration** column, because the page never saw it hydrate.
+
 Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block the page reported. A page reports its first 500 blocks. When it has more, the answer says so.
+
+### load-defer-block <ngmd-badge variant="action">Action</ngmd-badge>
+
+Makes one `@defer` block fetch its dependencies and show its main content now, as if its trigger fired, in development only. Use it to check deferred content without scrolling, hovering or waiting. Reads: page.
+
+| Argument | Required | Value                                                                      |
+| -------- | -------- | -------------------------------------------------------------------------- |
+| `block`  | Yes      | A block id from [`defer-blocks`](#defer-blocks), such as `d3`.             |
+| `page`   | No       | The page id. Required when more than one tab reports a block with that id. |
+
+The page loads the block the way `DeferBlockFixture.render` does in Angular's testing package, then runs change detection with `ng.applyChanges`. When the dependencies fail to load, the block shows its `@error` block and the answer says so. A block without an `@error` block is left on its placeholder. The block's own triggers do not fire, so a load does not prove they work.
+
+It refuses, and loads nothing, when:
+
+- the block already shows its main content
+- the block is server HTML waiting for [incremental hydration](https://angular.dev/guide/incremental-hydration) (`dehydrated` or `hydrate never`), since a load would skip its hydrate trigger
+- the page's Angular does not export the internals a load needs (`ɵgetDeferBlocks`, `ɵtriggerResourceLoading` and `ɵrenderDeferBlockState`)
+- no page reports a block with that id, or several tabs do and `page` is missing
+
+A reload of the page undoes it. Set [`actions.components`](../getting-started/configuration.md#actions) to `false` to drop the tool.
 
 ### for-blocks
 
@@ -339,7 +361,7 @@ Starts, stops or clears a change detection recording, and turns the live views o
 | `track`            | no       | `true` writes each component check, lifecycle hook and output listener to a **Pangular** track in the Chrome Performance panel. `false` turns it off.         |
 | `angularProfiling` | no       | `true` calls `ng.enableProfiling()` for Angular's own Performance panel track. It stays on until the page reloads, so `false` is refused.                     |
 
-Pass `record`, a view or both. Without `page`, `record` goes to every connected page (`stop` only to the pages that record). `record` waits up to 3 seconds for each page to confirm and names the pages that did; when none does, or no page is connected, it refuses with `isError`. Call it with `record: "start"`, use the app, then call `change-detection`.
+Pass `record`, a view or both. A recording keeps running when the tab reloads, until `stop`; the cycles from before the reload are gone. Without `page`, `record` goes to every connected page (`stop` only to the pages that record). `record` waits up to 3 seconds for each page to confirm and names the pages that did; when none does, or no page is connected, it refuses with `isError`. Call it with `record: "start"`, use the app, then call `change-detection`.
 
 `flash`, `track` and `angularProfiling` go to the page in `page`, or to every connected page. An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app has no live views. The tool says there is no DOM when `page` names such an app, or when `page` is left out and every page that reports is one. `record` works on these apps as on a browser page. They are the **Live views** toggles of the panel; see [Watch checks live](../inspectors/components.md#watch-checks-live). With `agent.readOnly` the tool is not registered, so start the recording from the panel.
 

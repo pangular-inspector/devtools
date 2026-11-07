@@ -44,6 +44,9 @@ import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
 import type { ComponentCommand } from '../types/component-command.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
+import type { SignalFocus } from '../types/signal-focus.types';
+import { componentJson, hostPathText } from './component-copy';
+import { ValueFlash, flashKey } from './component-value-flash';
 import { SourceLink } from '../ui/source-link';
 import { actionAllowed } from '../devtools-config';
 import { ValueTree } from './component-value-tree';
@@ -103,6 +106,8 @@ interface Detail {
   name: string;
   tag: string;
   path: string;
+  /** A CSS selector that finds the host with `querySelector`, from a browser page. */
+  selector?: string;
   source?: SourceLocation;
   changeDetection?: string;
   encapsulation?: string;
@@ -524,13 +529,28 @@ function storedDirectiveHosts(): boolean {
                   </div>
                 }
               }
-              @if (canShowInjector() && !staticReport()) {
+              @if ((canShowInjector() || canShowSignals()) && !staticReport()) {
                 <div class="actions">
-                  <button type="button" (click)="openInjector(sel)">
-                    Show in Injectors
-                    <span class="sr-only">: {{ sel.name }}</span>
-                  </button>
+                  @if (canShowInjector()) {
+                    <button type="button" (click)="openInjector(sel)">
+                      Show in Injectors
+                      <span class="sr-only">: {{ sel.name }}</span>
+                    </button>
+                  }
+                  @if (canShowSignals()) {
+                    <button type="button" (click)="openSignals(sel)">
+                      Show in Signals
+                      <span class="sr-only">: {{ sel.name }}</span>
+                    </button>
+                  }
                 </div>
+              }
+              @if (detail(); as d) {
+                <div class="actions" role="group" aria-label="Copy">
+                  <button type="button" (click)="copyJson(d)">Copy as JSON</button>
+                  <button type="button" (click)="copyHostPath(d)">Copy host path</button>
+                </div>
+                <p class="where action-message" role="status">{{ copyMessage() }}</p>
               }
               @if (!staticReport() && !native()) {
                 <app-store-global
@@ -602,7 +622,7 @@ function storedDirectiveHosts(): boolean {
                     @if (v.inputs.length) {
                       <ul class="props">
                         @for (p of v.inputs; track p.name) {
-                          <li class="prop">
+                          <li class="prop" [class.changed]="flashed('input', p.name)">
                             <span class="prop-name mono">
                               {{ p.name }}
                               @if (p.prop !== p.name) {
@@ -657,11 +677,20 @@ function storedDirectiveHosts(): boolean {
                     @if (v.properties.length) {
                       <ul class="props">
                         @for (p of v.properties; track p.name) {
-                          <li class="prop">
+                          <li class="prop" [class.changed]="flashed('property', p.name)">
                             <span class="prop-name mono">
                               {{ p.name }}
                               @if (p.kind) {
                                 <span class="flag">{{ p.kind }}</span>
+                              }
+                              @if (p.kind === 'signal' && canShowSignals() && !staticReport()) {
+                                <button
+                                  type="button"
+                                  class="signal-link"
+                                  (click)="openSignals(sel, p.prop)"
+                                >
+                                  Show in Signals<span class="sr-only">: {{ p.name }}</span>
+                                </button>
                               }
                             </span>
                             <app-value-tree
@@ -695,6 +724,24 @@ function storedDirectiveHosts(): boolean {
                   </div>
                 }
 
+                @if (!propQuery() && ownedDeferBlocks().length) {
+                  <div class="block">
+                    <h3>
+                      Defer blocks <span class="pill">{{ ownedDeferBlocks().length }}</span>
+                    </h3>
+                    <ul class="chips">
+                      @for (block of ownedDeferBlocks(); track block.id) {
+                        <li class="chip">
+                          <span class="mono">{{ block.state }}</span>
+                          <span class="chip-note">{{
+                            block.triggers.join(', ') || 'no triggers'
+                          }}</span>
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                }
+
                 @for (dir of v.directives; track dir.name + dir.index) {
                   <div class="block">
                     <h3>
@@ -704,7 +751,10 @@ function storedDirectiveHosts(): boolean {
                     @if (dir.inputs.length) {
                       <ul class="props">
                         @for (p of dir.inputs; track p.name) {
-                          <li class="prop">
+                          <li
+                            class="prop"
+                            [class.changed]="flashed('directive', p.name, dir.index)"
+                          >
                             <span class="prop-name mono">{{ p.name }}</span>
                             <app-value-tree
                               [prop]="p"
@@ -1539,6 +1589,37 @@ function storedDirectiveHosts(): boolean {
       border-radius: var(--radius-sm);
       background: var(--bg);
     }
+    .prop.changed {
+      outline: 2px solid var(--accent);
+      outline-offset: -1px;
+      animation: value-flash 1s var(--ease) forwards;
+    }
+    @keyframes value-flash {
+      from {
+        outline-color: var(--accent);
+      }
+      to {
+        outline-color: transparent;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .prop.changed {
+        animation: none;
+      }
+    }
+    .signal-link {
+      height: auto;
+      min-height: 0;
+      margin-left: 6px;
+      padding: 0 6px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 18px;
+    }
+    .signal-link:focus-visible {
+      @include m.focus-ring(-2px);
+    }
     .prop-name {
       display: block;
       margin-bottom: 4px;
@@ -1764,6 +1845,9 @@ export class ComponentTree {
   /** Whether the Injectors tab is on, so "Show in Injectors" can open it. */
   readonly canShowInjector = input(false);
   readonly showInjector = output<InjectorFocus>();
+  /** Whether the Signals tab is on, so "Show in Signals" can open it. */
+  readonly canShowSignals = input(false);
+  readonly showSignals = output<SignalFocus>();
 
   readonly filter = signal('');
   readonly loading = signal(false);
@@ -1788,6 +1872,13 @@ export class ComponentTree {
     source: this.selectedId,
     computation: () => '',
   });
+  /** What the last copy did, for the selected component only. */
+  readonly copyMessage = linkedSignal<string | null, string>({
+    source: this.selectedId,
+    computation: () => '',
+  });
+  /** Values of the selected component that changed in the last push, outlined for a second. */
+  private readonly flash = new ValueFlash();
   readonly collapsed = signal<ReadonlySet<string>>(new Set());
   /** Elements that host directives but no component show as rows; this viewer can hide them. */
   readonly showDirectiveHosts = signal(storedDirectiveHosts());
@@ -1904,6 +1995,11 @@ export class ComponentTree {
   );
 
   readonly deferBlocks = computed(() => this.page()?.deferBlocks ?? []);
+  /** The defer blocks in the selected component's template. */
+  readonly ownedDeferBlocks = computed(() => {
+    const id = this.selectedId();
+    return id ? this.deferBlocks().filter((block) => block.owner?.id === id) : [];
+  });
 
   readonly countLabel = computed(() =>
     countText(
@@ -2119,6 +2215,18 @@ export class ComponentTree {
       });
     });
     effect(() => {
+      const detail = this.detail();
+      const owner = detail ? `${this.page()?.pageId ?? ''}|${detail.id}` : null;
+      const values = new Map<string, unknown>();
+      for (const p of detail?.inputs ?? []) values.set(flashKey('input', p.name), p.value);
+      for (const p of detail?.properties ?? []) values.set(flashKey('property', p.name), p.value);
+      detail?.directives.forEach((dir, index) => {
+        for (const p of dir.inputs) values.set(flashKey('directive', p.name, index), p.value);
+      });
+      untracked(() => this.flash.update(owner, values));
+    });
+    this.destroyRef.onDestroy(() => this.flash.clear());
+    effect(() => {
       const client = this.rpc();
       if (!client) return;
       void this.refresh();
@@ -2282,6 +2390,44 @@ export class ComponentTree {
         ? ''
         : 'Could not reveal it. The component must be rendered in the tab these DevTools inspect.',
     );
+  }
+
+  /** Whether a value of the detail changed in the last push, so it shows an outline. */
+  flashed(section: 'input' | 'property' | 'directive', name: string, index?: number): boolean {
+    return this.flash.changed().has(flashKey(section, name, index));
+  }
+
+  /** Opens the Signals tab on this component's graph, with the signal in `key` selected. */
+  openSignals(node: LiveNode, key?: string) {
+    const pageId = this.page()?.pageId;
+    this.showSignals.emit({
+      componentId: node.id,
+      ...(pageId ? { pageId } : {}),
+      ...(key ? { key } : {}),
+    });
+  }
+
+  /** Copies only what the panel holds, which the page serialized and masked already. */
+  async copyJson(detail: Detail) {
+    await this.copy(detail.id, componentJson(detail), `Copied ${detail.name} as JSON.`);
+  }
+
+  async copyHostPath(detail: Detail) {
+    await this.copy(
+      detail.id,
+      hostPathText(detail),
+      detail.selector ? 'Copied the host selector.' : 'Copied the host path.',
+    );
+  }
+
+  private async copy(id: string, text: string, done: string) {
+    let message = done;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      message = 'The clipboard is not available here.';
+    }
+    if (this.selectedId() === id) this.copyMessage.set(message);
   }
 
   /** Opens the Injectors tab on this component's element injector. */
