@@ -1,6 +1,6 @@
 ---
 title: Angular Native
-description: Send live components, signals, injectors, stores, change detection, leaks and errors from an Angular Native app on a device to the devtools on your machine.
+description: Add the devtools to an Angular Native app and send live components, signals, injectors, stores, change detection, leaks and errors from a device to your machine.
 ---
 
 <ngmd-hero title="Angular Native" gradient>
@@ -9,9 +9,135 @@ description: Send live components, signals, injectors, stores, change detection,
 
 # Angular Native
 
-[Angular Native](https://ng-native.com) renders *Angular onto React Native's Fabric renderer, so the app has no DOM for the [browser overlay](./overlay.md) to walk. The `@pangular-inspector/devtools/overlay-angular-native` entry point walks Angular Native's own node tree instead and sends the same live data to a devtools server that runs on your machine.
+[Angular Native](https://ng-native.com) renders *Angular onto React Native's Fabric renderer, so the app has no DOM for the [browser overlay](./overlay.md) to walk. The `@pangular-inspector/devtools/overlay-angular-native` entry point walks Angular Native's own node tree instead, and sends the same live data to the [standalone devtools server](./cli.md) on your machine.
 
-This page describes what the overlay shows and how it works. To add it to an app, follow [Set up Angular Native](../guides/angular-native.md).
+This page sets the overlay up, then describes what it shows and how it works.
+
+## Requirements
+
+- A development build. Angular publishes its debug API on `globalThis.ng` only when `ngDevMode` is on, which is the default in a Metro development build.
+- An app started with `mount()` from `@ng-native/platform`. The overlay needs the root node it returns. The demo uses `@ng-native/*` 0.2.0, the version the overlay is written against.
+- A `WebSocket` global and a standards-compliant `URL`. React Native provides `WebSocket`. Expo provides `URL`. React Native's own `URL` is read-only, and the client sets the `protocol` of the socket URL, so a bare React Native app needs a polyfill such as `react-native-url-polyfill`.
+
+## Set up
+
+<ngmd-workflow>
+  <ngmd-step title="Install the package">
+    Add <code>&#64;pangular-inspector/devtools</code>. A bare React Native app also needs a <code>URL</code> polyfill.
+  </ngmd-step>
+  <ngmd-step title="Start the overlay">
+    Call <code>initAngularNativeOverlay()</code> in <code>src/main.ts</code>, after <code>mount()</code>, with the root node it returns.
+  </ngmd-step>
+  <ngmd-step title="Run the devtools server">
+    Start <code>pangular dev --no-auth</code> in the app's folder.
+  </ngmd-step>
+  <ngmd-step title="Open the panel">
+    Open the <strong>Angular Native apps</strong> URL the server prints. The live tabs fill once the app connects.
+  </ngmd-step>
+</ngmd-workflow>
+
+### Install
+
+```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
+pnpm add @pangular-inspector/devtools
+```
+
+```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
+npm install @pangular-inspector/devtools
+```
+
+```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
+yarn add @pangular-inspector/devtools
+```
+
+```bash group="install" name="bun" image="https://bun.sh/logo.svg"
+bun add @pangular-inspector/devtools
+```
+
+### WebSocket and URL
+
+The overlay needs a `WebSocket` global and a standards-compliant `URL`. React Native provides `WebSocket`, and Expo provides `URL`, so an Expo app needs nothing more.
+
+React Native's own `URL` is read-only, and the client sets the `protocol` of the socket URL. In a bare React Native app, add a polyfill such as `react-native-url-polyfill` and import it first in `src/main.ts`.
+
+### Start the overlay
+
+Start the overlay after `mount()` from `@ng-native/platform`, and pass the root node of the mounted app:
+
+```ts {5,15}
+// src/main.ts
+import {AppRegistry, Image, Platform, processColor} from 'react-native';
+import {mount} from '@ng-native/platform';
+import {getFabricUIManager, registerPlatformComponents} from '@ng-native/fabric';
+import {initAngularNativeOverlay} from '@pangular-inspector/devtools/overlay-angular-native';
+import {App} from './app/app.ts';
+
+registerPlatformComponents(Platform.OS);
+
+AppRegistry.registerRunnable('main', ({rootTag}) => {
+  const app = mount(Number(rootTag), App, getFabricUIManager(), {
+    processColor,
+    resolveAssetSource: (value) => Image.resolveAssetSource(value as never),
+  });
+  if (__DEV__) initAngularNativeOverlay({root: app.engine.root});
+});
+```
+
+The `__DEV__` check keeps the overlay out of release builds, which have no `ng` debug global to read. `initAngularNativeOverlay()` returns a function that stops the overlay and tells the server to forget the app. See [Options](#options) for `baseURL`, `intervalMs` and `retryMs`.
+
+### Where the overlay connects
+
+The overlay connects to `http://localhost:9999/` unless you pass `baseURL`.
+
+| Where the app runs                     | What to do                                                                                      |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| iOS simulator                          | Nothing. The simulator shares your machine's `localhost`.                                       |
+| Android emulator or USB Android device | Run `adb reverse tcp:9999 tcp:9999`, the same forwarding Metro uses for its own port.           |
+| Physical device over Wi-Fi             | Pass your machine's LAN address as `baseURL`, such as `{baseURL: 'http://192.168.1.20:9999/'}`. |
+
+A device that reaches the server over plain HTTP may need a cleartext exception for that address in `Info.plist` or the Android network security config.
+
+### Run the devtools server
+
+Run the server in the app's folder, so the source scanners read its `src/`:
+
+```bash
+cd my-angular-native-app
+npx @pangular-inspector/devtools dev --no-auth
+```
+
+The server listens on `localhost` only, which the iOS simulator reaches directly and an Android emulator reaches through `adb reverse`. `--no-auth` is needed because the app cannot enter the one-time code the panel asks for. Without it, the overlay logs a warning in the Metro log that names the flag and keeps retrying.
+
+When it is ready, the server prints the Angular Native view on its own line:
+
+```text
+  pangular v<version>
+  Panel: http://localhost:9999/
+  Angular Native apps: http://localhost:9999/?view=angular-native
+  MCP:   http://localhost:9999/__mcp
+```
+
+A physical device over Wi-Fi reaches your machine over the network, so the server has to listen on an interface the device can reach:
+
+```bash
+npx @pangular-inspector/devtools dev --host 192.168.1.20 --allowed-origin http://192.168.1.20:9999 --no-auth
+```
+
+The server then listens on that address only, not on `localhost`, so open the panel at `http://192.168.1.20:9999/`. `--allowed-origin` lets the panel's own origin through there. Use your machine's address and the server's port.
+
+<ngmd-alert severity="warning" label="Trusted networks only">
+  With <code>--host</code> and <code>--no-auth</code>, every host that can reach that address can call the devtools RPC and MCP endpoints without a code. Use it on a trusted network only. Binding to the one address the device uses, as above, keeps the server off your other interfaces, which <code>0.0.0.0</code> would not.
+</ngmd-alert>
+
+See [Standalone CLI](./cli.md) for the other server options and [Security](../security.md) for what `--no-auth` turns off.
+
+### Open the panel
+
+Open `http://localhost:9999/?view=angular-native` on your machine. The **Angular Native** view shows the tabs an app on a device fills: **Components**, **Signals**, **Injectors**, **Store**, **Queries**, **Pipes** and **Errors**. With no app connected, it says **No Angular Native app is connected**.
+
+When the app connects, the Metro log shows `[pangular] Connected to the devtools server at http://localhost:9999/` and the tabs fill. Hover a component in the tree to outline its view on the device.
+
+If the app reports to a hub (Express or the Vite plugin) instead, pick the **Angular Native** dock in the side rail. See [Where it shows in the panel](#where-it-shows-in-the-panel).
 
 ## What it shows
 
@@ -60,16 +186,6 @@ The overlay marks its component reports with `platform: 'angular-native'`, and t
 
 `list-pages` gives each page's platform, so an agent can tell an Angular Native app from a browser tab. See [Agent tools](../agents/tools.md#list-pages).
 
-## Requirements
-
-- A development build. Angular publishes its debug API on `globalThis.ng` only when `ngDevMode` is on, which is the default in a Metro development build.
-- An app started with `mount()` from `@ng-native/platform`. The overlay needs the root node it returns. The demo uses `@ng-native/*` 0.2.0, the version the overlay is written against.
-- A `WebSocket` global and a standards-compliant `URL`. React Native provides `WebSocket`. Expo provides `URL`. React Native's own `URL` is read-only, and the client sets the `protocol` of the socket URL, so a bare React Native app needs a polyfill such as `react-native-url-polyfill`.
-
-## Set up
-
-[Set up Angular Native](../guides/angular-native.md) walks through it: install the package, start the overlay after `mount()`, run the server with `--no-auth` and open the panel. It also covers how the app reaches the server from a simulator, an emulator or a device, and how to run the [Angular Native demo](../contributing/demo-apps.md#angular-native-demo).
-
 ## Options
 
 | Option       | Default                         | What it does                                                                   |
@@ -101,11 +217,39 @@ The hook does nothing when `ngDevMode` is off. Without it, only stores created a
 - **Errors**: the overlay wraps the app's `ErrorHandler`, listens to the console, and hears React Native's global error handler (`ErrorUtils`), which it calls on with every error and puts back when the overlay stops.
 - **Highlight**: when the panel or the `highlight` agent tool points at a component, the overlay sets `outlineWidth`, `outlineStyle` and `outlineColor` in the view's inline style, and restores the previous values when the panel clears it.
 
-## FAQ
+## Try the demo
+
+`examples/angular-native` is an Expo app wired up this way, with a root service, an `@ngrx/signals` store and components with signals to inspect. It is outside the pnpm workspace and installs with npm, using a tarball of the devtools package built from this repository. It uses `@ng-native/*` 0.2.0. The overlay's tests run against a simulated view tree and connection, and no automated test runs the demo on a simulator or device:
+
+```bash
+cd examples/angular-native
+npm run devtools:pack
+npm install
+npm run devtools
+```
+
+`npm run devtools` starts the devtools server with `--no-auth` on `http://localhost:9999/`, scanning the demo's `src`. In a second terminal, build and start the app:
+
+```bash
+npm run ios
+```
+
+On Android, forward the devtools port first:
+
+```bash
+adb reverse tcp:9999 tcp:9999
+npm run android
+```
+
+After a change in `packages/devtools`, run `npm run devtools:pack` and then `npm install ./pangular-inspector-devtools.tgz`, since a plain `npm install` keeps the tarball its lockfile pins. See [Angular Native demo](../contributing/demo-apps.md#angular-native-demo) for what each file covers.
+
+## Troubleshooting
+
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The live tabs stay empty" open>
-    Check the Metro log for a <code>[pangular]</code> line. A warning about <code>--no-auth</code> means the server asked for a code. A warning about reaching the server means the address is wrong for where the app runs. See <a href="../guides/angular-native.md#where-the-overlay-connects">where the overlay connects</a>. A release build has no <code>ng</code> global, so nothing is collected there.
+    Check the Metro log for a <code>[pangular]</code> line. A warning about <code>--no-auth</code> means the server asked for a code. A warning about reaching the server means the address is wrong for where the app runs. See <a href="#where-the-overlay-connects">where the overlay connects</a>. A release build has no <code>ng</code> global, so nothing is collected there.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The Providers list of an injector is empty">
     Angular records providers only when a <code>window</code> global exists as <code>mount()</code> creates the platform. When <code>__DEV__</code> is <code>true</code> and no <code>window</code> exists, importing <code>&#64;pangular-inspector/devtools/overlay-angular-native</code> defines one until Angular publishes its debug utilities, then removes it. Keep the import at the top of <code>src/main.ts</code>, so it runs before <code>mount()</code>. If the list stays empty, check that <code>window</code> is defined before <code>mount()</code> runs.
@@ -115,9 +259,9 @@ The hook does nothing when `ngDevMode` is off. Without it, only stores created a
 ## Where to next
 
 <ngmd-pill-row>
-  <ngmd-pill href="/guides/angular-native" title="Set up Angular Native"></ngmd-pill>
   <ngmd-pill href="/getting-started/cli" title="Standalone CLI"></ngmd-pill>
   <ngmd-pill href="/getting-started/configuration" title="Configuration"></ngmd-pill>
+  <ngmd-pill href="/getting-started/troubleshooting" title="Troubleshooting"></ngmd-pill>
   <ngmd-pill href="/inspectors/components" title="Components"></ngmd-pill>
   <ngmd-pill href="/security" title="Access and redaction"></ngmd-pill>
 </ngmd-pill-row>

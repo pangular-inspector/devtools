@@ -965,7 +965,7 @@ claude mcp add pangular -- \\
 
   readonly stack: StackItem[] = [
     {name: 'Angular', url: '/getting-started/installation', logo: '/logos/angular.svg', size: 20},
-    {name: 'AnalogJS', url: '/guides/analog', logo: '/logos/analog.svg', size: 17},
+    {name: 'AnalogJS', url: '/getting-started/vite', logo: '/logos/analog.svg', size: 17},
     {name: 'Vite', url: '/getting-started/vite', logo: '/logos/vite-mark.svg', size: 19},
     {
       name: 'Express',
@@ -981,7 +981,12 @@ claude mcp add pangular -- \\
       logoDark: '/logos/ngrx-dark.svg',
       size: 20,
     },
-    {name: 'NativeScript', url: '/guides/nativescript', logo: '/logos/nativescript.svg', size: 17},
+    {
+      name: 'NativeScript',
+      url: '/getting-started/nativescript',
+      logo: '/logos/nativescript.svg',
+      size: 17,
+    },
     {
       name: 'Angular Native',
       url: '/getting-started/angular-native',

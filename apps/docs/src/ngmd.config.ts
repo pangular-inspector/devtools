@@ -191,6 +191,7 @@ const config: NgmdConfig = {
         {label: 'Chrome extension', href: '/getting-started/chrome-extension'},
         {label: 'Angular Native', href: '/getting-started/angular-native'},
         {label: 'NativeScript', href: '/getting-started/nativescript'},
+        {label: 'Troubleshooting', href: '/getting-started/troubleshooting'},
       ],
     },
     {
@@ -228,9 +229,6 @@ const config: NgmdConfig = {
       items: [
         {label: 'Restore NgRx signal state', href: '/guides/ngrx-signals-restore'},
         {label: 'Set up SSR & HTTP', href: '/guides/ssr-http'},
-        {label: 'Set up Analog', href: '/guides/analog'},
-        {label: 'Set up NativeScript', href: '/guides/nativescript'},
-        {label: 'Set up Angular Native', href: '/guides/angular-native'},
         {label: 'Set up Capacitor', href: '/guides/capacitor'},
         {label: 'Write a plugin', href: '/guides/write-a-plugin'},
         {label: 'Inspect, fix and verify', href: '/guides/inspect-fix-verify'},
