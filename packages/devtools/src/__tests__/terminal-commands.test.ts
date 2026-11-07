@@ -123,7 +123,11 @@ describe('terminal command detection', () => {
       packageManagerFor('/work/app', files({ 'package.json': { packageManager: 'yarn@4.5.0' } })),
     ).toBe('yarn');
     const workspace = (path: string) =>
-      path === '/work/pnpm-lock.yaml' ? '' : path === '/work/app/package.json' ? '{}' : undefined;
+      path === join('/work', 'pnpm-lock.yaml')
+        ? ''
+        : path === join('/work/app', 'package.json')
+          ? '{}'
+          : undefined;
     expect(packageManagerFor('/work/app', workspace)).toBe('pnpm');
     expect(packageManagerFor('/work/app', files({ 'package.json': {} }))).toBe('npm');
   });

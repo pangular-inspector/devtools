@@ -8,6 +8,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { authStoreDir } from '../auth-store.ts';
 import { cliMcpSetting } from '../cli.ts';
 
+/**
+ * Checks that `path` exists and, on POSIX, that only its owner can read it. Windows has no such
+ * modes: `chmod` there only sets the read-only flag, and `stat` reports 0o666.
+ */
+function expectPrivate(path: string, mode: number) {
+  const actual = statSync(path).mode & 0o777;
+  if (process.platform !== 'win32') expect(actual).toBe(mode);
+}
+
 const BIN = fileURLToPath(new URL('../../bin.mjs', import.meta.url));
 const REPO = fileURLToPath(new URL('../../../../', import.meta.url));
 const MCP_TOKEN = 'cli-mcp-token-0123456789abcdef';
@@ -44,7 +53,9 @@ describe('pangular dev access', () => {
       cwd: REPO,
       env: {
         ...process.env,
+        // `homedir()` reads HOME on POSIX and USERPROFILE on Windows.
         HOME: home,
+        USERPROFILE: home,
         PANGULAR_ROOT: '',
         PANGULAR_CONFIG: '',
         PANGULAR_MCP_TOKEN: MCP_TOKEN,
@@ -115,10 +126,10 @@ describe('pangular dev access', () => {
     );
     expect(await rpc.requestTrustWithCode(code)).toBeTruthy();
     const dir = authStoreDir(REPO, home);
-    await vi.waitFor(() => expect(statSync(join(dir, 'auth.json')).mode & 0o777).toBe(0o600), {
+    await vi.waitFor(() => expectPrivate(join(dir, 'auth.json'), 0o600), {
       timeout: 3000,
     });
-    expect(statSync(dir).mode & 0o777).toBe(0o700);
+    expectPrivate(dir, 0o700);
     expect(
       Object.keys(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')).trusted),
     ).toHaveLength(1);

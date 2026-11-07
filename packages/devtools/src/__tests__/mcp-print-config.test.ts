@@ -237,7 +237,10 @@ describe('pangular mcp --print-config', () => {
     expect(process.cwd()).toBe(cwd);
     const text = lines.join('\n');
     expect(text).not.toContain(SECRET);
-    expect(text).toContain(`--root ${root} --config ${join(root, 'pangular.config.json')}`);
+    // Quoted where the shell needs it, as a Windows path with `\` is.
+    expect(text).toContain(
+      `--root ${shellQuote(root)} --config ${shellQuote(join(root, 'pangular.config.json'))}`,
+    );
     expect(text).toContain('== HTTP: live pages, at http://127.0.0.1:5173/__devframes/__mcp ==');
     expect(text).toContain("--header 'Authorization: Bearer ${PANGULAR_MCP_TOKEN}'");
     expect(text).not.toContain('Warning');
