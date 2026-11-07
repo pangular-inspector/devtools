@@ -131,6 +131,21 @@ Messages go through the same redaction as field values.
 
 Form bugs and model-aware accessibility checks, each with a fix. For generic accessibility checks, run axe on the page.
 
+The accessibility checks compare the form model with the element each field binds:
+
+| Rule                            | Severity | What it finds                                                                                                         |
+| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `missing-label`                 | warning  | An input with no accessible name.                                                                                     |
+| `aria-invalid-desync`           | warning  | `aria-invalid` that disagrees with the field state.                                                                   |
+| `required-not-exposed`          | warning  | A field the model requires whose element has no `required` or `aria-required`.                                        |
+| `error-not-shown`               | info     | An invalid, touched field with no visible error text near it.                                                         |
+| `error-not-described`           | info     | Visible error text that `aria-describedby` or `aria-errormessage` does not link to the input.                         |
+| `missing-autocomplete`          | info     | An input whose type or name says it collects personal data, such as `email` or `postal-code`, with no `autocomplete`. |
+| `submit-disabled-while-invalid` | info     | Every submit button disabled while the form is invalid.                                                               |
+| `no-focus-on-invalid-submit`    | info     | Focus that stayed put after an invalid submit.                                                                        |
+
+Turn a rule off with [`lint.rules`](../getting-started/configuration.md#lint-rules), such as `lint: { rules: { 'missing-autocomplete': false } }`.
+
 A finding about one field shows its path, such as `at address.zip`. Click the path to open that field, the same way an **Error summary** entry does: the tab switches to the **Fields** view, opens the field's [details](#field-details) and moves focus to them. Findings about the whole form have no path.
 
 If the devtools server does not answer, the Submit view, the Lint view and the field details say so and offer **Try again**.
