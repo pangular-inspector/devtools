@@ -741,6 +741,8 @@ const READ_PLAN = [
 
   ['explain-pipe', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
   ['explain-pipe', '/examples/pipes', () => ({ name: 'date' })],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({})],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
 
   ['list-ssr-requests', '/examples/http', () => ({ limit: 5 })],
   [
@@ -3059,7 +3061,7 @@ function runDocs(state) {
   docs.argumentDrift = argDrift;
   // The counts the docs state.
   const builtIns = live.length + 1; // devframe_state_read is listed too, under Shared state
-  docs.statedToolCount = toolsMd.match(/^\s*([A-Z][a-z-]+) tools, grouped/m)?.[1];
+  docs.statedToolCount = toolsMd.match(/^\s*([A-Z][a-z]+(?:[- ][a-z]+)*) tools, grouped/m)?.[1];
   docs.liveBuiltInTools = live.length;
   docs.liveTotalTools = state.tools.size;
   const actionLive = [...state.tools.values()]

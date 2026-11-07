@@ -154,6 +154,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
+- **Pipes:** while recording, a pipe that returns an equal result 20 calls in a row is marked **churning**, in the panel and in `explain-pipe`. **Sort pipes** orders the list by calls or by time in `transform`, and **Called while recording** shows only the recorded pipes (#369).
+- **Components:** a **Pipes in template** block lists the pipes the selected component's template uses on the page, and opens one in the **Pipes** tab (#369).
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
 
@@ -170,11 +172,12 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 #### Agents and MCP
 
-- 98 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
+- 100 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.
 - Per-page resource templates and `list_changed` notifications (#417).
+- A `pangular:pipe-usages` resource with the pipes in the source, every template use, and the live pipe usage of the pages (#369).
 - Five MCP prompts for common workflows: `inspect-page`, `debug-error`, `fix-form`, `performance-pass` and `verify-fix` (#416). Server instructions describe the tiers and the tools.
 - Agent skills shipped in the package, installed with `pangular skills install`.
 - Read-only tools for browser agents through WebMCP, off by default (`agent.browserTools`).
@@ -195,6 +198,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The NgRx collector serializes a signal store or the classic `Store` only when its state, computed values or method stats changed, and the overlay compares a report version instead of the serialized report, so an unchanged store costs no serialization on each check. A change made in place, without a new state object, can show late (#368).
 - Collectors schedule their work outside the Angular zone, so an app that writes a signal or logs during change detection settles again on zone.js.
 - Long lists and trees in the panel render only the visible rows.
+- The pipe source scan behind `scan-pipes`, `explain-pipe`, the pipe lint and the audit keeps each file's result until the file or its `templateUrl` changes, and skips the walk while the Vite watcher saw no change (#369).
 - The agent tool list is much smaller: shorter descriptions, and library tools only for apps that use them.
 
 ### Fixes
@@ -238,6 +242,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The **Routes** tab tells screen readers how each outlet in **Outlets** is nested, as it already did for **Active routes** (#370).
 - The **Forms** timeline tags a change as **agent** only when a WebMCP call wrote it, or when it is in the call's own form while the call runs (#368). Typing in any form while a long WebMCP submit is pending is tagged **user**, not **agent**.
 - The **Pipes** tab no longer marks two `| async` usages of a Promise, a Subject, an `asObservable()` view of one or an NgRx store select as duplicates, since their subscribers share one execution (#369). Any other source that two `| async` usages subscribe to shows as **possible duplicate subscription**, and `explain-pipe` says **Possible duplicate subscriptions**, because the page can't see `share()` or `shareReplay()` in a pipe.
+- Recording pipe calls counts a pipe from its first call when it sits in a template branch that renders later, and patches a pipe class that a newly added view brings as soon as the page sees the view, instead of on the next report (#369).
 - Browser DevTools show the app's own line as the caller of a `console` call again. The browser entries ship source maps that list the console tap in `x_google_ignoreList`, so its wrapper frame is skipped (#369).
 - The Angular Native overlay gates the injector profiler like the NativeScript overlay: in a development build with no `window`, importing it defines one until Angular publishes its debug utilities, so the **Providers** lists fill (#371).
 - Redaction leaks found by a corpus of fake secrets run through every redaction path are closed: a secret pair after another word and a colon (`Error: password: "…"`), the key after `Authorization: ApiKey` in an Analog server body that is not JSON, secret pairs in the fragment or matrix params of an Analog server message, headers with a camelCase secret name such as `newPassword`, and tokens used as NgRx state keys.
