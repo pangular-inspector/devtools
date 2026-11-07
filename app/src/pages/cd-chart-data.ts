@@ -4,8 +4,11 @@ import type {
   CdSpanKind,
 } from '@pangular-inspector/devtools/internal/config';
 
-/** One frame at 60 frames per second. A cycle longer than this can drop a frame. */
-export const FRAME_BUDGET_MS = 16.6;
+/**
+ * The slow cycle threshold when a recording names none: `limits.cdSlowMs`'s
+ * default, about one frame at 60 frames per second.
+ */
+export const FRAME_BUDGET_MS = 16;
 
 /** A range of recorded cycles by cycle id, both ends included. */
 export interface CdRange {
@@ -13,8 +16,9 @@ export interface CdRange {
   to: number;
 }
 
-export function overBudget(cycle: Pick<CdCycle, 'ms'>): boolean {
-  return cycle.ms > FRAME_BUDGET_MS;
+/** Whether a cycle took longer than the recording's slow threshold (`limits.cdSlowMs`). */
+export function overBudget(cycle: Pick<CdCycle, 'ms'>, slowMs = FRAME_BUDGET_MS): boolean {
+  return cycle.ms > slowMs;
 }
 
 /** Formats a duration the way the recording view does. */
@@ -64,9 +68,9 @@ export function aggregateComponents(cycles: readonly CdCycle[]): CdComponentStat
 }
 
 /** The top of the bar chart's scale: the slowest cycle, with room above the budget line. */
-export function chartMax(cycles: readonly CdCycle[]): number {
+export function chartMax(cycles: readonly CdCycle[], slowMs = FRAME_BUDGET_MS): number {
   const slowest = cycles.reduce((max, cycle) => Math.max(max, cycle.ms), 0);
-  return Math.max(slowest, FRAME_BUDGET_MS * 1.25);
+  return Math.max(slowest, slowMs * 1.25);
 }
 
 /** A treemap cell in percent of the map's width and height. */

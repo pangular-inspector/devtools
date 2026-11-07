@@ -117,6 +117,7 @@ const PANGULAR_LIMITS: {
   readonly httpCalls: {readonly default: 200; readonly min: 10; readonly max: 2000};
   readonly changeLog: {readonly default: 200; readonly min: 10; readonly max: 2000};
   readonly cdCycles: {readonly default: 200; readonly min: 10; readonly max: 2000};
+  readonly cdSlowMs: {readonly default: 16; readonly min: 1; readonly max: 1000};
   readonly capacitorCalls: {readonly default: 200; readonly min: 10; readonly max: 2000};
   readonly idleAfterMs: {readonly default: 60000; readonly min: 0; readonly max: 600000};
 };
@@ -192,6 +193,12 @@ interface PangularConfig {
     changeLog?: number;
     /** Change detection cycles kept per page while recording. Default 200. */
     cdCycles?: number;
+    /**
+     * A change detection cycle longer than this, in ms, counts as slow: the
+     * recording flags it and the chart draws it over the line. Default 16
+     * (about one frame at 60 frames per second), from 1 to 1000.
+     */
+    cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
     /**
@@ -261,6 +268,8 @@ interface PangularHostOptions {
   authTokens?: string[];
   /** Server plugins: agent tools and shared state of Pangular plugins (`plugin.ts`). */
   serverPlugins?: readonly PangularServerPlugin[];
+  /** How the host lets clients in, for the Dashboard's security status (`security-status.ts`). */
+  security?: PangularSecurityHost;
   /**
    * The folder the server scans, when it holds no Angular project (a wrong
    * `--root`). Source scan tools then refuse and name it, so the agent sees

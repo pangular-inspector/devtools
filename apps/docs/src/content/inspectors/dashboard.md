@@ -52,6 +52,10 @@ A card shows **Counting…** while it loads. It shows **Count unavailable** when
 
 Below the cards, the **Configuration** block lists the devtools options that differ from the defaults, such as **Inspectors off**, **Blocked actions** and **Limits**. It says **Defaults** when nothing is changed. Until the panel connects, the block says **Loading…**, the stat cards stay hidden and the tab strip shows only **Dashboard** and the open tab, since the panel doesn't know yet which inspectors are on. See [Configuration](../getting-started/configuration.md#check-the-active-configuration).
 
+### Security block
+
+Below the **Configuration** block, the **Security** block shows whether the one-time code is on, how many clients hold a trusted token and when those tokens expire, how many pairing tokens the server accepts, and who may reach the server: this machine only or other machines too, and the allowed origins and hosts. It never shows a token or the code. A static report shows none. See [Check the security status](../security.md#check-the-security-status).
+
 ## Where the data comes from
 
 Most of the Dashboard reads your workspace, not the running page. It works before the app loads in a browser.

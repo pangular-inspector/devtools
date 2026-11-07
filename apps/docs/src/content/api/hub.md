@@ -110,6 +110,12 @@ interface PangularConfig {
     changeLog?: number;
     /** Change detection cycles kept per page while recording. Default 200. */
     cdCycles?: number;
+    /**
+     * A change detection cycle longer than this, in ms, counts as slow: the
+     * recording flags it and the chart draws it over the line. Default 16
+     * (about one frame at 60 frames per second), from 1 to 1000.
+     */
+    cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
     /**

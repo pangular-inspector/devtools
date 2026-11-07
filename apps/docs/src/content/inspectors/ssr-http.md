@@ -54,6 +54,31 @@ If the server uses `compression()`, mount `ssrMiddleware` after it. Mounted the 
 
 If your server takes web-standard handlers, as Hono, h3 and Nitro do, wrap the Angular handler with `withPangularSsr()` from `@pangular-inspector/devtools/ssr` instead. It records the same data. For Fastify and Analog, the same entry point has a Node tracer. See [Trace SSR renders](../getting-started/other-servers.md#trace-ssr-renders) and [Trace server renders](../getting-started/vite.md#trace-server-renders).
 
+### Transfer cache options
+
+`withPangular()` takes the same options as `withHttpTransferCacheOptions()` under `transferCache`. It passes them to the transfer cache that `provideClientHydration()` sets up, whatever order the providers come in, and the tab uses them to explain each [transfer cache outcome](#transfer-cache-outcome):
+
+```ts {9,12}
+// src/app/app.config.ts
+import {ApplicationConfig} from '@angular/core';
+import {provideHttpClient, withFetch} from '@angular/common/http';
+import {provideClientHydration} from '@angular/platform-browser';
+import {providePangularHttp, withPangular} from '@pangular-inspector/devtools/http';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideClientHydration(),
+    provideHttpClient(
+      withFetch(),
+      withPangular({transferCache: {includePostRequests: true, includeHeaders: ['etag']}}),
+    ),
+    providePangularHttp(),
+  ],
+};
+```
+
+Use it in place of `withHttpTransferCacheOptions()`, not next to it. Without `provideClientHydration()` there is no transfer cache, so the options do nothing and a development build logs a warning. In production builds `withPangular()` still passes the options to the cache, so the app caches the same way in development and production.
+
 ## What it shows
 
 ### SSR requests
@@ -112,15 +137,16 @@ Each server call is marked **cached** when Angular's transfer cache stored its r
 | Response cache         | The response has `Cache-Control` `no-store`, `no-cache` or `private`.                                                    |
 | Set-Cookie             | The response sets a cookie.                                                                                              |
 | Fault rule             | A fault rule answered on the server, before the transfer cache ran.                                                      |
+| Filter                 | The `filter` passed to `withPangular({transferCache})` returned `false`.                                                 |
 | Cache off or filter    | None of the above. The transfer cache is off, or `filter` or another `withHttpTransferCacheOptions` setting left it out. |
 
-The tab checks the TransferState after each server response, so **cached** is what Angular stored. The reason is worked out from the request and the response, in the order Angular checks them, with its default options. Options such as `includePostRequests` or `includeRequestsWithAuthHeaders` let a call through, so a skipped call only lists a reason that still applies.
+The tab checks the TransferState after each server response, so **cached** is what Angular stored. The reason is worked out from the request and the response, in the order Angular checks them. It uses the options passed to `withPangular({transferCache})`, or Angular's defaults without them. Options set only with `withHttpTransferCacheOptions()` can't be read, so their effect shows as **Cache off or filter**. To get exact reasons, pass the options to `withPangular()` instead. See [Transfer cache options](#transfer-cache-options).
 
 ### HTTP timeline
 
 Every `HttpClient` request, tagged **SSR** or **Client**. Each row shows the method, the URL, the page that made it, the status, the time, and notes:
 
-- **transfer cache**: the TransferState cache answered it. Only client requests get it, because the server never reads the cache; a server call shows its [transfer cache outcome](#transfer-cache-outcome) instead. A client request counts as a hit only when its method, response type, URL, body and params match the entry Angular stored, and Angular would cache it: no `transferCache: false`, auth headers, credentials or no-cache request.
+- **transfer cache**: the TransferState cache answered it. Only client requests get it, because the server never reads the cache; a server call shows its [transfer cache outcome](#transfer-cache-outcome) instead. A client request counts as a hit only when its method, response type, URL, body and params match the entry Angular stored, and Angular would cache it with the options passed to `withPangular({transferCache})`, or with its defaults without them. With the defaults, that means no `transferCache: false`, POST, auth headers, credentials or no-cache request. Options such as `includePostRequests` let more requests count, and a `filter` that returns `false` leaves one out. See [Transfer cache options](#transfer-cache-options).
 - **delayed N ms**: a fault rule held it back.
 - **mocked**: a fault rule answered it with a status below 400.
 - **faulted**: a fault rule failed it with a status of 400 or more, or with a network error (status 0, shown as **ERR**).

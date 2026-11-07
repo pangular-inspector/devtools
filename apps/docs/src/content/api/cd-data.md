@@ -159,6 +159,16 @@ interface CdOptionsRequest {
 }
 ```
 
+## cdSlowMs
+
+Function. Source: [`packages/devtools/src/cd-data.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/cd-data.ts).
+
+A recording's `slowMs`, or the default when it names none or one out of range.
+
+```ts
+function cdSlowMs(value: unknown): number;
+```
+
 ## CdTraceEvent
 
 Interface. Source: [`packages/devtools/src/cd-data.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/cd-data.ts).
@@ -205,6 +215,17 @@ interface CdTraceFile {
   displayTimeUnit: 'ms';
   otherData: Record<string, string | number>;
 }
+```
+
+## DEFAULT_CD_SLOW_MS
+
+Constant. Source: [`packages/devtools/src/cd-data.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/cd-data.ts).
+
+The slow cycle threshold of a recording that names none, such as one from a
+page older than `limits.cdSlowMs`. Matches that limit's default.
+
+```ts
+const DEFAULT_CD_SLOW_MS: 16;
 ```
 
 ## MAX_CD_IMPORT_BYTES

@@ -374,7 +374,7 @@ export function attachNativeDiagnostics<H extends object>(
   const dirty = createTreeDirty();
 
   const cd = on.components
-    ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => true, {
+    ? attachChangeDetection(my, pageId, getNg, limits, tickMs, () => true, {
         profilerGate,
         roots: () => tree.roots(),
         hostId,

@@ -295,6 +295,7 @@ const config: NgmdConfig = {
         {label: 'Set up SSR & HTTP', href: '/guides/ssr-http'},
         {label: 'Set up Capacitor', href: '/guides/capacitor'},
         {label: 'Write a plugin', href: '/guides/write-a-plugin'},
+        {label: 'Ship a plugin from a library', href: '/guides/ship-a-plugin'},
         {label: 'Inspect, fix and verify', href: '/guides/inspect-fix-verify'},
       ],
     },

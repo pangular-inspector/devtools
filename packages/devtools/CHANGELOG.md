@@ -145,6 +145,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Hub messages and toasts, a dock group with badges, and an **All tools** dock.
 - New entry points: `/overlay-manual` (starts nothing on import), `/plugin`, `/capacitor-hook`, `/store-hook`, `/startup-hook`, `/ssr` and `/cd-data`.
 - New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup`, `plugins` and `redaction.entropy`.
+- `limits.cdSlowMs` (default 16 ms) sets when a change detection cycle counts as slow. The recording flags cycles over it, the `change-detection` agent tool counts and marks them, and the panel chart draws its budget line there instead of at a fixed 16.6 ms.
 - `redaction.entropy`, off by default, masks long high-entropy strings that no name or shape rule catches, such as an opaque token in a harmless field. `true` masks runs of 24 characters or more; `{minLength, threshold}` sets other limits. Hex values, UUIDs, ULIDs and camelCase identifiers stay readable, and known shapes keep their prefix. It applies on every redaction path, on the page and on the devtools server, and shows as **Entropy masking** on the Dashboard.
 - After pairing, focus moves to the active tab with a **Connected** note.
 
@@ -177,6 +178,9 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Components:** a **Pipes in template** block lists the pipes the selected component's template uses on the page, and opens one in the **Pipes** tab (#369).
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
+- The server keeps at most 256 KB of JSON for each NgRx store's state. Past it, the largest slices show `[too large: N KB]`, so one huge slice can't fill the server's memory or the panel.
+- `withPangular({ transferCache })` takes Angular's `HttpTransferCacheOptions` and passes them to the transfer cache that `provideClientHydration()` sets up. The SSR & HTTP tab uses them to explain each transfer cache outcome, including a new **Filter** reason.
+- The Dashboard has a **Security** block: whether the one-time code is on or locked, how many trusted tokens there are and when they expire, how many pairing tokens the server accepts, and who may reach the server (reach, allowed origins and hosts). The panel reads it with the `security-status` RPC, which answers trusted clients only and never carries a token or the code.
 - **Injectors:** selecting an element injector reads it again on the page, and **Refresh** in the toolbar reads every injector again. Element injectors are still cached between updates, since reading what they inject is costly.
 - **Injectors:** the Environment view lists lazy route injectors the router already loaded but no rendered element uses, with an **inactive** chip. `inspect-providers` and the `injector-tree` resource mark them `inactive: true`.
 - **Injectors:** a collapsed **Hint** above the live tree lists providers your source declares that nothing on the page injected so far. It is a hint, not an error.
@@ -234,6 +238,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `pangular build` refuses an `--outDir` that would delete files that are not a previous report, unless `--force` is passed.
 - `buildReport()` from `@pangular-inspector/devtools/cli` writes the static report from a script, with the output folder checks of `pangular build`. Unlike `pangular build`, it resolves `outDir` against the working directory, and `config` takes a config object, not a file path.
 - The source scan reads Nx projects.
+- `pangular token --rotate` drops every trusted token of the project and prints a new one-time code from each running server (the CLI, the Vite plugin or the Express hub, several at once when they share the project), which also ends a lock after too many wrong codes. `pangular token` prints how many tokens there are.
+- The CLI start-up output names the NativeScript setup view (`?view=nativescript`) next to the Angular Native one.
 
 ### Performance
 
@@ -298,6 +304,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 - A quick start, and a panel screenshot on every inspector page.
 - Pages for the command palette, settings, terminals, the popup and hub, configuration, other servers (Hono, h3, Fastify), Capacitor, the timeline, errors, audit, TanStack Query, agent skills, browser agents and writing a plugin.
+- A guide to shipping a plugin from a library, built on the example plugin package `examples/pangular-plugin-example` (a feature flag store with its own tab and agent tools), which the Analog demo uses (#404).
 - A roadmap page.
 - The Capacitor and NativeScript guides show the Android network security config and the iOS App Transport Security and local network settings a device needs to reach the devtools over the LAN (#373).
 - The Express and other servers pages say which port the WebSocket side-car uses (the first free one from 9777), how to pin it with `ws: {port}`, and how to serve the socket on the app's own server with `attach(server)` (#426).

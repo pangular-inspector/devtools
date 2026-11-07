@@ -588,7 +588,7 @@ async function startOverlay(
     ? attachHydrationOverlay(my, pageId, () => void pushTree(true).catch(() => {}))
     : null;
   const cd = on.components
-    ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => lease.active)
+    ? attachChangeDetection(my, pageId, getNg, limits, tickMs, () => lease.active)
     : null;
   const ngrx = on.ngrx
     ? attachNgrx(my, pageId, getNg, limits.changeLog, { trace: devtoolsConfig.ngrx.trace })
