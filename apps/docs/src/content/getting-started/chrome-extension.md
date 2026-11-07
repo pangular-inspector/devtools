@@ -160,7 +160,7 @@ The extension adds an **Angular component** pane to the Elements panel, next to 
 
 The values are the ones the panel gets, with secrets masked by the same [redaction](../security.md) rules. The pane needs the overlay on the page and `inspectors.components` on. Without the overlay it says so. An element outside any component shows "No Angular component owns the selected element."
 
-## Toolbar button
+### Toolbar button
 
 Click the Pangular Inspector button in the Chrome toolbar (pin it from the puzzle piece menu first) to see what the extension finds on the current tab:
 
