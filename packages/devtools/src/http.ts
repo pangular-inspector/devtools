@@ -26,6 +26,11 @@ import type { Subscription } from 'rxjs';
 import { redactMessage } from './forms-privacy.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
+import {
+  PANGULAR_TRANSFER_CACHE,
+  transferCacheProviders,
+  type HttpTransferCacheOptions,
+} from './http-transfer-options.ts';
 import { isHydrationMessage } from './http-hydration.ts';
 import { captureHeaders, withCapturedHeaders, type HeaderSource } from './http-headers.ts';
 
@@ -118,9 +123,15 @@ function transferWindowOpen(): boolean {
   return !stableApps.has(appRef);
 }
 
-/** True when Angular's transfer cache, with its default options, may answer this request. */
-export function transferCacheEligible(req: HttpRequest<unknown>): boolean {
-  return requestSkipReason(req) === undefined;
+/**
+ * True when Angular's transfer cache may answer this request, with `options`
+ * (from `withPangular({ transferCache })`) or its defaults.
+ */
+export function transferCacheEligible(
+  req: HttpRequest<unknown>,
+  options: HttpTransferCacheOptions = {},
+): boolean {
+  return requestSkipReason(req, options) === undefined;
 }
 
 function devMode(): boolean {
@@ -227,8 +238,9 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   } else {
     source = next(analogTagged(req, side, () => currentAnalogRender(inject(Injector))));
   }
+  const cacheOptions = inject(PANGULAR_TRANSFER_CACHE, { optional: true }) ?? {};
   const cacheable = side === 'client' && !mocked && transferWindowOpen();
-  const claimable = cacheable && transferCacheEligible(req);
+  const claimable = cacheable && transferCacheEligible(req, cacheOptions);
   const transferState = side === 'server' ? inject(TransferState, { optional: true }) : null;
   const serverCache = (
     response: { ok: boolean; headers?: HttpHeaders } | null,
@@ -238,7 +250,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     const stored = transferCacheKeys(req).some((key) => transferState.hasKey(makeStateKey(key)));
     return stored
       ? { cacheStored: true }
-      : { cacheStored: false, cacheSkip: cacheSkipReason(req, response) };
+      : { cacheStored: false, cacheSkip: cacheSkipReason(req, response, cacheOptions) };
   };
   const observed = new Observable<HttpEvent<unknown>>((subscriber) => {
     // The transfer cache replays a hit synchronously, so a response that
@@ -336,9 +348,28 @@ function captureHydrationWarnings() {
   });
 }
 
-/** `provideHttpClient(withPangular())` registers the DevTools interceptor. */
-export function withPangular() {
-  return withInterceptors([pangularHttpInterceptor]);
+/** Options for `withPangular()`. */
+export interface PangularHttpOptions {
+  /**
+   * Options for Angular's HTTP transfer cache, the same as
+   * `withHttpTransferCacheOptions()` takes. They are passed to the cache that
+   * `provideClientHydration()` sets up, and the SSR & HTTP inspector uses them
+   * to explain why a request was or was not cached.
+   */
+  transferCache?: HttpTransferCacheOptions;
+}
+
+/**
+ * `provideHttpClient(withPangular())` registers the DevTools interceptor.
+ * `withPangular({ transferCache })` also configures Angular's transfer cache.
+ */
+export function withPangular(options: PangularHttpOptions = {}) {
+  const feature = withInterceptors([pangularHttpInterceptor]);
+  if (!options.transferCache) return feature;
+  return {
+    ...feature,
+    ɵproviders: [...feature.ɵproviders, ...transferCacheProviders(options.transferCache)],
+  };
 }
 
 function watchServerNavigations() {

@@ -79,6 +79,7 @@ export const CACHE_SKIP_TEXT = {
   'set-cookie': 'the response sets a cookie',
   error: 'failed responses are not stored',
   mocked: 'a fault rule answered before the transfer cache ran',
+  filter: 'the transferCache filter passed to withPangular() left it out',
   'cache-off-or-filter':
     'the transfer cache is off, or its filter (or another withHttpTransferCacheOptions setting) left it out',
 } as const;
