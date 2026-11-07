@@ -1235,6 +1235,11 @@ export class App implements OnInit, OnDestroy {
         this.measureNav();
       });
     });
+    // The popup only hears the pill choice from the panel, so the restored one goes out on connect.
+    effect(() => {
+      if (!this.connected()) return;
+      untracked(() => this.postToPopup({ type: 'pangular:popup-pill', pill: this.pill() }));
+    });
     // Opening a dock clears the count of unseen messages on it.
     effect(() => {
       const opened = this.openedDock();
