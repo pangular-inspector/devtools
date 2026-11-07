@@ -846,10 +846,11 @@ async function startOverlay(
     const counts = { renders, errors: errors?.errorCount() ?? 0 };
     const key = `${counts.renders}|${counts.errors}`;
     if (key === shownCounts) return;
+    const popup = overlayPopup();
+    // No popup yet: leave shownCounts as it was, so a popup that loads later still gets the counts.
+    if (!popup) return;
     shownCounts = key;
-    void overlayPopup()
-      ?.then((m) => m.setLauncherCounts(counts))
-      .catch(() => {});
+    void popup.then((m) => m.setLauncherCounts(counts)).catch(() => {});
   };
   const pushAll = () => {
     collectors.forEach((run) => run());
