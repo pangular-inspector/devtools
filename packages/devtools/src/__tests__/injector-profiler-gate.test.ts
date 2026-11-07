@@ -48,6 +48,17 @@ describe('gateInjectorProfiler', () => {
     expect((g['ng'] as Record<string, unknown>)['ɵgetLoadedRoutes']).toBeTypeOf('function');
   });
 
+  it('gates when the router published onto ng before the gate ran', () => {
+    const ng: Record<string, unknown> = { ɵgetLoadedRoutes: () => [] };
+    g['ng'] = ng;
+    gateInjectorProfiler();
+    expect(g['window']).toBe(globalThis);
+    expect(bootAngular().profiler).toBe(true);
+    expect('window' in g).toBe(false);
+    expect(g['ng']).toBe(ng);
+    expect(ng['getComponent']).toBeTypeOf('function');
+  });
+
   it('removes window when ng arrives with the utilities already on it', () => {
     gateInjectorProfiler();
     const getComponent = () => null;

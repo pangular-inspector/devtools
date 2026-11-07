@@ -288,6 +288,10 @@ Angular creates a `signalStore` the first time something injects it. Open a page
 
 Use `provideStore()` or `StoreModule.forRoot()`. The overlay stops looking after a few tries, so if you provide the Store late, reload the page.
 
+### State changed in place
+
+The tab rereads a store only when its state object is a new one, as NgRx creates on every change. Code that changes a nested object in place, without `patchState` or a reducer, leaves the tab on the old values until the next real change.
+
 ### Redaction
 
 The devtools replace state keys with secret-looking names with `[redacted]`, at any depth. A signal store method call that writes such a key shows every argument as `[redacted]` in the change log, and so do later calls of that method. An argument whose parameter name looks secret, such as `password` in `login(email, password)`, is masked too. See [what the devtools redact](../security.md#components-signals-ngrx-and-pipes).
