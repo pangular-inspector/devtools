@@ -130,6 +130,8 @@ describe('ngrx.trace', () => {
     const [entry] = collector.logSince(0);
     expect(entry.trace?.length).toBeGreaterThan(0);
     expect(entry.trace!.join('\n')).toContain('ngrx-trace-stats.test.ts');
+    // The collector's own frames are cut by count, never the caller's.
+    expect(entry.trace![0]).toMatch(/^fromTheTest /);
     expect(entry.trace!.join('\n')).not.toMatch(/ngrx-collector\.ts|https?:\/\//);
 
     const classic = fakeClassic({ trace: true });
@@ -138,7 +140,7 @@ describe('ngrx.trace', () => {
     }
     dispatchFromTest();
     const [action] = classic.collector.logSince(0);
-    expect(action.trace!.join('\n')).toContain('dispatchFromTest');
+    expect(action.trace![0]).toMatch(/^dispatchFromTest /);
   });
 
   it('masks a token in a frame', () => {

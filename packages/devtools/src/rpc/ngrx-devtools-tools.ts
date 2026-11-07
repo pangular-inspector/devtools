@@ -32,10 +32,10 @@ interface Deps {
 }
 
 export const NGRX_STORE_DEVTOOLS_DESCRIPTION =
-  'Change the @ngrx/store Store DevTools history (dev only, needs provideStoreDevtools()): `op` toggle skips or includes the action of log entry `seq`; jump shows the state after `seq`, or Store DevTools state `index` (0 is the committed state); commit makes the current state the new start; reset goes back to the initial state; pause stops (`paused: true`) or starts recording. Commit and reset drop the history. Needs `page` when several tabs have a Store, and actions.ngrx.';
+  'Change the @ngrx/store Store DevTools history (dev only): `op` toggle skips or includes action `seq`, jump goes to `seq` or state `index` (0 is committed), commit, reset, or pause recording (`paused`). Commit and reset drop the history. Needs actions.ngrx.';
 
 export const NGRX_EXPLAIN_CHANGE_DESCRIPTION =
-  'Why an NgRx state value changed: the newest change log entries that wrote a state `path` (such as `cart.items` or `user.name`), with the action or method and its arguments, its origin, the event that caused it and, with ngrx.trace on, the call site. Or `seq` for one entry. Reads the log the page already reported.';
+  'Why an NgRx state value changed: the newest log entries that wrote a state `path` (like `cart.items`), or entry `seq`, with the action or method, arguments, origin, causing event and, with ngrx.trace on, the call site.';
 
 const PAGE = {
   type: 'string',

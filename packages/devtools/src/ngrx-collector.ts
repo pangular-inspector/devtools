@@ -333,6 +333,13 @@ export function usesWithDevtools(value: object): boolean {
 
 /** Entries the collector writes itself (restores, Store DevTools operations), left out of the stats. */
 const INTERNAL_TYPE = /^(Restore #\d+|Back to latest$|Store DevTools: )/;
+/**
+ * `@ngrx/signals` frames between a `patchState` call and a watcher, by name,
+ * for a build that bundles NgRx into a chunk without a package path.
+ */
+const NGRX_INTERNAL_FRAME =
+  /^(Object\.)?(patchState|notifyWatchers|executeWatcher|getWatchers|watchState|updateState)\b/;
+
 /** Timestamps kept per stat to measure bursts. */
 const BURST_SAMPLES = NGRX_LOOP_BURST;
 
@@ -375,11 +382,22 @@ export function createNgrxCollector<H extends object = Element>(
   maxLog = MAX_LOG,
   options: NgrxCollectorOptions = {},
 ): NgrxCollector {
-  /** The app frames of the code running now, when `ngrx.trace` is on. */
-  const traceNow = (): string[] | undefined => {
+  /**
+   * The app frames of the code running now, when `ngrx.trace` is on. `own` is
+   * how many frames of this collector sit between `traceNow` and the code it
+   * reports: a bundled build puts the overlay in the app's own chunks, where
+   * the file filter of `appFrames` cannot tell them apart.
+   */
+  const traceNow = (own: number): string[] | undefined => {
     if (!options.trace) return undefined;
-    const frames = appFrames(captureStack(), NGRX_TRACE_FRAMES);
-    return frames.length ? frames : undefined;
+    const lines = (captureStack() ?? '').split('\n');
+    // V8 starts with an `Error` line; Firefox and Safari list frames only.
+    const header = lines[0] && !/^\s*at\s|@/.test(lines[0]) ? 1 : 0;
+    const stack = lines.slice(header + 2 + own).join('\n');
+    const frames = appFrames(stack, NGRX_TRACE_FRAMES + 4).filter(
+      (frame) => !NGRX_INTERNAL_FRAME.test(frame),
+    );
+    return frames.length ? frames.slice(0, NGRX_TRACE_FRAMES) : undefined;
   };
   const withTrace = (trace: string[] | undefined) => (trace ? { trace } : {});
   const statsByKey = new Map<string, StatInfo>();
@@ -596,7 +614,8 @@ export function createNgrxCollector<H extends object = Element>(
     if (t.watched) return;
     if (t.depth > 0 || t.pendingBefore) return;
     t.pendingBefore = snapshot(t);
-    t.pendingTrace = traceNow();
+    // Under onWrite: the wrapped set or update.
+    t.pendingTrace = traceNow(2);
     queueMicrotaskOutside(() => {
       const before = t.pendingBefore;
       const trace = t.pendingTrace;
@@ -629,6 +648,7 @@ export function createNgrxCollector<H extends object = Element>(
     t: Tracked,
     before: Snapshot,
     call: Tracked['methodStack'][number] | undefined,
+    callTrace?: string[],
   ) => {
     const after = snapshot(t);
     const changes = snapshotDiff(before, after, t.stateKeys);
@@ -648,8 +668,7 @@ export function createNgrxCollector<H extends object = Element>(
       maskLogged(call.logged);
     }
     if (!call) maskAsyncCallers(t, before, after);
-    // Inside the watchState callback, so the stack still holds the patchState caller.
-    const trace = isRestore ? undefined : (call?.trace ?? traceNow());
+    const trace = isRestore ? undefined : callTrace;
     const logged = append(
       {
         source: 'signal-store',
@@ -706,7 +725,10 @@ export function createNgrxCollector<H extends object = Element>(
           // into one entry.
           if (!before) return;
           const call = t.methodStack[t.methodStack.length - 1];
-          appendChange(t, before, call);
+          // The outermost method call's site, or, for a patchState outside a
+          // method, this callback's own stack, which still holds its caller.
+          const trace = call ? t.methodStack.find((frame) => frame.trace)?.trace : traceNow(1);
+          appendChange(t, before, call, trace);
         },
         { injector: t.injector, manualCleanup: true },
       );
@@ -759,7 +781,8 @@ export function createNgrxCollector<H extends object = Element>(
           startedAt: now(),
           fired: 0,
           method: original,
-          ...(outer ? withTrace(traceNow()) : {}),
+          // Under the proxy's apply.
+          ...(outer ? withTrace(traceNow(1)) : {}),
         };
         t.methodStack.push(frame);
         t.depth++;
@@ -1023,7 +1046,8 @@ export function createNgrxCollector<H extends object = Element>(
       const previous = currentDispatchedEvent;
       const previousTrace = currentEventTrace;
       currentDispatchedEvent = info;
-      currentEventTrace = traceNow();
+      // Under the wrapped dispatch.
+      currentEventTrace = traceNow(1);
       let result: unknown;
       try {
         result = original.apply(this, args);
@@ -1176,7 +1200,8 @@ export function createNgrxCollector<H extends object = Element>(
     const tag = (action: unknown, origin: NgrxActionOrigin) => {
       if (!active || !action || typeof action !== 'object') return;
       origins.set(action, origin);
-      const trace = traceNow();
+      // Under tag and the wrapped dispatch or next.
+      const trace = traceNow(2);
       if (trace) traces.set(action, trace);
     };
     const undo: (() => void)[] = [];
