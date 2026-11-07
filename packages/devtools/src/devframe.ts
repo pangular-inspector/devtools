@@ -1032,6 +1032,12 @@ const pangular = defineDevframe({
     const routerPages = new Map<string, RouterPage>();
     /** Every navigation the pages report, numbered, for pangular:follow-navigations. */
     const navigationStream = new NavigationStream();
+    /** Drops the stream entries of pages that expired or were forgotten. */
+    const dropGoneStreamPages = () => {
+      for (const id of navigationStream.pageIds()) {
+        if (!routerPages.has(id)) navigationStream.clear(id);
+      }
+    };
     const routerState = await my.rpc.sharedState('router', {
       initialValue: { pages: [] } as RouterState,
     });
@@ -1064,6 +1070,8 @@ const pangular = defineDevframe({
           applyRouter(currentRouter(routerPages));
         }
         feed.navigations(report.pageId, report.navigations);
+        // Merging a report expires stale pages too.
+        dropGoneStreamPages();
         navigationStream.record(report.pageId, report.navigations);
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
@@ -1271,6 +1279,7 @@ const pangular = defineDevframe({
         if (!config.actions.router) throw new Error(actionBlockedMessage('router'));
         if (typeof pageId !== 'string') throw new Error('Give the id of the page to clear.');
         if (clearRouterNavigations(routerPages, pageId)) applyRouter(currentRouter(routerPages));
+        navigationStream.clear(pageId);
         void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
       },
     });
@@ -1282,6 +1291,7 @@ const pangular = defineDevframe({
       handler: (pageId: string) => {
         if (mayForget(pageId) && routerPages.delete(pageId)) {
           applyRouter(currentRouter(routerPages));
+          navigationStream.clear(pageId);
         }
       },
     });
@@ -1547,7 +1557,10 @@ const pangular = defineDevframe({
       const next = expirePages(formPages, now, limits.formTimeline, liveTtl);
       if (next) applyForms(next);
       const nextRouter = expireRouterPages(routerPages, now, liveTtl);
-      if (nextRouter) applyRouter(nextRouter);
+      if (nextRouter) {
+        applyRouter(nextRouter);
+        dropGoneStreamPages();
+      }
       const nextPipes = expirePipePages(pipePages, now, liveTtl);
       if (nextPipes) applyPipes(nextPipes);
       if (expireNgrxPages(ngrxPages, now, liveTtl)) applyNgrx();
@@ -1870,6 +1883,7 @@ const pangular = defineDevframe({
               if (clearRouterNavigations(routerPages, pageId)) {
                 applyRouter(currentRouter(routerPages));
               }
+              navigationStream.clear(pageId);
               void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
               cleared.push(`router navigations for page "${pageId}"`);
             } else {
@@ -1882,6 +1896,7 @@ const pangular = defineDevframe({
                 });
               }
               applyRouter(currentRouter(routerPages));
+              navigationStream.clear();
               cleared.push('router navigations');
             }
           }

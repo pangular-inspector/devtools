@@ -1,6 +1,6 @@
 import type { NavigationRecord } from '../router.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
-import { capped } from './router-tools.ts';
+import { capped, MAX_TOOL_CHARS } from './router-tools.ts';
 
 /** One navigation as the stream hands it out: new, or changed since it was last handed out. */
 export interface StreamEntry {
@@ -86,6 +86,24 @@ export class NavigationStream {
     return added;
   }
 
+  /**
+   * Forgets the navigations of one page, or of every page, after they were
+   * cleared or the page went away. The cursor keeps counting, so a cursor an
+   * agent holds stays valid.
+   */
+  clear(pageId?: string): void {
+    const gone = (id: string) => pageId === undefined || id === pageId;
+    this.entries = this.entries.filter((entry) => !gone(entry.pageId));
+    for (const key of this.signatures.keys()) {
+      if (gone(key.slice(0, key.indexOf('\u0000')))) this.signatures.delete(key);
+    }
+  }
+
+  /** The pages that have navigations in the stream. */
+  pageIds(): Set<string> {
+    return new Set(this.entries.map((entry) => entry.pageId));
+  }
+
   /** The latest cursor: what an agent passes to start following from now. */
   get cursor(): number {
     return this.seq;
@@ -163,12 +181,26 @@ export function streamText(read: StreamRead, args: { since?: number; waited: boo
   } else {
     lines.push(
       `${read.entries.length} navigation(s)${args.since === undefined ? '' : ` after cursor ${args.since}`}, oldest first. "(updated)" marks one that was listed before and has since ended or changed.`,
-      ...read.entries.map(line),
     );
   }
-  lines.push(
-    '',
-    `**Next cursor: ${read.cursor}**. Pass it as \`since\` to get only what comes after.`,
-  );
-  return capped(`${UNTRUSTED}\n\n${lines.join('\n')}`, 'pass a later `since` or `page`');
+  const footer = (cursor: number) =>
+    `\n\n**Next cursor: ${cursor}**. Pass it as \`since\` to get only what comes after.`;
+  const more = (count: number) =>
+    `\n_${count} more navigation(s) did not fit. Pass the cursor below as \`since\` to read them._`;
+  let body = `${UNTRUSTED}\n\n${lines.join('\n')}`;
+  // Cut only at a whole entry, and hand out the cursor of the last one shown,
+  // so the next call goes on from there instead of skipping the rest.
+  let cursor = read.cursor;
+  for (const [index, entry] of read.entries.entries()) {
+    const next = `\n${line(entry)}`;
+    const left = read.entries.length - index - 1;
+    const room = (left ? more(left) : '') + footer(left ? entry.seq : read.cursor);
+    if (index > 0 && body.length + next.length + room.length > MAX_TOOL_CHARS) {
+      cursor = read.entries[index - 1].seq;
+      body += more(left + 1);
+      break;
+    }
+    body += next;
+  }
+  return capped(body + footer(cursor), 'pass a later `since` or `page`');
 }

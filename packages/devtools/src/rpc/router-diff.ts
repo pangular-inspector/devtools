@@ -38,7 +38,8 @@ export type NavigationDiffResult = NavigationDiff | { error: string };
 function queryOf(url: string | undefined): Record<string, string> {
   const query = url?.split('#')[0].split('?')[1];
   if (!query) return {};
-  const out: Record<string, string> = {};
+  // No prototype, so keys such as `__proto__` or `constructor` stay plain keys.
+  const out: Record<string, string> = Object.create(null);
   for (const pair of query.split('&')) {
     if (!pair) continue;
     const [key, ...rest] = pair.split('=');
@@ -60,9 +61,14 @@ function compareMaps(
   prefix = '',
 ): DiffChange[] {
   const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
+  // Own keys only: a query key such as `constructor` must not read Object.prototype.
   return keys
-    .filter((key) => before[key] !== after[key])
-    .map((key) => ({ field: `${prefix}${key}`, before: before[key], after: after[key] }));
+    .map((key) => ({
+      field: `${prefix}${key}`,
+      before: Object.hasOwn(before, key) ? before[key] : undefined,
+      after: Object.hasOwn(after, key) ? after[key] : undefined,
+    }))
+    .filter((change) => change.before !== change.after);
 }
 
 function routeKey(route: MatchedRoute): string {

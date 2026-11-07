@@ -136,6 +136,18 @@ describe('diffNavigations', () => {
     expect(diff.same).toContain('Route data');
   });
 
+  it('reads only own query keys, so constructor and __proto__ are plain values', () => {
+    const diff = diffNavigations(
+      nav(1, { finalUrl: '/users/1?constructor=1&__proto__=x' }),
+      nav(2, { finalUrl: '/users/2' }),
+    );
+    const query = diff.sections.find((s) => s.title === 'Query params')?.changes;
+    expect(query).toEqual([
+      { field: '__proto__', before: 'x', after: undefined },
+      { field: 'constructor', before: '1', after: undefined },
+    ]);
+  });
+
   it('says when a navigation has no route data to compare', () => {
     const diff = diffNavigations(nav(1, { outcome: 'cancelled' }), b);
     expect(diff.notes[0]).toMatch(/#1 has no route data/);

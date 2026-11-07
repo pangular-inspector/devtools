@@ -874,7 +874,7 @@ export function describeNavigation(
     const meaning = ERROR_CATALOG[nav.errorCode];
     lines.push(`  - error ${code(nav.errorCode)}${meaning ? `: ${meaning}` : ''}`);
   }
-  if (nav.errorHandler) lines.push(`  - withNavigationErrorHandler: ${nav.errorHandler}`);
+  if (nav.errorHandler) lines.push(`  - withNavigationErrorHandler: ${code(nav.errorHandler)}`);
   if (
     nav.generation !== undefined &&
     page?.generation !== undefined &&
