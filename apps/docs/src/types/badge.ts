@@ -4,7 +4,8 @@
  * One map, two consumers:
  *   - `<ngmd-badge variant="...">` (`src/app/ui/badge.ts`): inline status pill
  *   - sidebar status chip (`src/app/components/sidebar.ts`), driven by
- *     `NavItem.status` declared in `ngmd.config.ts`
+ *     `NavItem.status` declared in `ngmd.config.ts`, hidden once its
+ *     `until` version is reached (`src/nav-badges.ts`)
  *
  * Add a row here to define a new variant. Both the inline component and
  * the sidebar pick it up without further edits.

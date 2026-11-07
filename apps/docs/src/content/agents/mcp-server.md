@@ -311,6 +311,10 @@ Your client can ask you before it runs them. To drop them from the server, set `
 
 Each browser tab reports on its own and gets a page id, and so does an [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app. `list-pages` lists them with their platform. Without `page`, every tool that reads live data uses the same default page, the first row of `list-pages`, and names it in its answer. [The page argument](./tools.md#the-page-argument) gives the rule and the tools that pick a page another way. Pass `page` to pick another tab. An id that no tab reports gets an answer that lists the tabs that do, instead of data from another tab. The server drops pages that stop reporting after a short time.
 
+## Troubleshooting
+
+If the HTTP endpoint answers `401` or `403`, see [The MCP endpoint answers 401 or 403](../getting-started/troubleshooting.md#the-mcp-endpoint-answers-401-or-403). If a tool says no page reports its data, open the app in a development build with the overlay loaded, as in [The tabs stay empty](../getting-started/troubleshooting.md#the-tabs-stay-empty).
+
 ## Where to next
 
 <ngmd-card-grid columns="3">

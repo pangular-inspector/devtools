@@ -158,6 +158,10 @@ describe('Capacitor view', () => {
     expect(link?.textContent).toContain('Capacitor setup guide');
     expect(link?.href).toBe('https://pangular-inspector.dev/guides/capacitor/');
     expect(link?.target).toBe('_blank');
+    const platforms = el.querySelector<HTMLAnchorElement>('.platforms a');
+    expect(platforms?.textContent).toContain('Supported and planned platforms');
+    expect(platforms?.href).toBe('https://pangular-inspector.dev/getting-started/platforms/');
+    expect(platforms?.target).toBe('_blank');
     expect(el.textContent).not.toContain('Coming Soon');
     expect(tabNames(fixture)).toEqual([]);
   });

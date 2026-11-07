@@ -150,7 +150,7 @@ It prints lines like these after the startup lines:
     ng build --configuration development --define "__PANGULAR_LAN_URL__='http://192.168.1.20:9999/'"
 ```
 
-The `--define` flag needs the `application` builder of Angular 17.2 or later. The NativeScript overlay connects to the injected URL when you pass no `baseURL`, and `lanDevtoolsURL()` from `@pangular-inspector/devtools/overlay-manual` reads it in a Capacitor app. See [Set up Capacitor](../guides/capacitor.md#use-the-injected-lan-address) and [Set up NativeScript](../guides/nativescript.md#use-the-injected-lan-address).
+The `--define` flag needs the `application` builder of Angular 17.2 or later. The NativeScript overlay connects to the injected URL when you pass no `baseURL`, and `lanDevtoolsURL()` from `@pangular-inspector/devtools/overlay-manual` reads it in a Capacitor app. See [Set up Capacitor](../guides/capacitor.md#use-the-injected-lan-address) and [Set up NativeScript](./nativescript.md#use-the-injected-lan-address).
 
 `--lan-address` only prints. It doesn't change the host the server binds to, the origin check or the one-time code. With `--host localhost`, the default, it prints a warning and no address, since a phone can't reach that server. `--lan-address 192.168.1.20` names the address, for a machine on several networks. A loopback address is refused.
 
@@ -317,6 +317,8 @@ The JSON has the package version under `tool`, each lint with `ran` and its find
 The SARIF output is a SARIF 2.1.0 log with one run. Rule ids are the lint and the rule, such as `templates/track-by-index`. `error`, `warning` and `info` become the SARIF levels `error`, `warning` and `note`. File paths are relative to `%SRCROOT%`, the project folder. A finding about a whole file points at line 1, and a finding about a route has no location. Upload the file to a code scanning tool, such as GitHub code scanning. The tool then shows each finding on the line it is about.
 
 ## FAQ
+
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Do I need to run my app first?" open>

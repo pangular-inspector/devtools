@@ -209,7 +209,7 @@ A floating button appears on your page. It opens the devtools with one dock entr
 | NgRx           | Store patterns from source, and live state and actions                                                                     |
 | Analog         | File routes, server calls, render modes and lint (a notice in non-Analog apps)                                             |
 | Angular Native | Components, signals, injectors, stores, queries, pipes and errors of a connected [Angular Native](./angular-native.md) app |
-| NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                                             |
+| NativeScript   | Setup steps for [NativeScript apps](./nativescript.md)                                                                     |
 | Capacitor      | Plugin calls of a connected [Capacitor app](../inspectors/capacitor.md), or setup steps when none is connected             |
 
 [Popup and hub](./popup-and-hub.md) covers the panel, its dock modes and deep links.
@@ -313,6 +313,8 @@ The overlay looks for `/__pangular/` too. Without the hub, every tab sits in one
 Like `@pangular-inspector/devtools/hub`, the devframe entry point loads Devframe from `node_modules` when it is imported, instead of being bundled into your server. That keeps the Angular 20 server build working: Angular 20 adds a top-level `createRequire` import to every server chunk, which collides with the same import in Devframe's own files. Install the package as a dependency of the app that runs the server.
 
 ## Troubleshooting
+
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The button does not appear" open>

@@ -173,7 +173,7 @@ npm run devtools
 
 <ngmd-pill-row>
   <ngmd-pill href="/contributing/development" title="Development setup"></ngmd-pill>
-  <ngmd-pill href="/guides/analog" title="Set up Analog"></ngmd-pill>
+  <ngmd-pill href="/getting-started/vite" title="Vite and Analog"></ngmd-pill>
   <ngmd-pill href="/guides/ssr-http" title="Set up SSR & HTTP"></ngmd-pill>
   <ngmd-pill href="/getting-started/angular-native" title="Angular Native"></ngmd-pill>
 </ngmd-pill-row>

@@ -46,6 +46,8 @@
     "docs:dev": "nx serve pangular-inspector-docs",
     "docs:build": "nx build pangular-inspector-docs",
     "docs:test": "nx test pangular-inspector-docs",
+    "docs:agent-tools": "node scripts/docs-agent-tools.mjs",
+    "docs:api": "node scripts/docs-api.mjs",
     "docs:deploy": "nx deploy pangular-inspector-docs"
   },
   "private": true,
