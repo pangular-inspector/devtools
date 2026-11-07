@@ -9,31 +9,18 @@ import {
   pickPage,
   type RouterState,
 } from './router-tools.ts';
-
-/** One field that differs between two navigations. A missing side did not have it. */
-export interface DiffChange {
-  field: string;
-  before?: string;
-  after?: string;
-}
-
-export interface DiffSection {
-  title: string;
-  changes: DiffChange[];
-}
-
-export interface NavigationDiff {
-  a: number;
-  b: number;
-  /** Sections with at least one change, in a fixed order. */
-  sections: DiffSection[];
-  /** Titles of the sections that are the same in both. */
-  same: string[];
-  /** What could not be compared, such as a navigation with no route data. */
-  notes: string[];
-}
-
-export type NavigationDiffResult = NavigationDiff | { error: string };
+import type {
+  DiffChange,
+  DiffSection,
+  NavigationDiff,
+  NavigationDiffResult,
+} from '../router-types.ts';
+export type {
+  DiffChange,
+  DiffSection,
+  NavigationDiff,
+  NavigationDiffResult,
+} from '../router-types.ts';
 
 function queryOf(url: string | undefined): Record<string, string> {
   const query = url?.split('#')[0].split('?')[1];

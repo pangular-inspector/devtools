@@ -24,7 +24,7 @@ function nav(id: number, url: string, extra: Partial<NavigationRecord> = {}): Na
 }
 
 function page(extra: Partial<RouterPage> = {}): RouterPage {
-  return { pageId: 'p1', reportedAt: 1, snapshot: null, navigations: [], ...extra };
+  return { pageId: 'p1', reportedAt: 1, changedAt: 1, snapshot: null, navigations: [], ...extra };
 }
 
 async function settle(fixture: ComponentFixture<unknown>) {

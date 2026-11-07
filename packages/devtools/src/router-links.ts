@@ -10,31 +10,8 @@ import {
 } from './router.ts';
 import { elementId } from './element-id.ts';
 import { serialize } from './serialize.ts';
-
-export interface OutletInfo {
-  outlet: string;
-  route?: string;
-  component?: string;
-  element?: string;
-  devtoolsId?: string;
-  activated: boolean;
-  detached?: boolean;
-  inputs?: { input: string; source: string }[];
-  data?: string;
-  children?: OutletInfo[];
-}
-
-export interface LinkInfo {
-  text: string;
-  href?: string;
-  active?: boolean;
-  linkActive?: boolean;
-  activeClasses?: string[];
-  exact?: boolean;
-  ariaCurrent?: string;
-  element?: string;
-  devtoolsId?: string;
-}
+import type { OutletInfo, LinkInfo } from './router-types.ts';
+export type { OutletInfo, LinkInfo } from './router-types.ts';
 
 const MAX_OUTLETS = 100;
 const MAX_LINKS = 100;

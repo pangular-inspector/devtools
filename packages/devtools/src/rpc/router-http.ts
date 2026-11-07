@@ -2,17 +2,8 @@ import { redactCall } from '../http-redact.ts';
 import type { HttpCall } from '../http-rules.ts';
 import type { NavigationRecord } from '../router.ts';
 import { clip, code } from '../text.ts';
-
-/**
- * The HttpClient calls of one navigation, joined from the HTTP inspector's
- * report of the same page: the ones that started while it ran (guards,
- * resolvers, lazy loads) and the ones that started after it ended, before
- * the next navigation or {@link AFTER_MS} (the components it rendered).
- */
-export interface NavigationCalls {
-  during: HttpCall[];
-  after: HttpCall[];
-}
+import type { NavigationCalls } from '../router-types.ts';
+export type { NavigationCalls } from '../router-types.ts';
 
 /** How long after a navigation ends a call still counts as one of its own. */
 export const AFTER_MS = 5_000;

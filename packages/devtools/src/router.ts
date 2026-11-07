@@ -3,100 +3,23 @@ import { routerHeldOnPage } from './router-fallback.ts';
 import { REDACTED, serializeFormValue } from './forms.ts';
 import { decode, isSecretKey, knownSecrets, redactText, rememberSecret } from './text-redact.ts';
 import { clip } from './text.ts';
-import { matchedRoutesOf, type MatchedRoute } from './router-matched.ts';
-import {
-  navigationFromQuery,
-  redirectFromQuery,
-  type QueryRedirect,
-} from './router-open-redirect.ts';
-
-export interface RouteGuards {
-  canActivate?: string[];
-  canActivateChild?: string[];
-  canDeactivate?: string[];
-  canMatch?: string[];
-  canLoad?: string[];
-}
-
-export interface ActiveRoute {
-  path: string;
-  url: string;
-  outlet: string;
-  component?: string;
-  title?: string;
-  ownTitle?: boolean;
-  params: Record<string, unknown>;
-  data: Record<string, unknown>;
-  paramSources?: Record<string, 'own' | 'inherited'>;
-  dataSources?: Record<string, 'static' | 'resolved' | 'inherited'>;
-  guards?: RouteGuards;
-  resolvers?: string[];
-  lazy?: boolean;
-  children: ActiveRoute[];
-}
-
-export interface RouterSnapshot {
-  url: string;
-  queryParams: Record<string, unknown>;
-  fragment: string | null;
-  root: ActiveRoute;
-  browserUrl?: string;
-  urlDrift?: boolean;
-  title?: string;
-  pending?: { id: number; url: string };
-}
-
-export type NavigationOutcome =
-  'pending' | 'succeeded' | 'redirected' | 'cancelled' | 'failed' | 'skipped';
-
-export interface GuardRun {
-  guard: string;
-  kind: string;
-  route: string;
-  result: string;
-  ms: number;
-}
-
-export interface NavigationRecord {
-  id: number;
-  url: string;
-  trigger: string;
-  startedAt: number;
-  endedAt?: number;
-  outcome: NavigationOutcome;
-  finalUrl?: string;
-  from?: string;
-  extras?: string[];
-  caller?: string;
-  phases?: Record<string, number>;
-  redirectedFrom?: number;
-  redirectTo?: string;
-  redirectKind?: string;
-  guards?: { names: string[]; passed?: boolean; ms?: number };
-  resolvers?: { names: string[]; ms?: number };
-  checked?: { activate: string[]; deactivate: string[] };
-  runs?: GuardRun[];
-  lazyLoaded?: string[];
-  reused?: string[];
-  requests?: { count: number; urls: string[] };
-  warnings?: string[];
-  errorCode?: string;
-  errorHandler?: string;
-  scroll?: string;
-  title?: string;
-  generation?: number;
-  reason?: string;
-  code?: string;
-  beforeConnect?: boolean;
-  earlier?: number;
-  probe?: boolean;
-  /** The routes it activated, for comparing two navigations (`router-diff.ts`). */
-  routes?: MatchedRoute[];
-  /** Its target came from a query param: a possible open redirect (`router-open-redirect.ts`). */
-  queryRedirect?: QueryRedirect;
-  /** The browser Navigation API event it came with (`router-platform-nav.ts`). */
-  platform?: { type: string; userInitiated?: boolean };
-}
+import { matchedRoutesOf } from './router-matched.ts';
+import { navigationFromQuery, redirectFromQuery } from './router-open-redirect.ts';
+import type {
+  RouteGuards,
+  ActiveRoute,
+  RouterSnapshot,
+  GuardRun,
+  NavigationRecord,
+} from './router-types.ts';
+export type {
+  RouteGuards,
+  ActiveRoute,
+  RouterSnapshot,
+  NavigationOutcome,
+  GuardRun,
+  NavigationRecord,
+} from './router-types.ts';
 
 export interface RouterDebugApi {
   getInjector?(el: Element): unknown;

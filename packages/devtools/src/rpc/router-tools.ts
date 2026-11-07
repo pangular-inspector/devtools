@@ -2,9 +2,8 @@ import { defaultPage } from './default-page.ts';
 import type { ActiveRoute, NavigationRecord, RouterSnapshot } from '../router.ts';
 import type { RouteNode } from '../router-config.ts';
 import type { RouterSetup } from '../router-setup.ts';
-import type { LinkInfo, OutletInfo } from '../router-links.ts';
+import type { OutletInfo } from '../router-links.ts';
 import type { PreloadRecord } from '../router-actions.ts';
-import type { PlatformNavigation } from '../router-platform-nav.ts';
 import type { HttpCall } from '../http-rules.ts';
 import {
   callsForNavigation,
@@ -26,42 +25,8 @@ import {
   loopTitle,
   type NavigationLoop,
 } from './router-loops.ts';
-
-export interface RouterReport {
-  pageId: string;
-  snapshot: RouterSnapshot | null;
-  navigations: NavigationRecord[];
-  /** Older navigations removed at `limits.navigations`. */
-  dropped?: number;
-  generation?: number;
-  config?: RouteNode[];
-  configTruncated?: number;
-  activeIds?: string[];
-  setup?: RouterSetup;
-  outlets?: OutletInfo[];
-  links?: LinkInfo[];
-  /** Links past the first 100 that the page found but did not list. */
-  linksTruncated?: number;
-  /**
-   * Elements that could hold a link but were past the page's check limit, so
-   * `linksTruncated` is a lower bound.
-   */
-  linksUnchecked?: number;
-  preloads?: PreloadRecord[];
-  instrumented?: boolean;
-  /** The browser Navigation API's `navigate` events, newest last. */
-  platformNavigations?: PlatformNavigation[];
-}
-
-export interface RouterPage extends RouterReport {
-  reportedAt: number;
-  changedAt: number;
-  loops?: NavigationLoop[];
-}
-
-export interface RouterState {
-  pages: RouterPage[];
-}
+import type { RouterReport, RouterPage, RouterState } from '../router-types.ts';
+export type { RouterReport, RouterPage, RouterState } from '../router-types.ts';
 
 type Pages = Map<string, RouterPage>;
 

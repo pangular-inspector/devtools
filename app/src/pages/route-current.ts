@@ -410,8 +410,9 @@ export class RouteCurrent {
   }
 
   guardList(route: ActiveRoute) {
-    return Object.entries(route.guards ?? {}).flatMap(([kind, names]) =>
-      names.map((name) => `${kind} ${name}`),
+    return Object.entries(route.guards ?? {}).flatMap(
+      ([kind, names]: [string, string[] | undefined]) =>
+        (names ?? []).map((name) => `${kind} ${name}`),
     );
   }
 

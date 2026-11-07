@@ -1,131 +1,40 @@
 import type { DevframeRpcClient } from 'devframe/client';
 import { rpcTry } from '../rpc';
+import type {
+  NavigationCalls,
+  RouteNode,
+  RouterLintResult,
+  ScannedRoute,
+} from '@pangular-inspector/devtools/internal/types';
 
-export interface ActiveRoute {
-  path: string;
-  url: string;
-  outlet: string;
-  component?: string;
-  title?: string;
-  ownTitle?: boolean;
-  params: Record<string, unknown>;
-  data: Record<string, unknown>;
-  paramSources?: Record<string, string>;
-  dataSources?: Record<string, string>;
-  guards?: Record<string, string[]>;
-  resolvers?: string[];
-  lazy?: boolean;
-  children: ActiveRoute[];
-}
+export type {
+  ActiveRoute,
+  DiffChange,
+  GuardRun,
+  LinkInfo,
+  LintFinding,
+  LoopHop,
+  MatchedRoute,
+  NavigationCalls,
+  NavigationDiffResult,
+  NavigationLoop,
+  NavigationRecord,
+  OutletInfo,
+  PlatformNavigation,
+  RouteNode,
+  RoutePreview,
+  RouterPage,
+  RouterSetup,
+} from '@pangular-inspector/devtools/internal/types';
 
-export interface GuardRun {
-  guard: string;
-  kind: string;
-  route: string;
-  result: string;
-  ms: number;
-}
+/** A route from the source scan (`get-routes` RPC). */
+export type SourceRoute = ScannedRoute;
 
-export interface NavigationRecord {
-  id: number;
-  url: string;
-  trigger: string;
-  startedAt: number;
-  endedAt?: number;
-  outcome: string;
-  finalUrl?: string;
-  from?: string;
-  extras?: string[];
-  caller?: string;
-  phases?: Record<string, number>;
-  redirectedFrom?: number;
-  redirectTo?: string;
-  redirectKind?: string;
-  guards?: { names: string[]; passed?: boolean; ms?: number };
-  resolvers?: { names: string[]; ms?: number };
-  checked?: { activate: string[]; deactivate: string[] };
-  runs?: GuardRun[];
-  lazyLoaded?: string[];
-  reused?: string[];
-  requests?: { count: number; urls: string[] };
-  warnings?: string[];
-  errorCode?: string;
-  errorHandler?: string;
-  scroll?: string;
-  title?: string;
-  reason?: string;
-  code?: string;
-  beforeConnect?: boolean;
-  earlier?: number;
-  probe?: boolean;
-  routes?: MatchedRoute[];
-  /** The target came from a query param of the URL: a possible open redirect. */
-  queryRedirect?: { param: string; by: string };
-  /** The browser Navigation API event it came with. */
-  platform?: { type: string; userInitiated?: boolean };
-}
+/** Lint findings for the panel, or why no check could run (`router-lint` RPC). */
+export type LintResult = RouterLintResult;
 
-/** A browser Navigation API `navigate` event the page recorded. */
-export interface PlatformNavigation {
-  at: number;
-  type: string;
-  url: string;
-  userInitiated?: boolean;
-  hashChange?: boolean;
-  navigationId?: number;
-  result?: 'succeeded' | 'failed';
-  error?: string;
-}
-
-export interface LoopHop {
-  id: number;
-  from: string;
-  to: string;
-  via: string;
-  by?: string;
-}
-
-export interface NavigationLoop {
-  kind: 'redirect' | 'burst' | 'config';
-  ids: number[];
-  cycle: string[];
-  hops: LoopHop[];
-  guards: string[];
-  bounces: number;
-  end: string;
-}
-
-export interface RouteNode {
-  id: string;
-  path: string;
-  fullPath: string;
-  kind: string;
-  component?: string;
-  redirectTo?: string;
-  pathMatch?: string;
-  outlet?: string;
-  lazy?: 'unloaded' | 'loaded';
-  matcher?: string;
-  guards?: Record<string, string[]>;
-  resolvers?: string[];
-  title?: string;
-  providers?: number;
-  children?: RouteNode[];
-}
-
-export interface SourceRoute {
-  path: string;
-  fullPath: string;
-  kind: 'page' | 'group' | 'redirect' | 'wildcard';
-  component?: string;
-  redirectTo?: string;
-  title?: string;
-  guards?: Record<string, string[]>;
-  resolvers?: string[];
-  hasChildren: boolean;
-  file: string;
-  line?: number;
-}
+/** An HttpClient call as the `router-http` RPC returns it. */
+export type TimelineCall = NavigationCalls['during'][number];
 
 export function sourceLocation(source: SourceRoute): string {
   return source.line ? `${source.file}:${source.line}` : source.file;
@@ -141,152 +50,6 @@ export function sourceOf(node: RouteNode, sources: SourceRoute[]): SourceRoute |
     candidates.find((s) => !!node.component && s.component === node.component) ??
     candidates.find((s) => !s.component || !node.component)
   );
-}
-
-export interface OutletInfo {
-  outlet: string;
-  route?: string;
-  component?: string;
-  element?: string;
-  /** Stable id of the routed component's host element, as the component tree uses it. */
-  devtoolsId?: string;
-  activated: boolean;
-  detached?: boolean;
-  inputs?: { input: string; source: string }[];
-  data?: string;
-  children?: OutletInfo[];
-}
-
-export interface LinkInfo {
-  text: string;
-  href?: string;
-  active?: boolean;
-  linkActive?: boolean;
-  exact?: boolean;
-  ariaCurrent?: string;
-}
-
-export interface RouterSetup {
-  mode: 'full' | 'events-only';
-  setupKind: string;
-  routers: number;
-  angularVersion?: string;
-  options: { name: string; value: string; set: boolean }[];
-  features: Record<string, string>;
-  strategies: Record<string, string>;
-  baseHref?: string;
-  hydrated?: number;
-}
-
-export interface RouterPage {
-  pageId: string;
-  reportedAt: number;
-  changedAt?: number;
-  snapshot: {
-    url: string;
-    queryParams: Record<string, unknown>;
-    fragment: string | null;
-    root: ActiveRoute;
-    browserUrl?: string;
-    urlDrift?: boolean;
-    title?: string;
-    pending?: { id: number; url: string };
-  } | null;
-  navigations: NavigationRecord[];
-  dropped?: number;
-  generation?: number;
-  config?: RouteNode[];
-  configTruncated?: number;
-  activeIds?: string[];
-  setup?: RouterSetup;
-  outlets?: OutletInfo[];
-  links?: LinkInfo[];
-  /** Links past the first 100 that the page found but did not list. */
-  linksTruncated?: number;
-  preloads?: { path: string; startedAt: number; ms?: number; failed?: boolean }[];
-  instrumented?: boolean;
-  loops?: NavigationLoop[];
-  platformNavigations?: PlatformNavigation[];
-}
-
-export interface LintFinding {
-  rule: string;
-  severity: 'error' | 'warning' | 'info';
-  route: string;
-  message: string;
-  fix: string;
-  angular: string;
-}
-
-export type LintResult =
-  | { checked: true; findings: LintFinding[] }
-  | { checked: false; reason: 'no-page' | 'events-only' | 'no-config' };
-
-/** A field that differs between two navigations (`router-diff` RPC). */
-export interface DiffChange {
-  field: string;
-  before?: string;
-  after?: string;
-}
-
-export type NavigationDiffResult =
-  | {
-      a: number;
-      b: number;
-      sections: { title: string; changes: DiffChange[] }[];
-      same: string[];
-      notes: string[];
-    }
-  | { error: string };
-
-/** One activated route kept on a navigation record. */
-export interface MatchedRoute {
-  path: string;
-  outlet?: string;
-  component?: string;
-  params?: Record<string, string>;
-  data?: Record<string, string>;
-}
-
-/** An HttpClient call as the `router-http` RPC returns it. */
-export interface TimelineCall {
-  id: string;
-  url: string;
-  method: string;
-  status: number;
-  durationMs: number;
-  at: number;
-  cancelled?: boolean;
-  error?: string;
-}
-
-/** The HTTP inspector's calls of one navigation (`router-http` RPC). */
-export interface NavigationCalls {
-  during: TimelineCall[];
-  after: TimelineCall[];
-}
-
-/** What going to a URL would do (`router-preview` RPC). */
-export interface RoutePreview {
-  url: string;
-  finalUrl: string;
-  matched: boolean;
-  hops: { from: string; to: string; route: string }[];
-  chain: {
-    path: string;
-    component?: string;
-    outlet?: string;
-    lazy?: string;
-    title?: string;
-    source?: string;
-    active?: boolean;
-  }[];
-  params: Record<string, string>;
-  steps: { phase: string; items: string[] }[];
-  renderMode?: { mode: string; path: string; file: string };
-  stopped?: string;
-  notes: string[];
-  nearest: string[];
 }
 
 export const routerCall = rpcTry;
