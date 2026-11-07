@@ -13,8 +13,10 @@ describe('extension manifest', () => {
     expect(JSON.stringify(manifest)).not.toContain('<all_urls>');
   });
 
-  it('asks for no permissions and loopback hosts only', () => {
-    expect(manifest['permissions']).toEqual([]);
+  it('asks only for permissions with no install warning, and loopback hosts only', () => {
+    // activeTab lets the toolbar popup read the tab it was opened on, once, and scripting runs
+    // that one read. Neither shows a warning on install.
+    expect(manifest['permissions']).toEqual(['activeTab', 'scripting']);
     for (const host of manifest['host_permissions'] as string[]) {
       expect(host).toMatch(/^https?:\/\/(\*\.localhost|127\.0\.0\.1|\[::1\])\/\*$/);
     }
@@ -22,12 +24,47 @@ describe('extension manifest', () => {
   });
 
   it('lists only files that exist', () => {
+    const action = manifest['action'] as {
+      default_popup?: string;
+      default_icon?: Record<string, string>;
+    };
     const files = [
       manifest['devtools_page'],
+      action.default_popup,
+      ...Object.values(action.default_icon ?? {}),
+      (manifest['options_ui'] as { page?: string } | undefined)?.page,
       (manifest['background'] as { service_worker?: string } | undefined)?.service_worker,
       ...Object.values(manifest['icons'] as Record<string, string>),
     ].filter((file): file is string => typeof file === 'string');
     for (const file of files) expect(existsSync(new URL(file, extension)), file).toBe(true);
+  });
+});
+
+describe('extension pages', () => {
+  it('has a toolbar popup and a site access page', () => {
+    expect(manifest['action']).toMatchObject({ default_popup: 'popup.html' });
+    expect(manifest['options_ui']).toEqual({ page: 'options.html', open_in_tab: false });
+  });
+
+  it('loads every script each page needs, in order', () => {
+    const scripts = (page: string) =>
+      [...readFileSync(new URL(page, extension), 'utf8').matchAll(/<script src="([^"]+)"/g)].map(
+        (match) => match[1],
+      );
+    expect(scripts('devtools.html')).toEqual(['frames.js', 'devtools.js']);
+    expect(scripts('panel.html')).toEqual([
+      'panel-actions.js',
+      'connection-probe.js',
+      'frames.js',
+      'panel-bridge.js',
+    ]);
+    expect(scripts('popup.html')).toEqual(['connection-probe.js', 'popup.js']);
+    expect(scripts('options.html')).toEqual(['options.js']);
+    for (const page of ['devtools.html', 'panel.html', 'popup.html', 'options.html']) {
+      for (const file of scripts(page)) {
+        expect(existsSync(new URL(file!, extension)), file).toBe(true);
+      }
+    }
   });
 });
 

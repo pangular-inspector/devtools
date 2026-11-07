@@ -14,10 +14,11 @@ import { LiveRoute } from './live-route';
 import { SHARED_STYLES, type SourceRoute } from './router-types';
 import type { ComponentFocus } from '../types/component-focus.types';
 import { SourceLink } from '../ui/source-link';
+import { SearchField } from '../ui/search-field';
 
 @Component({
   selector: 'app-route-inspector',
-  imports: [LiveRoute, SourceLink],
+  imports: [SearchField, LiveRoute, SourceLink],
   template: `
     <p class="page-intro">
       The live route, every navigation, the route config the router uses, the router setup and a
@@ -52,15 +53,11 @@ import { SourceLink } from '../ui/source-link';
       </div>
       <div id="config-body" class="config-body" [hidden]="!expanded()">
         <div class="toolbar">
-          <input
+          <app-search-field
             #filterInput
-            class="field"
-            type="search"
-            aria-label="Filter source routes"
-            placeholder="Filter routes…"
-            [value]="filter()"
-            (input)="onFilterInput($event)"
-            (keydown.escape)="filter.set('')"
+            placeholder="Filter by path, component or file"
+            saveKey="router-source"
+            [(value)]="filter"
           />
           <button type="button" class="small" [attr.aria-busy]="loading()" (click)="refresh()">
             {{ loading() ? 'Scanning…' : 'Refresh' }}
@@ -293,11 +290,6 @@ export class RouteInspector {
       ),
       ...(route.resolvers ?? []).map((resolver) => `resolve ${resolver}`),
     ];
-  }
-
-  onFilterInput(event: Event) {
-    const target = event.target as HTMLInputElement | null;
-    this.filter.set(target?.value ?? '');
   }
 
   async refresh() {

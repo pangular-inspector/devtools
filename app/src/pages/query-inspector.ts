@@ -32,6 +32,7 @@ import {
   type QueryRequestResult,
 } from './query-types';
 import { pretty } from './store-types';
+import { SearchField } from '../ui/search-field';
 
 type View = 'queries' | 'mutations';
 
@@ -56,7 +57,7 @@ const FILTERS: SelectOption[] = [
 
 @Component({
   selector: 'app-query-inspector',
-  imports: [NgTemplateOutlet, RovingList, Select],
+  imports: [SearchField, NgTemplateOutlet, RovingList, Select],
   template: `
     @if (!loaded()) {
       <p class="state" role="status">Loading queries…</p>
@@ -106,21 +107,13 @@ const FILTERS: SelectOption[] = [
             Mutations <span class="badge">{{ page()?.mutations.length ?? 0 }}</span>
           </button>
         </div>
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #search
-            type="search"
-            aria-label="Filter by key"
-            placeholder="Filter by key"
-            [value]="filter()"
-            (input)="filter.set($any($event.target).value)"
-            (keydown.escape)="filter.set('')"
-          />
-        </div>
+        <app-search-field
+          #search
+          class="search"
+          placeholder="Filter by key"
+          saveKey="query"
+          [(value)]="filter"
+        />
         @if (view() === 'queries') {
           <app-select
             class="filter-select"

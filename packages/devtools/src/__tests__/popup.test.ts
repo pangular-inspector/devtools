@@ -207,6 +207,21 @@ describe.sequential('devtools popup', () => {
     expect(parseInt(top, 10)).toBeLessThan(window.innerHeight);
   });
 
+  it('places the launcher again when the panel closes, as the wider pill', async () => {
+    localStorage.setItem(
+      'pangular-popup',
+      JSON.stringify({ launcher: { x: 99999, y: 20 }, docked: 'float', pill: true }),
+    );
+    await loadPopup(true);
+    const { fab } = parts();
+    const left = () => parseInt(fab.style.inset.split(' ')[3], 10);
+    fab.click();
+    // Closed, the pill is wider than the round button was.
+    Object.defineProperty(fab, 'offsetWidth', { configurable: true, get: () => 200 });
+    fab.click();
+    expect(left()).toBeLessThanOrEqual(window.innerWidth - 200);
+  });
+
   it('labels the panel and its controls', async () => {
     await loadPopup();
     const shadow = document.getElementById('pangular-popup-root')!.shadowRoot!;
@@ -636,6 +651,71 @@ describe.sequential('devtools popup', () => {
       expect(stored().passive).toBeUndefined();
     });
 
+    it('keeps the round launcher and its label until the counts launcher is turned on', async () => {
+      const popup = await loadPopup();
+      const { fab } = parts();
+      popup.setLauncherCounts({ renders: 12, errors: 1 });
+      expect(fab.classList.contains('pill')).toBe(false);
+      expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector');
+    });
+
+    it('shows the counts on a pill the panel turns on, and says them in the label', async () => {
+      const popup = await loadPopup(true);
+      await openedSrc();
+      Object.defineProperty(frame(), 'contentWindow', { get: () => panelWindow });
+      const { fab } = parts();
+      const counts = () => fab.querySelector('.pill-counts')!;
+      send({ type: 'pangular:popup-pill', pill: true });
+      expect(stored().pill).toBe(true);
+      expect(fab.classList.contains('pill')).toBe(true);
+      expect(counts().getAttribute('aria-hidden')).toBe('true');
+      expect(counts().textContent).toBe('0 renders0 errors');
+
+      popup.setLauncherCounts({ renders: 1, errors: 0 });
+      expect(counts().textContent).toBe('1 render0 errors');
+      expect(fab.querySelector('.pill-errors')!.classList.contains('some')).toBe(false);
+      popup.setLauncherCounts({ renders: 15_300, errors: 1 });
+      expect(counts().textContent).toBe('15k renders1 error');
+      expect(fab.querySelector('.pill-errors')!.classList.contains('some')).toBe(true);
+      expect(fab.getAttribute('aria-label')).toBe(
+        'Toggle Pangular Inspector, 15300 renders, 1 error',
+      );
+      // A bad count keeps the last good one.
+      popup.setLauncherCounts({ renders: Number.NaN, errors: -3 });
+      expect(fab.getAttribute('aria-label')).toBe(
+        'Toggle Pangular Inspector, 15300 renders, 1 error',
+      );
+
+      send({ type: 'pangular:popup-pill', pill: false });
+      expect(fab.classList.contains('pill')).toBe(false);
+      expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector');
+      expect(stored().pill).toBeUndefined();
+      // Only the panel's own frame may turn it on.
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'pangular:popup-pill', pill: true },
+          source: window,
+          origin: location.origin,
+        }),
+      );
+      expect(fab.classList.contains('pill')).toBe(false);
+    });
+
+    it('starts as a pill when the popup saved it, and stays hidden in passive mode', async () => {
+      localStorage.setItem('pangular-popup', JSON.stringify({ pill: true, passive: true }));
+      await loadPopup();
+      const { fab } = parts();
+      expect(fab.classList.contains('pill')).toBe(true);
+      expect(fab.classList.contains('passive')).toBe(true);
+    });
+
+    it('shortens large counts', async () => {
+      const { shortCount } = await loadPopup();
+      expect(
+        [0, 999, 1000, 1250, 9999, 12_400, 999_999, 1_200_000, 25_000_000].map(shortCount),
+      ).toEqual(['0', '999', '1.0k', '1.3k', '10.0k', '12k', '1000k', '1.2M', '25M']);
+    });
+
     it('closes when the panel heard the shortcut', async () => {
       await loadPopup(true);
       await openedSrc();
@@ -802,6 +882,24 @@ describe.sequential('devtools popup', () => {
       expect(win.close).toHaveBeenCalled();
       expect(panel.classList.contains('open')).toBe(true);
       expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector');
+    });
+
+    it('shows the pill label again once the popped-out panel comes back', async () => {
+      localStorage.setItem('pangular-popup', JSON.stringify({ pill: true }));
+      const win = fakeWindow();
+      vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+      const popup = await loadPopup(true);
+      await openedSrc();
+      popup.setLauncherCounts({ renders: 3, errors: 0 });
+      const { fab } = parts();
+      popoutButton().click();
+      await vi.waitFor(() =>
+        expect(fab.getAttribute('aria-label')).toBe('Bring Pangular Inspector back into the page'),
+      );
+      // The launcher brings it back: the label says the counts again.
+      fab.click();
+      fab.click();
+      expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector, 3 renders, 0 errors');
     });
 
     it('reserves the window during the click when the panel has not loaded yet', async () => {

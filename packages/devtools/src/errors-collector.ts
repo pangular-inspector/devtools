@@ -57,6 +57,8 @@ export interface ErrorsCollector {
   /** Starts again after `leave` (a page restored from the back/forward cache). */
   resume(): void;
   stop(): void;
+  /** Every error caught since the page loaded, each repeat included (for the launcher pill). */
+  errorCount(): number;
 }
 
 export interface ErrorsOptions {
@@ -241,6 +243,7 @@ export function attachErrors(
   let nextEntry = 0;
   let droppedErrors = 0;
   let droppedConsole = 0;
+  let caught = 0;
   let removedIds: string[] = [];
   let full = true;
   let sentAt = 0;
@@ -343,6 +346,7 @@ export function attachErrors(
     if (stopped) return;
     const at = now();
     if (repeated(value, at)) return;
+    caught++;
     let message = valueText(value, MAX_MESSAGE);
     if ((value === undefined || value === null) && fallbackMessage) {
       message = clip(redactText(fallbackMessage), MAX_MESSAGE);
@@ -626,6 +630,7 @@ export function attachErrors(
 
   return {
     push,
+    errorCount: () => caught,
     leave() {
       if (left) return;
       left = true;
