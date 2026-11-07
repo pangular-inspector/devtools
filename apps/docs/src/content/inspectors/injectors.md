@@ -24,6 +24,12 @@ A switch at the top picks the view:
 
 Each row shows a kind letter (`C`, `D` or `E`), the tag or injector name, the component or directive classes, and icons with the number of injected and provided tokens.
 
+The Environment view also lists the injectors of lazy routes the router already loaded but that no rendered element uses, such as a route the app navigated away from. They carry an **inactive** chip, and their details say the router loaded them but no element on the page uses them now. They keep the services they created until the app reloads.
+
+### Refresh
+
+The overlay reads each element injector once, because reading what it injects is costly. Selecting an element injector asks the page to read that one again, and **Refresh** in the toolbar reads every injector again. Use **Refresh** when a component injects something after it was first listed, as a lazy `inject()` call does.
+
 The toolbar also shows the change detection mode the page reported: **Zoneless**, **zone.js**, or **Zoneless, zone.js loaded** when zone.js is on the page but the app doesn't use it.
 
 ### Page picker
@@ -31,6 +37,12 @@ The toolbar also shows the change detection mode the page reported: **Zoneless**
 When more than one open page reports an injector tree, a **Page** picker appears in the toolbar. It lists each page by title, or by URL when the page has no title. The tab starts on the page that reported last, and stays on the page you choose when another page reports later. Each page keeps its own selected injector and expanded rows, and hovering a row highlights the element in the chosen page.
 
 If the chosen page closes, the tab moves to the page that reported last and announces the change to screen readers. When the panel opens framed by a page, such as the popup on that page, the tab shows that page only and has no **Page** picker.
+
+### Providers never injected
+
+When a live tree is shown, a collapsed **Hint** line above the tree counts the providers your source declares that nothing on the shown page injected, for example **2 providers in source are never injected on this page**. Open it to see each token with its file, line and `providedIn`.
+
+It compares `providers` entries and injectable services from the [source scan](#source-mode) with the tokens that element injectors and created services injected, by name. A `providedIn` service that an environment injector already created counts as injected. It is a hint, never an error: a guard, an interceptor or code that has not run yet can still inject a provider it lists.
 
 ### Search and filters
 
@@ -102,7 +114,7 @@ A class instance is stored as the live object. A `useValue` object or array is s
 
 ### Source mode
 
-Without a live tree, the tab lists DI found in your source files, in four groups:
+Without a live tree, the tab lists DI found in your source files, in five groups:
 
 | Group                          | Lists                                                                                                         |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -110,6 +122,7 @@ Without a live tree, the tab lists DI found in your source files, in four groups
 | **Injectable Services**        | `@Injectable` and `@Service` classes, plus `signalStore` and `InjectionToken` declarations with `providedIn`. |
 | **inject() Calls**             | `inject(T)` calls and constructor parameters of decorated classes, typed or with `@Inject(T)`.                |
 | **Component Providers**        | Any `providers` or `viewProviders` array, in components, routes, app config or NgModules.                     |
+| **Helpers (unresolved)**       | Calls to other `provide*()` functions, such as your own, marked **helper (unresolved)**. Collapsed at first.  |
 
 If the devtools server does not answer, the tab says **Couldn't load DI data** with a **Retry** button instead of an empty list. If only the live tree fails, the source list stays and a **Couldn't load the live injector tree** message with **Retry** sits above it.
 
@@ -253,7 +266,15 @@ Hover highlights need a CSS selector for the element. Elements inside a shadow r
 
 ### Source mode only knows some provide functions
 
-The **Root Providers** group matches a fixed list of Angular `provide*()` functions. It doesn't list your own provider functions.
+The **Root Providers** group matches a fixed list of Angular `provide*()` functions. Any other `provide*()` call, such as your own `provideFeature()`, is listed under **Helpers (unresolved)** with the function's name, because the scan can't tell which tokens it registers. A method or member call named `provide*` is not listed.
+
+### Element injectors don't follow the page on their own
+
+Element injectors are read once, and again when you select one or press **Refresh**. A list can miss what a component injected after it was first read until then. Environment injectors are read on every update.
+
+### Inactive route injectors need the router's own fields
+
+Inactive route injectors are found through the `_injector` and `_loadedInjector` fields the router sets on its route objects, and through `ng.ɵgetRouterInstance` or the root injector's `Router` record. A Router that the app created somewhere else, or a future Angular that renames those fields, leaves them out.
 
 ## FAQ
 
