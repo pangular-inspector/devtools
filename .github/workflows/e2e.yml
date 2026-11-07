@@ -1,7 +1,8 @@
 name: E2E
 
-# The slow end-to-end checks that do not fit a pull request: every panel view in a real browser,
-# multi-tab and lifecycle resilience, and the install matrix from a packed tarball. Pull requests
+# The slow end-to-end checks that do not fit a pull request: every panel view and the Chrome
+# extension panel in a real browser, multi-tab and lifecycle resilience, and the install matrix
+# from a packed tarball. Pull requests
 # run the security and MCP checks (ci.yml), and a release can run a slice of the install matrix on
 # its tarball. See apps/docs/src/content/contributing/development.md.
 on:
@@ -54,12 +55,20 @@ jobs:
       - name: Check every panel view
         run: pnpm e2e:panel --base http://localhost:4000 --out dist/e2e-panel
 
+      # The unpacked extension in headless Chromium, with DevTools open on the demo: the panel
+      # finds the server, loads extension/ui for the page and lists the App component.
+      - name: Check the Chrome extension panel
+        if: ${{ !cancelled() }}
+        run: pnpm e2e:extension --base http://localhost:4000 --out dist/e2e-extension
+
       - name: Keep the screenshots and results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-panel
-          path: dist/e2e-panel
+          path: |
+            dist/e2e-panel
+            dist/e2e-extension
           if-no-files-found: ignore
 
   resilience:

@@ -37,6 +37,7 @@
     "e2e:mcp": "node scripts/e2e-mcp.mjs",
     "e2e:security": "node scripts/e2e-security.mjs",
     "e2e:panel": "node scripts/e2e-panel.mjs",
+    "e2e:extension": "node scripts/e2e-extension.mjs",
     "e2e:resilience": "node scripts/e2e-resilience.mjs",
     "extension:build": "pnpm devtools:build && rm -rf extension/ui && cp -r dist/devtools-ui extension/ui",
     "extension:zip": "pnpm extension:build && node scripts/extension-zip.mjs",
