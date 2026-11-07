@@ -47,6 +47,54 @@ async function mount(handler: Handler, state: unknown = {}) {
     file: signalInput('file', true),
     line: signalInput('line'),
   };
+  // The child views take signal inputs too, which JIT compilation reads from here.
+  const children: [Promise<Record<string, unknown>>, string, string[], string[]][] = [
+    [
+      import('../../../../app/src/pages/analog-playground.ts'),
+      'AnalogPlayground',
+      ['rpc', 'routes', 'target', 'origin'],
+      [],
+    ],
+    [import('../../../../app/src/pages/analog-build.ts'), 'AnalogBuild', ['rpc'], []],
+    [import('../../../../app/src/pages/analog-runtime.ts'), 'AnalogRuntime', ['rpc'], []],
+    [
+      import('../../../../app/src/pages/analog-data.ts'),
+      'AnalogData',
+      ['rpc', 'page', 'serverFns', 'duplicates', 'refetches'],
+      [],
+    ],
+    [
+      import('../../../../app/src/pages/analog-transform.ts'),
+      'AnalogTransform',
+      ['rpc', 'file', 'serverFns'],
+      ['closed'],
+    ],
+    [
+      import('../../../../app/src/pages/analog-content-preview.ts'),
+      'AnalogContentPreview',
+      ['rpc', 'file', 'schema'],
+      ['closed'],
+    ],
+    [
+      import('../../../../app/src/pages/analog-content-preview.ts'),
+      'MarkdownInline',
+      ['parts'],
+      [],
+    ],
+    [
+      import('../../../../app/src/pages/analog-value-tree.ts'),
+      'AnalogValueNode',
+      ['name', 'value'],
+      [],
+    ],
+  ];
+  for (const [loaded, name, inputs, outputs] of children) {
+    const type = (await loaded)[name] as { propDecorators?: unknown };
+    type.propDecorators = Object.fromEntries([
+      ...inputs.map((input) => [input, signalInput(input)]),
+      ...outputs.map((output) => [output, [{ type: Output, args: [output] }]]),
+    ]);
+  }
   if (!testBedReady) {
     TestBed.initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
     testBedReady = true;
@@ -90,7 +138,22 @@ async function mount(handler: Handler, state: unknown = {}) {
     el.querySelector<HTMLButtonElement>(`#analog-tab-${id}`)!.click();
     await settle();
   };
-  return { fixture, el, settle, type, submit, tab, inspector: fixture.componentInstance };
+  const { By } = await import('@angular/platform-browser');
+  const playground = () =>
+    fixture.debugElement.query(By.css('app-analog-playground')).componentInstance as {
+      response: { set(value: unknown): void };
+      method: { set(value: string): void };
+    };
+  return {
+    fixture,
+    el,
+    settle,
+    type,
+    submit,
+    tab,
+    inspector: fixture.componentInstance,
+    playground,
+  };
 }
 
 const match = (file: string, params: Record<string, string>) => ({
@@ -132,7 +195,7 @@ describe('Analog panel', () => {
   it('clears the old response and blocks a second send while a request runs', async () => {
     let resolve: (value: unknown) => void = () => {};
     const sent: unknown[] = [];
-    const { el, type, submit, tab, settle, inspector } = await mount((name, arg) => {
+    const { el, type, submit, tab, settle, playground } = await mount((name, arg) => {
       if (name === 'analog-project') return PROJECT;
       if (name === 'analog-call-api') {
         sent.push(arg);
@@ -142,7 +205,7 @@ describe('Analog panel', () => {
     });
     await tab('server');
     await type('#api-path', '/api/v1/hello');
-    inspector.response.set({ ok: true, status: 200, ms: 1, type: 'x', body: '"old"' });
+    playground().response.set({ ok: true, status: 200, ms: 1, type: 'x', body: '"old"' });
     await submit('form.playground');
     const button = () =>
       el.querySelector<HTMLButtonElement>('form.playground button[type=submit]')!;
@@ -159,7 +222,7 @@ describe('Analog panel', () => {
 
   it('keeps Send off for data-changing methods until the checkbox is ticked', async () => {
     const sent: unknown[] = [];
-    const { el, type, submit, tab, settle, inspector } = await mount((name, arg) => {
+    const { el, type, submit, tab, settle, playground } = await mount((name, arg) => {
       if (name === 'analog-project') return PROJECT;
       if (name === 'analog-call-api') {
         sent.push(arg);
@@ -169,7 +232,7 @@ describe('Analog panel', () => {
     });
     await tab('server');
     await type('#api-path', '/api/v1/products');
-    inspector.method.set('POST');
+    playground().method.set('POST');
     await settle();
     const button = el.querySelector<HTMLButtonElement>('form.playground button[type=submit]')!;
     expect(button.disabled).toBe(true);
@@ -181,7 +244,9 @@ describe('Analog panel', () => {
     await settle();
     expect(button.disabled).toBe(false);
     await submit('form.playground');
-    expect(sent).toEqual([{ method: 'POST', path: '/api/v1/products', confirm: true }]);
+    expect(sent).toEqual([
+      expect.objectContaining({ method: 'POST', path: '/api/v1/products', confirm: true }),
+    ]);
   });
 
   it('shows each lint finding message, deduped', async () => {

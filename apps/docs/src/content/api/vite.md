@@ -103,6 +103,15 @@ interface PangularConfig {
     /** Rule status by rule name. `false` turns the rule off; `true` or omitted keeps it on. */
     rules?: Record<string, boolean>;
   };
+  analog?: {
+    /**
+     * A JSON Schema file, relative to the Analog project root, that the
+     * frontmatter of every markdown file under `src/content` must match, such
+     * as `content.schema.json`. The Content tab and `analog-lint` report the
+     * files that don't. Left out, the frontmatter is only checked for syntax.
+     */
+    contentSchema?: string;
+  };
   ngrx?: {
     /**
      * Record where each NgRx change log entry came from: the app frames of the

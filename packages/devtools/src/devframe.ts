@@ -5134,6 +5134,7 @@ const pangular = defineDevframe({
         ttl: liveTtl,
         owners,
         rules: config.lint.rules,
+        contentSchema: config.analog.contentSchema,
       });
     }
     feed.attachDocks(

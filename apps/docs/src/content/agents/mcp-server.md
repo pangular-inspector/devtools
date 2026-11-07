@@ -104,7 +104,7 @@ The stdio server reads the [devtools options](../getting-started/configuration.m
 
 Over stdio, the source scan tools work: `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `ngrx-scan`, `scan-pipes` and `scan-build`. So do the tools that read files only, like `scan-pipe-usage`, `explain-pipe`, `suggest-pipe-migrations`, `scan-render-mode`, `analog-scan-routes` and `analog-lint`.
 
-The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `run-form-action`, `fill-form`, the forms and router tools, `analog-inspect-page`, `analog-list-server-calls` and `analog-run-api`. Use HTTP for those.
+The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `run-form-action`, `fill-form`, the forms and router tools, `analog-inspect-page`, `analog-list-server-calls`, `analog-inspect-transform`, `analog-inspect-render-mode`, `analog-run-nitro-task` and `analog-run-api`. Use HTTP for those.
 
 ## Connect over HTTP
 
@@ -275,33 +275,35 @@ Every tool answers with one plain text block, the answer as written: markdown fo
 
 ### Read and action tools
 
-Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-three tools act on the app, so the server does not mark them read-only:
+Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-five tools act on the app, so the server does not mark them read-only:
 
-| Tool                      | Tier          | Reference                                                                         |
-| ------------------------- | ------------- | --------------------------------------------------------------------------------- |
-| `navigate`                | `action`      | [Act on the router](./tools.md#act-on-the-router)                                 |
-| `probe-route`             | `action`      | [Act on the router](./tools.md#act-on-the-router)                                 |
-| `record-guards`           | `action`      | [Act on the router](./tools.md#act-on-the-router)                                 |
-| `ngrx-dispatch`           | `action`      | [Dispatch an action](./tools.md#dispatch-an-action)                               |
-| `ngrx-restore`            | `action`      | [Restore a state](./tools.md#restore-a-state)                                     |
-| `tanstack-run-query`      | `action`      | [Invalidate or refetch a query](./tools.md#invalidate-or-refetch-a-query)         |
-| `run-form-action`         | `action`      | [Act on a form](./tools.md#act-on-a-form)                                         |
-| `fill-form`               | `action`      | [Act on a form](./tools.md#act-on-a-form)                                         |
-| `set-http-rule`           | `action`      | [Fault rules](./tools.md#fault-rules)                                             |
-| `remove-http-rule`        | `action`      | [Fault rules](./tools.md#fault-rules)                                             |
-| `set-ssr-override`        | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides)     |
-| `remove-ssr-override`     | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides)     |
-| `set-component-property`  | `action`      | [Edit a component](./tools.md#edit-a-component)                                   |
-| `set-signal`              | `action`      | [Edit a component](./tools.md#edit-a-component)                                   |
-| `load-defer-block`        | `action`      | [load-defer-block](./tools.md#load-defer-block)                                   |
-| `watch-signal`            | `action`      | [watch-signal](./tools.md#watch-signal)                                           |
-| `record-pipes`            | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)                                 |
-| `track-subscriptions`     | `action`      | [Track subscriptions](./tools.md#track-subscriptions)                             |
-| `record-change-detection` | `action`      | [record-change-detection](./tools.md#record-change-detection)                     |
-| `audit`                   | `action`      | [audit](./tools.md#audit)                                                         |
-| `clear-recordings`        | `destructive` | [Clear recordings](./tools.md#clear-recordings)                                   |
-| `analog-run-api`          | `destructive` | [Call a server route](./tools.md#call-a-server-route)                             |
-| `ngrx-store-devtools`     | `destructive` | [Change the Store DevTools history](./tools.md#change-the-store-devtools-history) |
+| Tool                       | Tier          | Reference                                                                         |
+| -------------------------- | ------------- | --------------------------------------------------------------------------------- |
+| `navigate`                 | `action`      | [Act on the router](./tools.md#act-on-the-router)                                 |
+| `probe-route`              | `action`      | [Act on the router](./tools.md#act-on-the-router)                                 |
+| `record-guards`            | `action`      | [Act on the router](./tools.md#act-on-the-router)                                 |
+| `ngrx-dispatch`            | `action`      | [Dispatch an action](./tools.md#dispatch-an-action)                               |
+| `ngrx-restore`             | `action`      | [Restore a state](./tools.md#restore-a-state)                                     |
+| `tanstack-run-query`       | `action`      | [Invalidate or refetch a query](./tools.md#invalidate-or-refetch-a-query)         |
+| `run-form-action`          | `action`      | [Act on a form](./tools.md#act-on-a-form)                                         |
+| `fill-form`                | `action`      | [Act on a form](./tools.md#act-on-a-form)                                         |
+| `set-http-rule`            | `action`      | [Fault rules](./tools.md#fault-rules)                                             |
+| `remove-http-rule`         | `action`      | [Fault rules](./tools.md#fault-rules)                                             |
+| `set-ssr-override`         | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides)     |
+| `remove-ssr-override`      | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides)     |
+| `set-component-property`   | `action`      | [Edit a component](./tools.md#edit-a-component)                                   |
+| `set-signal`               | `action`      | [Edit a component](./tools.md#edit-a-component)                                   |
+| `load-defer-block`         | `action`      | [load-defer-block](./tools.md#load-defer-block)                                   |
+| `watch-signal`             | `action`      | [watch-signal](./tools.md#watch-signal)                                           |
+| `record-pipes`             | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)                                 |
+| `track-subscriptions`      | `action`      | [Track subscriptions](./tools.md#track-subscriptions)                             |
+| `record-change-detection`  | `action`      | [record-change-detection](./tools.md#record-change-detection)                     |
+| `audit`                    | `action`      | [audit](./tools.md#audit)                                                         |
+| `clear-recordings`         | `destructive` | [Clear recordings](./tools.md#clear-recordings)                                   |
+| `analog-run-api`           | `destructive` | [Call a server route](./tools.md#call-a-server-route)                             |
+| `ngrx-store-devtools`      | `destructive` | [Change the Store DevTools history](./tools.md#change-the-store-devtools-history) |
+| `analog-run-nitro-task`    | `action`      | [Run a Nitro task](./tools.md#run-a-nitro-task)                                   |
+| `analog-purge-nitro-cache` | `destructive` | [Purge the Nitro cache](./tools.md#purge-the-nitro-cache)                         |
 
 Your client can ask you before it runs them. To drop them from the server, set `agent.readOnly`, which keeps only the `read` tools. `audit` stays without its `axe` argument, as a `read` tool. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 

@@ -7,6 +7,12 @@ import { PANGULAR_HUB_BASE, startPangularHub } from './hub.ts';
 import { analogMiddleware, setDevOrigin } from './analog-server-log.ts';
 import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
 import { viteScanWatcher } from './rpc/analog-scan-cache.ts';
+import { clearViteEnv, setViteEnv } from './rpc/analog-runtime-config.ts';
+import {
+  installTransformTracer,
+  resetTransformTracer,
+  type ViteServerLike,
+} from './analog-transform.ts';
 import { releaseServerState } from './server-state.ts';
 import { normalizeAllowedOrigins } from './allowed-origins.ts';
 import {
@@ -158,6 +164,10 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         setAnalogRoot(server.config.root);
         const apiPrefix = options.apiPrefix ?? analogConfig(server.config.root).apiPrefix;
         server.middlewares.use(analogMiddleware(apiPrefix));
+        // Lets the Analog Routes view show a page file's transform stack.
+        installTransformTracer(server as unknown as ViteServerLike);
+        // What import.meta.env holds, for the Runtime view.
+        setViteEnv(server.config.env, server);
       }
       // The Analog and pipe source scans are kept until this watcher sees a change. With
       // `server.watch: null` Vite's watcher never fires, so the scans check by themselves.
@@ -193,6 +203,11 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         };
       }
       httpServer?.once('close', () => {
+        // A restart opens the new server before this one closes: clear only what is still ours.
+        if (analog) {
+          resetTransformTracer(server);
+          clearViteEnv(server);
+        }
         void devtools.context
           .then(releaseServerState, () => undefined)
           .finally(() => devtools.close());
