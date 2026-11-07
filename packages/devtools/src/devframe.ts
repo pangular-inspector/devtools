@@ -2814,7 +2814,7 @@ const pangular = defineDevframe({
       id: 'pangular:pipe-usages',
       name: 'Angular Pipe Usages',
       description:
-        'Pipes as JSON: `source` lists each declared or built-in pipe with purity and every template use (file and line), and `pipes`/`async` the live usage the pages report, with calls, churn and stale findings while recording. ' +
+        'Pipes as JSON: `source` has each pipe with purity and template uses; `pipes`/`async` the live page usage, with churn and stale findings while recording. ' +
         LIVE_RESOURCE_NOTE,
       mimeType: 'application/json',
       read: () => {
