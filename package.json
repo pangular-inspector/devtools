@@ -16,7 +16,7 @@
     "test": "nx test",
     "test:devtools": "vitest run --root packages/devtools",
     "test:panel": "vitest run --config app/vitest.config.ts",
-    "test:coverage": "pnpm test:devtools --coverage && pnpm test:panel --coverage",
+    "test:coverage": "pnpm test:devtools --coverage --testTimeout=20000 && pnpm test:panel --coverage --testTimeout=20000",
     "test:axe": "pnpm devtools:build-pkg && node bin.mjs build --outDir dist/panel-axe && node scripts/panel-axe.mjs dist/panel-axe",
     "test:axe:extension": "node scripts/extension-axe.mjs dist/panel-axe",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.spec.json --noEmit && ngc -p app/tsconfig.json --noEmit && ngc -p examples/analog/tsconfig.app.json --noEmit && tsc -p packages/devtools",

@@ -98,7 +98,8 @@ jobs:
   coverage:
     name: Test coverage
     # A report to read, not a gate: there is no threshold, and the build job is what fails a pull
-    # request on a broken test. v8 coverage slows the run, so a timeout here does not block.
+    # request on a broken test. v8 instrumentation slows every test, so the run gives each one
+    # 20 seconds instead of the default 5, which the slowest agent-tool tests went over.
     runs-on: ubuntu-latest
     timeout-minutes: 25
     continue-on-error: true
@@ -110,11 +111,11 @@ jobs:
       - uses: ./.github/actions/setup
 
       - name: Package tests with coverage
-        run: pnpm test:devtools --coverage
+        run: pnpm test:devtools --coverage --testTimeout=20000
 
       - name: Panel tests with coverage
         if: ${{ !cancelled() }}
-        run: pnpm test:panel --coverage
+        run: pnpm test:panel --coverage --testTimeout=20000
 
       # HTML under devtools/ and panel/, plus coverage-summary.json and lcov.info for each.
       - name: Keep the coverage report
