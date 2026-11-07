@@ -154,6 +154,10 @@ function stepsOf(chain: RouteNode[], leaving: RouteNode[]): PreviewStep[] {
     ]),
   );
   add(
+    'Resolvers',
+    chain.flatMap((node) => (node.resolvers ?? []).map((name) => `${name} @ ${node.fullPath}`)),
+  );
+  add(
     'Lazy component download (loadComponent)',
     chain
       .filter((node) => node.kind === 'component' && node.lazy)
@@ -161,10 +165,6 @@ function stepsOf(chain: RouteNode[], leaving: RouteNode[]): PreviewStep[] {
         (node) =>
           `${node.component ?? node.fullPath} (${node.lazy === 'loaded' ? 'already loaded' : 'downloads now'})`,
       ),
-  );
-  add(
-    'Resolvers',
-    chain.flatMap((node) => (node.resolvers ?? []).map((name) => `${name} @ ${node.fullPath}`)),
   );
   add(
     'Renders',

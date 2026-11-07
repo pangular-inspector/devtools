@@ -101,7 +101,7 @@ The live route config. The tab merges lazy children in once they load, and marks
 - **Test a URL** and click **Predict** to see which route matches it, or the nearest ones.
 - Click **What happens** for a card that predicts going to the URL from the live config. It does not navigate or run app code. The card shows:
   - the redirects it follows, and the route chain and params
-  - in order: the `canMatch` guards, lazy children that download, `canDeactivate` guards of the routes being left, `canActivateChild` and `canActivate` guards, lazy components, resolvers, the components that render and the title
+  - in order: the `canMatch` guards, lazy children that download, `canDeactivate` guards of the routes being left, `canActivateChild` and `canActivate` guards, resolvers, lazy components, the components that render and the title
   - the file each route is declared in, and the render mode from `*.routes.server.ts`
   - routes already active, marked, since they rerun guards only when their params change
   - why it stopped, when it reaches a function redirect, a redirect loop or a lazy route that has not loaded

@@ -111,8 +111,8 @@ describe('previewNavigation', () => {
       'canMatch',
       'canDeactivate',
       'canActivateChild and canActivate',
-      'Lazy component download',
       'Resolvers',
+      'Lazy component download',
       'Renders',
       'Title',
     ]);
@@ -121,7 +121,7 @@ describe('previewNavigation', () => {
       'canActivateChild authGuard @ /account',
       'canActivate ownerGuard @ /account/:id',
     ]);
-    expect(result.steps[3].items).toEqual(['AccountPage (downloads now)']);
+    expect(result.steps[4].items).toEqual(['AccountPage (downloads now)']);
   });
 
   it('stops at a lazy route that has not loaded, a function redirect or a loop', () => {
