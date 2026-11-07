@@ -17,7 +17,7 @@ The Pipes tab lists your `@Pipe` classes, the built-in pipes from `@angular/comm
 
 ### Pipe list
 
-Search by pipe name, class or file. Narrow the list with **Show pipes**: **All pipes**, **Custom**, **Built-in**, **Runtime only**, **Impure** or **On the page**.
+Search by pipe name, class or file. Narrow the list with **Show pipes**: **All pipes**, **Custom**, **Built-in**, **Runtime only**, **Impure**, **On the page** or **Called while recording**. Order it with **Sort pipes**: **Source order**, **Most calls** or **Most time** (time spent in `transform`). The two sorts put the pipes with recorded calls first, hottest at the top, and keep the others in source order below.
 
 Each row shows the pipe name, its class, and chips:
 
@@ -26,6 +26,8 @@ Each row shows the pipe name, its class, and chips:
 - **runtime only** for a pipe the source scan did not find, such as `translate` or `ngrxPush` from a library. Its row says **No source location**.
 - **pure** or **impure**.
 - **stale?** when recording caught a possible stale value.
+- **churning** when an instance returned an equal result 20 calls in a row while recording.
+- **N calls** and the total time in `transform`, while recording.
 
 The row also counts usages: **+N more** for a built-in pipe, and **N uses** for your own pipes.
 
@@ -43,9 +45,20 @@ Every template that uses the pipe, with file and line, for your own pipes and th
 
 ### Live on the page
 
-The number of instances and the components that use them. Click, hover or focus a component chip to highlight it. With recording on, this block adds the call count, the time spent in `transform` (total, average and slowest call), the errors it threw with the last message, the last input and output, and the last caller. When several instances were called, **Per instance** lists each one with its component, values, call count, time and caller. Click a component there to highlight it. The list is capped and says how many instances there are when it has more.
+The number of instances and the components that use them. Click, hover or focus a component chip to highlight it. With recording on, this block adds the call count, the time spent in `transform` (total, average and slowest call), the errors it threw with the last message, the last input and output, and the last caller. When several instances were called, **Per instance** lists each one with its component, values, call count, time and caller. Click a component there to highlight it. The list is capped and says how many instances there are when it has more. A churning pipe gets a note above the block that says what to change.
 
 When several tabs report pipes, the panel of a tab shows that tab's pipes and `| async` rows only. Without a tab of its own, the panel shows every tab together.
+
+### Churning pipes
+
+While recording, the page compares each call's result with the one before. A pipe is marked **churning** once an instance returned an equal result 20 calls in a row:
+
+| Pipe   | Counts as an equal call                                                                                                   |
+| ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Pure   | Any equal result. The pipe reran because its input changed reference, but the contents and so the output stayed the same. |
+| Impure | An equal object or array returned as a new reference, which makes the bindings that read it update for nothing.           |
+
+An impure pipe that returns the same reference or primitive on every check is how impure pipes run, so it is never marked. Results are compared three levels deep and up to 50 items or keys per level. A bigger result never counts as equal. A different result or an error starts the count again, and the mark stays until the next recording.
 
 ### Async subscriptions
 
@@ -90,7 +103,7 @@ Live discovery walks the rendered views with `ng.getComponent` and related debug
 
 ### Recording
 
-Click **Record calls** to count and time calls, count the calls that throw, and keep the last input and output of each pipe. A `transform` that throws still throws in your app. Recording patches each pipe's `transform` in one tab: the page the panel belongs to, or the page that reported last when the panel runs on its own. Other open tabs stay unpatched. It covers the pipes found on the page. A pipe class that first appears while recording, such as one in a view you open, is patched on the next report, so its first calls can be missed. **Stop recording** stops every tab that records. Click **Stop recording** when you are done.
+Click **Record calls** to count and time calls, count the calls that throw, and keep the last input and output of each pipe. A `transform` that throws still throws in your app. Recording patches each pipe's `transform` in one tab: the page the panel belongs to, or the page that reported last when the panel runs on its own. Other open tabs stay unpatched. It covers the pipes found on the page, and every pipe class the rendered templates can use, so a pipe in an `@if` branch that renders later is counted from its first call. A pipe class that only a newly added view brings, such as one in a lazy route you open, is patched as soon as the page sees the view, so only the calls made while that view first renders can be missed. **Stop recording** stops every tab that records. Click **Stop recording** when you are done.
 
 Each recording starts from zero, so a second recording measures one interaction on its own. The button switches to **Stop recording** once a page confirms that it is recording. If no page is connected, the tab says so and stays on **Record calls**.
 
@@ -127,6 +140,10 @@ Each recording starts from zero, so a second recording measures one interaction 
   </ngmd-step>
 </ngmd-workflow>
 
+### Fix a churning pipe
+
+Pick **Called while recording** in **Show pipes**, and look for **churning** rows. For a pure pipe, find the input that is rebuilt on every check (an array or object literal, or a method call in the template) and keep it in a field or a `computed()`. For an impure pipe, move the logic to a `computed()`, or return the previous result when the new one is equal. `suggest-pipe-migrations` lists the template uses to change.
+
 ### Remove duplicate subscriptions
 
 Open **Async subscriptions** and look for **possible duplicate subscription** rows. If the source is not already shared with `share()` or `shareReplay()`, subscribe once with `@let`, or turn the observable into a signal with `toSignal()`.
@@ -137,14 +154,15 @@ Look for **resubscribing** rows in **Async subscriptions**, and for `async-on-ca
 
 ## Agent tools
 
-| Tool                       | Live   | What it does                                                                                                                                                                                         |
-| -------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:scan-pipes`      | no     | Custom pipes and the built-in pipes in use.                                                                                                                                                          |
-| `pangular:scan-pipe-usage` | no     | Runs the lint rules above.                                                                                                                                                                           |
-| `pangular:explain-pipe`    | partly | One pipe by `name`: where it is declared or used, purity, live counts, time in `transform`, errors, last input and output, the stale warning, resubscribing `\| async` usages and the lint findings. |
-| `pangular:record-pipes`    | yes    | Starts or stops call recording with `action`, like **Record calls**.                                                                                                                                 |
+| Tool                               | Live   | What it does                                                                                                                                                                                                      |
+| ---------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:scan-pipes`              | no     | Custom pipes and the built-in pipes in use.                                                                                                                                                                       |
+| `pangular:scan-pipe-usage`         | no     | Runs the lint rules above.                                                                                                                                                                                        |
+| `pangular:explain-pipe`            | partly | One pipe by `name`: where it is declared or used, purity, live counts, time in `transform`, errors, last input and output, the stale and churn warnings, resubscribing `\| async` usages and the lint findings.   |
+| `pangular:record-pipes`            | yes    | Starts or stops call recording with `action`, like **Record calls**.                                                                                                                                              |
+| `pangular:suggest-pipe-migrations` | partly | Read-only suggestions for moving pipes to signals (`\| async` to `toSignal()`, impure or signal-reading pipes to `computed()`, churning and stale pipes), with the file and line of each use. It changes no file. |
 
-`explain-pipe` and `record-pipes` take `page` to pick a tab, and default to the most recent one, except that `record-pipes` with `action: "stop"` and no `page` stops recording on every tab. To give `explain-pipe` call data, call `record-pipes` with `action: "start"` or click **Record calls** in the panel, then use the app. See [Tools](../agents/tools.md#pipes).
+`explain-pipe`, `record-pipes` and `suggest-pipe-migrations` take `page` to pick a tab, and default to the most recent one, except that `record-pipes` with `action: "stop"` and no `page` stops recording on every tab. To give `explain-pipe` call data, call `record-pipes` with `action: "start"` or click **Record calls** in the panel, then use the app. See [Tools](../agents/tools.md#pipes). The [`pangular:pipe-usages`](../agents/resources.md#pipe-usages) resource serves the source scan and the live data as JSON.
 
 ## Limits and gotchas
 
@@ -183,7 +201,7 @@ Recording is off by default. Reload the page and it is off again.
 
 <ngmd-card-grid columns="2">
   <ngmd-card icon="layers" title="Components" link="/inspectors/components" cta="Open">
-    The components that use each pipe.
+    The components that use each pipe, and the pipes each component's template uses.
   </ngmd-card>
   <ngmd-card icon="zap" title="Signals" link="/inspectors/signals" cta="Open">
     Signals a pure pipe should not read.
