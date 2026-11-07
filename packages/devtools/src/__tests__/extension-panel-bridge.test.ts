@@ -8,6 +8,8 @@ import { PANGULAR_EXTENSION_ORIGINS } from '../extension-origin.ts';
 const root = join(import.meta.dirname, '../../../../extension');
 const source = [
   readFileSync(join(root, 'panel-actions.js'), 'utf8'),
+  readFileSync(join(root, 'connection-probe.js'), 'utf8'),
+  readFileSync(join(root, 'frames.js'), 'utf8'),
   readFileSync(join(root, 'panel-bridge.js'), 'utf8'),
 ].join('\n');
 const html = readFileSync(join(root, 'panel.html'), 'utf8');
@@ -27,6 +29,10 @@ interface Setup {
   readOrigin?: () => 'error' | 'hang' | 'origin';
   /** Whether the page answers the page id read, or hangs on a dialog. */
   readPageId?: () => 'hang' | 'answer';
+  /** Whether the top frame runs Angular. Without it, nothing says so and frames are searched. */
+  topAngular?: boolean;
+  /** Frames of the page: their URL, whether they run Angular, and their page id. */
+  frames?: { url: string; angular: boolean; pageId?: string }[];
 }
 
 const offline = () => Promise.reject(new TypeError('Failed to fetch'));
@@ -39,7 +45,9 @@ function open(setup: Setup = {}) {
   const origin = setup.origin ?? 'http://localhost:4200';
   let granted = setup.granted ?? true;
   const navigated: Listener[] = [];
+  const selected: Listener[] = [];
   const fetch = vi.fn((url: string, init?: RequestInit) => (setup.fetch ?? offline)(url, init));
+  const evals: { expression: string; frameURL: string | null }[] = [];
   const request = vi.fn(async () => {
     granted = setup.grant ?? false;
     return granted;
@@ -51,7 +59,39 @@ function open(setup: Setup = {}) {
     permissions: { contains: vi.fn(async () => granted), request },
     devtools: {
       inspectedWindow: {
-        eval: (expression: string, callback: (result: unknown, error?: unknown) => void) => {
+        eval: (
+          expression: string,
+          ...rest: [unknown, ((result: unknown, error?: unknown) => void)?]
+        ) => {
+          const callback = (typeof rest[0] === 'function' ? rest[0] : rest[1]) as (
+            result: unknown,
+            error?: unknown,
+          ) => void;
+          const frameURL = (typeof rest[0] === 'object' ? rest[0] : null) as {
+            frameURL?: string;
+          } | null;
+          evals.push({ expression, frameURL: frameURL?.frameURL ?? null });
+          const frame = setup.frames?.find((f) => f.url === frameURL?.frameURL);
+          if (frame) {
+            queueMicrotask(() =>
+              callback(
+                expression.includes('ng-version')
+                  ? frame.angular
+                  : expression.includes('__pangularPageId')
+                    ? (frame.pageId ?? null)
+                    : null,
+              ),
+            );
+            return;
+          }
+          if (expression.includes('ng-version')) {
+            queueMicrotask(() => callback(setup.topAngular ?? false));
+            return;
+          }
+          if (expression === 'location.href') {
+            queueMicrotask(() => callback(`${origin}/`));
+            return;
+          }
           const read = expression === 'location.origin' ? (setup.readOrigin?.() ?? 'origin') : '';
           if (read === 'hang') return;
           if (expression.includes('__pangularPageId') && setup.readPageId?.() === 'hang') return;
@@ -73,11 +113,15 @@ function open(setup: Setup = {}) {
             ),
           );
         },
-        getResources: (callback: (resources: { url: string }[]) => void) => callback([]),
+        getResources: (callback: (resources: { url: string; type: string }[]) => void) =>
+          callback([
+            { url: `${origin}/`, type: 'document' },
+            ...(setup.frames ?? []).map(({ url }) => ({ url, type: 'document' })),
+          ]),
       },
       network: { onNavigated: { addListener: (l: Listener) => navigated.push(l) } },
       panels: {
-        elements: { onSelectionChanged: { addListener: () => {} } },
+        elements: { onSelectionChanged: { addListener: (l: Listener) => selected.push(l) } },
         openResource: vi.fn(),
       },
     },
@@ -98,9 +142,11 @@ function open(setup: Setup = {}) {
 
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   return {
+    evals,
     fetch,
     request,
     navigate: () => navigated.forEach((l) => l()),
+    select: () => selected.forEach((l) => l()),
     status: $('status'),
     message: () => $('status-message').textContent,
     tried: () => [...$('status-tried').querySelectorAll('li')].map((li) => li.textContent),
@@ -526,6 +572,52 @@ describe('extension panel bridge', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(panel.fetch).toHaveBeenCalledTimes(1);
     expect(panel.frame.style.display).toBe('block');
+  });
+
+  it('reads an app that runs in a frame there, and looks for its server on the frame origin', async () => {
+    const storybook = 'http://localhost:6006/iframe.html?id=button--primary';
+    const panel = open({
+      origin: 'http://localhost:4200',
+      frames: [
+        { url: 'http://localhost:4200/ads.html', angular: false },
+        { url: storybook, angular: true, pageId: 'frame-page' },
+      ],
+      fetch: found('/__devframes/pangular/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    // Every probe goes to the frame's origin.
+    expect(panel.fetch.mock.calls.every(([url]) => url.startsWith('http://localhost:6006/'))).toBe(
+      true,
+    );
+    const src = new URL(panel.frame.src);
+    expect(src.searchParams.get('baseURL')).toBe('http://localhost:6006/__devframes/pangular/');
+    expect(src.searchParams.get('pageId')).toBe('frame-page');
+    expect(
+      panel.evals.filter((e) => e.expression.includes('__pangularPageId')).map((e) => e.frameURL),
+    ).toEqual([storybook]);
+
+    // The Elements selection is looked up in the same frame.
+    panel.select();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(panel.evals.at(-1)).toEqual({
+      expression: 'window.__pangularComponentOf?.($0) ?? null',
+      frameURL: storybook,
+    });
+  });
+
+  it('stays in the top frame when it runs Angular, without searching the frames', async () => {
+    const panel = open({
+      topAngular: true,
+      pageId: () => 'page-1',
+      frames: [{ url: 'http://localhost:5000/widget.html', angular: true, pageId: 'other' }],
+      fetch: found('/__devframes/pangular/__connection.json'),
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(new URL(panel.frame.src).searchParams.get('baseURL')).toBe(
+      'http://localhost:4200/__devframes/pangular/',
+    );
+    expect(new URL(panel.frame.src).searchParams.get('pageId')).toBe('page-1');
+    expect(panel.evals.every((e) => e.frameURL === null)).toBe(true);
   });
 
   it('pins the same extension origins the server trusts', () => {

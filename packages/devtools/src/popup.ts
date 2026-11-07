@@ -20,6 +20,8 @@ interface PopupState {
   theme?: 'light' | 'dark';
   /** Passive mode: the launcher stays hidden until the shortcut opens the panel. */
   passive?: boolean;
+  /** The launcher is a pill with the render and error counts while the panel is closed. */
+  pill?: boolean;
   /** The size in px the splitter left each docked side at; the default is 40% of the window. */
   dockSize?: Partial<Record<DockSide, number>>;
 }
@@ -87,6 +89,7 @@ function loadState(): PopupState {
         : {}),
       ...(saved.theme === 'light' || saved.theme === 'dark' ? { theme: saved.theme } : {}),
       ...(saved.passive === true ? { passive: true } : {}),
+      ...(saved.pill === true ? { pill: true } : {}),
       ...(dockSizes(saved.dockSize) ? { dockSize: dockSizes(saved.dockSize) } : {}),
     };
   } catch {
@@ -109,6 +112,43 @@ let explicitSrc: string | undefined;
 /** What the panel loads: a hub or panel URL, or `null` when no server answered. */
 let target: Promise<string | null> | undefined;
 let retarget: (() => void) | undefined;
+
+/** What the launcher pill shows, as the overlay last counted it. */
+export interface LauncherCounts {
+  /** Component template updates since the page loaded. */
+  renders: number;
+  /** Errors the errors inspector caught, each repeat included. */
+  errors: number;
+}
+
+let launcherCounts: LauncherCounts = { renders: 0, errors: 0 };
+/** Shows new counts on a popup that is already on the page. */
+let recount: (() => void) | undefined;
+
+/**
+ * Hands the overlay's counts to the launcher pill. The pill shows them only
+ * when the viewer turned it on in Settings.
+ *
+ * @internal
+ */
+export function setLauncherCounts(counts: Partial<LauncherCounts>) {
+  const whole = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? Math.floor(value)
+      : fallback;
+  launcherCounts = {
+    renders: whole(counts.renders, launcherCounts.renders),
+    errors: whole(counts.errors, launcherCounts.errors),
+  };
+  recount?.();
+}
+
+/** A count short enough for the pill: 999, 1.2k, 12k, 1.2M. */
+export function shortCount(value: number): string {
+  if (value < 1000) return String(value);
+  if (value < 1_000_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`;
+  return `${(value / 1_000_000).toFixed(value < 10_000_000 ? 1 : 0)}M`;
+}
 
 /** The shortcut that toggles the panel, or `false` when it is off. */
 let hotkey: string | false = DEFAULT_POPUP_HOTKEY;
@@ -289,6 +329,17 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     `<circle class="ko-fill" r="16"/>` +
     `<line x1="9" y1="9" x2="21" y2="21" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>` +
     `<circle class="ko-fill" r="12" stroke="currentColor" stroke-width="5"/></g></g></svg>`;
+
+  // The counts the launcher shows as a pill. The button's label says them, so
+  // the text itself is hidden from screen readers.
+  const pillCounts = document.createElement('span');
+  pillCounts.classList.add('pill-counts');
+  pillCounts.setAttribute('aria-hidden', 'true');
+  const pillRenders = document.createElement('span');
+  const pillErrors = document.createElement('span');
+  pillErrors.classList.add('pill-errors');
+  pillCounts.append(pillRenders, pillErrors);
+  fab.append(pillCounts);
 
   // Panel container
   const panel = document.createElement('div');
@@ -483,6 +534,31 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     }
     .fab:hover { filter: brightness(1.1); transform: scale(1.08); }
     .fab.passive { display: none; }
+    .pill-counts {
+      display: none;
+      gap: 8px;
+      font: 600 12px/1 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .fab.pill:not(.open) {
+      width: auto;
+      min-width: 44px;
+      gap: 6px;
+      padding: 0 14px 0 8px;
+      border-radius: 22px;
+    }
+    .fab.pill:not(.open) .pill-counts { display: inline-flex; }
+    .fab.pill:not(.open):hover { transform: scale(1.04); }
+    .pill-errors.some::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      margin: 0 4px 1px 0;
+      border-radius: 50%;
+      background: currentColor;
+    }
     .fab.open { --_fab-bg: var(--_fab-open); }
     .fab .ko { stroke: var(--_fab-bg); }
     .fab .ko-fill { fill: var(--_fab-bg); }
@@ -793,6 +869,28 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   /** What had focus when the shortcut opened the panel. */
   let returnFocus: HTMLElement | null = null;
 
+  /** Shows the launcher as a pill with the counts, or as the round button. */
+  function applyPill() {
+    const on = !!state.pill;
+    fab.classList.toggle('pill', on);
+    const { renders, errors } = launcherCounts;
+    pillRenders.textContent = `${shortCount(renders)} ${renders === 1 ? 'render' : 'renders'}`;
+    pillErrors.textContent = `${shortCount(errors)} ${errors === 1 ? 'error' : 'errors'}`;
+    pillErrors.classList.toggle('some', errors > 0);
+    // While the panel is popped out, the launcher keeps its "bring back" label from applyOutside.
+    if (!fab.classList.contains('outside')) {
+      fab.setAttribute(
+        'aria-label',
+        on
+          ? `Toggle Pangular Inspector, ${renders} ${renders === 1 ? 'render' : 'renders'}, ${errors} ${errors === 1 ? 'error' : 'errors'}`
+          : 'Toggle Pangular Inspector',
+      );
+    }
+    // A wider launcher may now cross the window edge.
+    if (state.launcher) placeLauncher(state.launcher.x, state.launcher.y);
+  }
+  recount = applyPill;
+
   /** Hides the launcher in passive mode while the panel is closed, if a shortcut can open it. */
   function applyPassive() {
     fab.classList.toggle('passive', !!state.passive && hotkey !== false && !isOpen);
@@ -968,12 +1066,16 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
 
   /** Labels the launcher for what a click does: open the panel, or bring it back. */
   function applyOutside() {
-    const label = outside
-      ? 'Bring Pangular Inspector back into the page'
-      : 'Toggle Pangular Inspector';
-    fab.setAttribute('aria-label', label);
-    fab.title = outside ? label : 'Pangular Inspector';
     fab.classList.toggle('outside', !!outside);
+    if (outside) {
+      const label = 'Bring Pangular Inspector back into the page';
+      fab.setAttribute('aria-label', label);
+      fab.title = label;
+      return;
+    }
+    fab.title = 'Pangular Inspector';
+    // Back in the page: the pill's label and counts, when the pill is on.
+    applyPill();
   }
 
   /** Forgets the pop-out window, closing it unless it is already closed. */
@@ -1076,6 +1178,8 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     if (!isOpen) {
       pendingFocus = false;
       returnFocus = null;
+      // A closed launcher shows as the wider pill, which may now cross the window edge.
+      if (state.launcher) placeLauncher(state.launcher.x, state.launcher.y);
     }
     if (isOpen && !loaded) load();
   }
@@ -1229,9 +1333,16 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
 
   /** Positions the launcher, keeping it fully on screen. */
   function placeLauncher(x: number, y: number) {
-    const size = fab.offsetWidth;
-    const left = Math.round(Math.min(Math.max(x, MARGIN), window.innerWidth - size - MARGIN));
-    const top = Math.round(Math.min(Math.max(y, MARGIN), window.innerHeight - size - MARGIN));
+    // The upper bound never drops below MARGIN, so a launcher wider than the window stays at the edge.
+    const left = Math.round(
+      Math.min(Math.max(x, MARGIN), Math.max(MARGIN, window.innerWidth - fab.offsetWidth - MARGIN)),
+    );
+    const top = Math.round(
+      Math.min(
+        Math.max(y, MARGIN),
+        Math.max(MARGIN, window.innerHeight - fab.offsetHeight - MARGIN),
+      ),
+    );
     fab.style.inset = `${top}px auto auto ${left}px`;
     launcherAt = { x: left, y: top };
     return launcherAt;
@@ -1299,6 +1410,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       theme?: unknown;
       mode?: unknown;
       passive?: unknown;
+      pill?: unknown;
     } | null;
     if (msg?.type === 'pangular:theme-change') applyPopupTheme(msg.theme);
     else if (msg?.type === 'pangular:popup-popout') void popOut();
@@ -1314,6 +1426,10 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       state.passive = msg.passive || undefined;
       saveState(state);
       applyPassive();
+    } else if (msg?.type === 'pangular:popup-pill' && typeof msg.pill === 'boolean') {
+      state.pill = msg.pill || undefined;
+      saveState(state);
+      applyPill();
     }
   };
   window.addEventListener('message', onThemeMessage);
@@ -1349,6 +1465,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   window.addEventListener('message', onOutsideMessage);
 
   applyLauncher();
+  applyPill();
   applyPassive();
   // Keep it reachable when the window changes size.
   window.addEventListener('resize', applyLauncher);
@@ -1377,6 +1494,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
       clearInterval(outsideWatch);
       window.removeEventListener('keydown', onHotkey, true);
       rehotkey = undefined;
+      recount = undefined;
       window.removeEventListener('resize', applyLauncher);
       window.removeEventListener('resize', applyDock);
       document.removeEventListener('toggle', onTopLayerOpen, true);

@@ -30,6 +30,7 @@ import { pangularMcp } from './agent-mcp.ts';
 import { PANGULAR_MCP_TOKEN_ENV, loadMcpToken } from './mcp-token.ts';
 import { registerSkillsCommand } from './skills-install.ts';
 import { registerLintCommand } from './lint-export.ts';
+import { escapes } from './rpc/source-scan.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_CONFIG_FILE = 'pangular.config.json';
@@ -58,7 +59,9 @@ export function checkReportOutDir(
   const kept = [cwd, ...(options.invokedFrom ? [canonical(resolve(options.invokedFrom))] : [])];
   const holds = (dir: string) => {
     const up = relative(target, dir);
-    return up === '' || (!up.startsWith('..') && !isAbsolute(up));
+    // Only a real `..` segment leaves the target: a folder named `..app` is inside it.
+    const leaves = escapes(up) || isAbsolute(up);
+    return up === '' || !leaves;
   };
   if (kept.some(holds)) {
     throw new Error(

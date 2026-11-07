@@ -1,6 +1,6 @@
 ---
 title: Settings
-description: Pick the panel theme, hide, pin and reorder tabs, hide the popup button until you press its shortcut, and turn the browser agent tools on or off.
+description: Pick the panel theme, hide, pin and reorder tabs, set up the popup button (passive mode and the counts launcher), save filters, resize panes, and turn the browser agent tools on or off.
 ---
 
 <ngmd-hero title="Settings" gradient>
@@ -17,11 +17,14 @@ Open **Settings** with the gear button in the panel header, or with **Open setti
 
 Settings belong to you, not to the project. The panel saves them in the browser's `localStorage`, so every panel on the same address uses them, and they survive reloads. The Chrome extension and the panel on your dev server have different addresses, so each keeps its own.
 
-| Key                     | Holds                                        |
-| ----------------------- | -------------------------------------------- |
-| `pangular-pref:theme`   | `light` or `dark`. Missing means **System**. |
-| `pangular-pref:tabs`    | The order, hidden tabs and pinned tabs.      |
-| `pangular-pref:passive` | `true` when passive mode is on.              |
+| Key                            | Holds                                                    |
+| ------------------------------ | -------------------------------------------------------- |
+| `pangular-pref:theme`          | `light` or `dark`. Missing means **System**.             |
+| `pangular-pref:tabs`           | The order, hidden tabs and pinned tabs.                  |
+| `pangular-pref:passive`        | `true` when passive mode is on.                          |
+| `pangular-pref:pill`           | `true` when the counts launcher is on.                   |
+| `pangular-pref:filters:<view>` | The [saved filters](#saved-filters) of one view.         |
+| `pangular-pref:pane:<view>`    | The width a [splitter](#resizable-panes) left a pane at. |
 
 If the browser blocks storage, the settings apply until the panel reloads. Remove the keys to go back to the defaults.
 
@@ -59,6 +62,32 @@ Passive mode hides the floating button on your app's page until you press the po
 The popup saves passive mode with its layout, under `pangular-popup` in your app's `localStorage`, so it stays on after a reload. Turn it on or off from the panel in the popup: the panel sends the change to the popup around it, and the button hides as soon as you close the panel. A panel opened elsewhere, such as the Chrome extension, saves the setting but has no popup to change.
 
 With `popup.hotkey: false` there is no shortcut to bring the button back, so passive mode is off and the checkbox is disabled.
+
+## Counts launcher
+
+**Counts launcher** turns the floating button on your app's page into a small pill that shows two counts while the panel is closed:
+
+| Count       | What it counts                                                                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **renders** | Component template updates since the page loaded, as Angular's profiler reports them. The count pauses while the tab is in the background.        |
+| **errors**  | Errors the [Errors inspector](../inspectors/errors.md) caught on the page, each repeat included. It stays at 0 when that inspector is turned off. |
+
+It is off by default. Like passive mode, the popup saves it under `pangular-popup` in your app's `localStorage`, and only the panel in the popup can change it. In passive mode the button stays hidden, pill or not.
+
+## Saved filters
+
+Every inspector page has one search field, named **Filter**. Type in it to narrow the page, and press <kbd>Escape</kbd> to clear it. An <kbd>Escape</kbd> that clears the field does nothing else, so it doesn't also close the popup.
+
+To keep a filter you use often, type it and press **Save** next to the field. It becomes a chip under the field:
+
+- Press a chip to apply its text. Press it again to clear the field. The chip of the text in the field shows as pressed.
+- Press the **×** on a chip to remove it.
+
+Each view keeps up to 8 chips, in `pangular-pref:filters:<view>`. The Errors and Console views of the Errors tab, and the live and source views of a tab, keep separate chips. A chip saves the text only, not the other filters of the page.
+
+## Resizable panes
+
+On a wide panel, the **Injectors** tree and its detail, and the **NgRx Store** log and its entry, are split by a bar you can drag. To resize from the keyboard, focus the bar and use the arrow keys (<kbd>Shift</kbd> for larger steps), <kbd>Home</kbd> and <kbd>End</kbd>. A double click puts the default width back. The width is saved per view, in `pangular-pref:pane:<view>`.
 
 ## Browser agents
 

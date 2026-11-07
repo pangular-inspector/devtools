@@ -350,9 +350,7 @@ describe('SignalInspector', () => {
     });
 
     function filterBox(host: HTMLElement): HTMLInputElement {
-      const box = host.querySelector<HTMLInputElement>(
-        'input[aria-label="Filter signals by name or kind"]',
-      );
+      const box = host.querySelector<HTMLInputElement>('.toolbar input[type="search"]');
       if (!box) throw new Error('No filter box');
       return box;
     }

@@ -17,6 +17,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { panelConfig } from '../devtools-config';
 import { hostPageId } from '../page-id';
 import { RovingList } from '../ui/roving-list';
+import { SearchField } from '../ui/search-field';
 import { Select, type SelectOption } from '../ui/select';
 import {
   ALL_PAGES,
@@ -54,7 +55,7 @@ const DRAG_THRESHOLD = 4;
 
 @Component({
   selector: 'app-timeline',
-  imports: [Select, RovingList],
+  imports: [Select, RovingList, SearchField],
   template: `
     <p class="intro">
       Navigations, HTTP calls, NgRx actions, change detection cycles, form events and signal changes
@@ -70,22 +71,13 @@ const DRAG_THRESHOLD = 4;
       </div>
     } @else {
       <div class="toolbar">
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #search
-            type="search"
-            aria-label="Filter events"
-            placeholder="Filter by name, URL or detail"
-            autocomplete="off"
-            [value]="query()"
-            (input)="query.set($any($event.target).value)"
-            (keydown.escape)="query.set('')"
-          />
-        </div>
+        <app-search-field
+          #search
+          class="search"
+          placeholder="Filter by name, URL or detail"
+          saveKey="timeline"
+          [(value)]="query"
+        />
         @if (pageOptions().length > 2) {
           <app-select
             class="page-select"

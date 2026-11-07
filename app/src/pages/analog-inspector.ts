@@ -15,6 +15,7 @@ import { plural, time } from '../format';
 import { hostPageId } from '../page-id';
 import { rpcCall, rpcTry as call } from '../rpc';
 import { SourceLink } from '../ui/source-link';
+import { SearchField } from '../ui/search-field';
 import { AnalogPlayground, type PlaygroundTarget } from './analog-playground';
 import { AnalogBuild } from './analog-build';
 import { AnalogData } from './analog-data';
@@ -337,6 +338,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
 @Component({
   selector: 'app-analog-inspector',
   imports: [
+    SearchField,
     SourceLink,
     AnalogPlayground,
     AnalogBuild,
@@ -439,15 +441,12 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   {{ explaining() ? 'Explaining…' : 'Explain' }}
                 </button>
               </form>
-              <label class="sr-only" for="route-filter">Filter routes</label>
-              <input
-                id="route-filter"
-                class="field filter"
-                type="search"
+              <app-search-field
+                class="filter"
+                inputId="route-filter"
                 placeholder="Filter by path or file"
-                [value]="filter()"
-                (input)="filter.set($any($event.target).value)"
-                (keydown.escape)="filter.set('')"
+                saveKey="analog-routes"
+                [(value)]="filter"
               />
             </div>
             <div class="explain-result" role="status">
@@ -651,24 +650,13 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
               </div>
             </div>
             <div class="call-filters" role="group" aria-label="Filter the server calls">
-              <div class="search">
-                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-                <input
-                  id="analog-call-search"
-                  class="field"
-                  type="search"
-                  placeholder="Find a URL, path or function…"
-                  aria-label="Find a URL, path or function"
-                  autocomplete="off"
-                  spellcheck="false"
-                  [value]="callQuery()"
-                  (input)="callQuery.set($any($event.target).value)"
-                  (keydown.escape)="callQuery.set('')"
-                />
-              </div>
+              <app-search-field
+                class="search"
+                inputId="analog-call-search"
+                placeholder="Filter by URL, path or function"
+                saveKey="analog-calls"
+                [(value)]="callQuery"
+              />
               <label class="check">
                 <input
                   type="checkbox"

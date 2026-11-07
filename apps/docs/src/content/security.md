@@ -180,7 +180,7 @@ The extension has host permissions for loopback hosts only: `localhost` and its 
 
 On any other host, the panel doesn't send a request until you click **Allow access**. Chrome then asks you to grant the extension that one host, on the scheme of the page and any port. The extension never asks for all hosts at once.
 
-The extension has no content scripts. It runs nothing in the pages you browse, and reads a page only through DevTools, while DevTools inspects it.
+The extension has no content scripts. It runs nothing in the pages you browse, and reads a page only through DevTools, while DevTools inspects it, or once when you click its toolbar button on a tab (`activeTab` and `scripting`, which add no install warning). Its site access page lists the hosts you granted, with a **Remove** button for each.
 
 Granting the extension a host doesn't change what the devtools server accepts. The server still applies the checks on this page.
 
