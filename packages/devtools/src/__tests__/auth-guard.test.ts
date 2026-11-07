@@ -385,9 +385,16 @@ describe('initPangularHub one-time code', () => {
 
     const dir = authStoreDir(process.cwd(), home);
     const file = join(dir, 'auth.json');
-    await vi.waitFor(() => expectPrivate(file, 0o600), { timeout: 3000 });
+    // The store holds an empty `auth.json` from startup and devframe writes the token a moment
+    // later, so wait for the token itself. Only on POSIX does the mode check also wait for it.
+    await vi.waitFor(
+      () => {
+        expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).trusted)).toHaveLength(1);
+        expectPrivate(file, 0o600);
+      },
+      { timeout: 3000 },
+    );
     expectPrivate(dir, 0o700);
-    expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).trusted)).toHaveLength(1);
     expect(existsSync(join(home, '.devframes', 'devframe', 'auth.json'))).toBe(false);
   });
 
