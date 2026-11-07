@@ -1269,3 +1269,61 @@ describe('FormsExportTest', () => {
     expect(testFileName('@p1')).toBe('form.spec.ts');
   });
 });
+
+describe('FormsInspector schema view', () => {
+  const signalForm: CollectedForm = {
+    id: 'profile@p1',
+    kind: 'signal',
+    owner: 'Profile',
+    label: 'Profile.form',
+    root: {
+      ...field(''),
+      type: 'group',
+      rules: { tree: 1 },
+      children: [
+        field('name', { required: true, rules: { sync: 2 }, constraints: { minLength: 2 } }),
+        field('promo', { hidden: true, hiddenBy: 'self', rules: { hidden: 1 } }),
+        field('plain'),
+      ],
+    },
+  };
+
+  it('offers a Schema tab for a Signal Form with the rules of each field', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput('rpc', fakeClient(fail, [signalForm, form]));
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const tab = host.querySelector<HTMLButtonElement>('#forms-tab-schema')!;
+    expect(tab.textContent?.trim()).toBe('Schema');
+    tab.click();
+    await settle(fixture);
+    const rows = Array.from(host.querySelectorAll('.schema tbody tr')).map((row) =>
+      Array.from(row.querySelectorAll('th, td'))
+        .map((cell) =>
+          Array.from(cell.children)
+            .map((part) => part.textContent?.trim())
+            .join(', '),
+        )
+        .join(' | '),
+    );
+    expect(rows).toEqual([
+      '(form), group | 1 cross-field rule |  | ',
+      'name, control | required, 2 validators | minLength 2 | ',
+      'promo, control | 1 hidden rule |  | hidden',
+    ]);
+  });
+
+  it('hides the Schema tab for other forms and falls back to Fields', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput('rpc', fakeClient(fail, [signalForm, form]));
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    fixture.componentInstance.tab_.set('schema');
+    fixture.componentInstance.selectForm(form.id);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#forms-tab-schema')).toBeNull();
+    expect(fixture.componentInstance.tab_()).toBe('fields');
+  });
+});

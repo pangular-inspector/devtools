@@ -84,6 +84,18 @@ Each error says where it comes from:
 
 Click a field to open its details below the table. Click the field again, or **Close**, to hide them. From there, set a value, or click **Focus**, **Touch**, **Revalidate** or **Store as global**. **Store as global** stores the form as `$form`, and the field as `$control`, in the page console. If the page defined `$form` or `$control` itself, it refuses and leaves them as they are.
 
+### Schema view
+
+A Signal Form has a **Schema** view. It lists each field the schema function of `form()` sets a rule on, with:
+
+| Column          | What it shows                                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Rules**       | `required`, and how many validators, cross-field rules (`validateTree`), async validators, hidden, disabled and readonly rules and metadata entries the field has. |
+| **Constraints** | `min`, `max`, `minLength`, `maxLength` and `pattern`, and the metadata values.                                                                                     |
+| **State now**   | Whether the field is hidden or readonly (by itself or by a parent), its disabled reasons and a pending debounce.                                                   |
+
+The counts come from Angular's logic tree, so a rule shows on the field it applies to. Fields without a rule are left out, and a group stays when one of its fields has a rule. Reactive and template-driven forms have no Schema view. Agents read the same rule counts with `pangular:explain-field`.
+
 ### Timeline view
 
 Recent changes, newest first, each tagged with its origin: user, code, agent (a WebMCP tool call) or devtools. Origins are per form: typing in one form tags changes in that form as user, and a change that app code makes in another form at the same time stays code. A panel or agent action tags only the form it acts on. When the overlay cannot tell which form an input belongs to, such as a custom control rendered in an overlay outside the form, the input counts for every form. The timeline tracks array items by identity, so moves show as moves. Async validation times show as **pending** tags. The page keeps the last 200 events, set with [`limits.formTimeline`](../getting-started/configuration.md#limits). Once older events are dropped, the timeline and `list-form-changes` say how many.

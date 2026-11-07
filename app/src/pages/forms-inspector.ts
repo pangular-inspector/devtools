@@ -21,6 +21,7 @@ import { FormsActionBar } from './forms-action-bar';
 import { FormsExportTest } from './forms-export-test';
 import { FormsFields, matchesChip, type Chip, type FieldRow } from './forms-fields';
 import { FormsList } from './forms-list';
+import { FormsSchema } from './forms-schema';
 import { FormsLint, FormsSubmit } from './forms-report';
 import { FormsSetupErrors } from './forms-setup-errors';
 import { FormsTimeline } from './forms-timeline';
@@ -39,10 +40,11 @@ import {
   type WebMcpPage,
 } from './forms-types';
 
-type Tab = 'fields' | 'timeline' | 'submit' | 'lint';
+type Tab = 'fields' | 'schema' | 'timeline' | 'submit' | 'lint';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'fields', label: 'Fields' },
+  { id: 'schema', label: 'Schema' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'submit', label: 'Submit' },
   { id: 'lint', label: 'Lint' },
@@ -73,6 +75,7 @@ function countFields(node: FormFieldNode): number {
     FormsExportTest,
     FormsFields,
     FormsList,
+    FormsSchema,
     FormsSetupErrors,
     FormsTimeline,
     FormsSubmit,
@@ -223,7 +226,7 @@ function countFields(node: FormFieldNode): number {
             />
 
             <div class="tabs" role="tablist" aria-label="Form views" (keydown)="onKey($event)">
-              @for (tab of tabs; track tab.id) {
+              @for (tab of tabs(); track tab.id) {
                 <button
                   type="button"
                   role="tab"
@@ -261,6 +264,9 @@ function countFields(node: FormFieldNode): number {
                     (clearFilters)="clearFilters($event)"
                     (highlight)="highlight($event?.formId ?? null, $event?.path ?? '')"
                   />
+                }
+                @case ('schema') {
+                  <app-forms-schema [form]="form" />
                 }
                 @case ('timeline') {
                   <app-forms-export-test [formId]="form.id" [rpc]="rpc()" />
@@ -538,8 +544,16 @@ export class FormsInspector {
     return this.instrumented().some((page) => id.endsWith(`@${page}`));
   });
   readonly filter = signal('');
-  readonly tabs = TABS;
-  readonly tab_ = signal<Tab>('fields');
+  /** The views of the selected form; Schema only for a Signal Form. */
+  readonly tabs = computed(() =>
+    this.selected()?.kind === 'signal' ? TABS : TABS.filter((tab) => tab.id !== 'schema'),
+  );
+  /** The open view, back on Fields when the next form has no such view. */
+  readonly tab_ = linkedSignal<{ id: Tab }[], Tab>({
+    source: this.tabs,
+    computation: (tabs, previous) =>
+      previous && tabs.some((tab) => tab.id === previous.value) ? previous.value : 'fields',
+  });
   readonly active = signal(new Set<Chip>());
   /** True while the path search or a chip hides fields, the same test `rows` applies. */
   readonly filtering = computed(() => !!this.filter() || this.active().size > 0);
@@ -827,7 +841,7 @@ export class FormsInspector {
   }
 
   onKey(event: KeyboardEvent) {
-    const order = this.tabs.map((tab) => tab.id);
+    const order = this.tabs().map((tab) => tab.id);
     const index = order.indexOf(this.tab_());
     let next = index;
     if (event.key === 'ArrowRight') next = (index + 1) % order.length;

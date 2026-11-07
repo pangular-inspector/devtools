@@ -43,6 +43,18 @@ export interface FormFieldNode {
   pendingSince?: number;
   name?: string;
   metadata?: unknown[];
+  /** Signal Forms: how many rules of each kind the schema set on this field. */
+  rules?: {
+    sync?: number;
+    tree?: number;
+    async?: number;
+    hidden?: number;
+    disabled?: number;
+    readonly?: number;
+    metadata?: number;
+  };
+  hiddenBy?: 'self' | 'parent';
+  readonlyBy?: 'self' | 'parent';
   dom?: { errorShown?: boolean; drift?: string | true; labelled?: boolean };
 }
 
