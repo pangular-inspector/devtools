@@ -240,6 +240,7 @@ A link can also select an item on its tab, on one page: `#tab=<tab>&id=<id>&page
 | ---------- | ---------------------------------------------------------- |
 | Components | A component instance, by its id in the component tree      |
 | Injectors  | The element injector of a component, by the component's id |
+| Signals    | The signal graph of a component, by the component's id     |
 | Forms      | A form, by its id                                          |
 
 On other tabs, `id` is ignored and the link opens the tab. `page` is the page id from `list-pages`. Without it, the tab looks on the page it shows. If the item is not on the page, the tab says so. The [`open-in-panel`](../agents/tools.md#open-in-panel) agent tool builds these links and switches the panels that are open to them.

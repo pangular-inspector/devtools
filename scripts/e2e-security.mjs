@@ -1576,6 +1576,7 @@ async function gatingChecks() {
     'remove-ssr-override',
     'set-component-property',
     'set-signal',
+    'load-defer-block',
     'watch-signal',
     'record-pipes',
     'track-subscriptions',

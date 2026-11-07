@@ -838,6 +838,7 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'remove-ssr-override',
   'set-component-property',
   'set-signal',
+  'load-defer-block',
   'watch-signal',
   'record-pipes',
   'track-subscriptions',
@@ -1657,7 +1658,24 @@ async function runActions(state) {
     doubledAfter,
   );
 
-  // watch-signal
+  // load-defer-block
+  await app.go('/examples/defer');
+  await sleep(800);
+  const deferRow = (await read('defer-blocks', {})).match(
+    /\| `(d\d+)` \|[^|\n]*\| placeholder \|[^|\n]*\| on interaction \|/,
+  );
+  r = await act('load-defer-block', { block: deferRow?.[1] ?? 'd0' });
+  await sleep(800);
+  write(
+    'load-defer-block',
+    'the on interaction block shows its content without a click',
+    (await page.getByText('Rendered after the button was used.').count()) > 0,
+    r.markdown.slice(0, 300),
+  );
+
+  // watch-signal, back on the signals page after the defer example
+  await app.go('/examples/signals');
+  await sleep(800);
   const graph = jsonBlock(await read('inspect-signals', { component: 'app-signals-example' }));
   const countNode = graph?.nodes?.find((node) => node.label === 'count');
   r = await act('watch-signal', { node: countNode?.id ?? 'count', stacks: true });
@@ -2158,6 +2176,7 @@ const ACTION_VALID = {
   'record-change-detection': () => ({ record: 'stop' }),
   'track-subscriptions': () => ({ action: 'stop' }),
   'record-pipes': () => ({ action: 'stop' }),
+  'load-defer-block': () => ({ block: 'd0' }),
   'clear-recordings': () => ({ target: 'router' }),
   'set-component-property': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
   'set-signal': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
@@ -3016,6 +3035,7 @@ function runDocs(state) {
     'cookies',
     'files',
     'payload',
+    'block',
   ]);
   // Library tools are documented but not listed for the demo, which uses none of the libraries.
   docs.phantomTools = [...documented].filter(

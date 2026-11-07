@@ -267,3 +267,74 @@ describe('startComponentPick', () => {
     });
   });
 });
+
+describe('startComponentPick with the keyboard', () => {
+  class _List {}
+  class _Item {}
+
+  function page() {
+    document.body.innerHTML = `
+      <app-root ng-version="22.0.0">
+        <app-list><div><app-item></app-item></div><app-item></app-item></app-list>
+        <input class="field" />
+      </app-root>
+      <div id="${POPUP_ROOT_ID}"><button class="fab"></button></div>`;
+    const root = document.querySelector('app-root')!;
+    const list = document.querySelector('app-list')!;
+    const [first, second] = Array.from(document.querySelectorAll('app-item'));
+    const instances = new Map<Element, object>([
+      [root, {}],
+      [list, new _List()],
+      [first!, new _Item()],
+      [second!, new _Item()],
+    ]);
+    const ng: ComponentDebugNg = { getComponent: (el) => instances.get(el) ?? null };
+    const highlight = { show: vi.fn(), clear: vi.fn() };
+    const pick = startComponentPick({ getNg: () => ng, highlight, timeoutMs: 5000 });
+    return { pick, highlight, root, list, first: first!, second: second! };
+  }
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('moves through components in page order, out and in, and picks with Enter', async () => {
+    const { pick, highlight, root, list, first, second } = page();
+    expect(pick.move('next')).toMatchObject({ moved: true, tag: 'app-root' });
+    expect(highlight.show).toHaveBeenLastCalledWith(root, true);
+    expect(pick.move('child')).toMatchObject({ moved: true, name: 'List' });
+    expect(pick.move('child')).toMatchObject({ moved: true, name: 'Item' });
+    expect(highlight.show).toHaveBeenLastCalledWith(first, true);
+    expect(pick.move('next')).toMatchObject({ moved: true, name: 'Item' });
+    expect(highlight.show).toHaveBeenLastCalledWith(second, true);
+    expect(pick.move('next')).toEqual({ moved: false, error: 'This is the last component.' });
+    expect(pick.move('parent')).toMatchObject({ moved: true, name: 'List' });
+    expect(highlight.show).toHaveBeenLastCalledWith(list, true);
+    expect(pick.move('pick')).toMatchObject({ moved: true, name: 'List', picked: true });
+    expect(await pick.result).toMatchObject({ ok: true, name: 'List', tag: 'app-list' });
+    expect(pick.move('next')).toEqual({ moved: false, error: 'No pick is running.' });
+  });
+
+  it('takes the arrow keys and Enter on the page, and keeps them from the app', async () => {
+    const { pick, first } = page();
+    const field = document.querySelector<HTMLInputElement>('.field')!;
+    const press = (key: string) => {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      field.dispatchEvent(event);
+      return event;
+    };
+    expect(press('ArrowDown').defaultPrevented).toBe(true);
+    press('ArrowRight');
+    press('ArrowRight');
+    expect(press('a').defaultPrevented).toBe(false);
+    press('Enter');
+    const result = await pick.result;
+    expect(result.ok && elementById(result.id)).toBe(first);
+  });
+
+  it('refuses Enter before anything is shown', () => {
+    const { pick } = page();
+    expect(pick.move('pick')).toEqual({ moved: false, error: 'Move to a component first.' });
+    pick.cancel();
+  });
+});
