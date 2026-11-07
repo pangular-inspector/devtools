@@ -144,6 +144,18 @@ Click a row for a response preview. The preview opens under the timeline and tak
 
 **Export HAR** saves the timeline as a HAR 1.2 file, named after the page path, such as `pangular-shop.har`. It holds the SSR request that served the page, with its kept response headers such as `Server-Timing`, then the server and client calls, oldest first, each with its method, URL, status, time, headers and response preview. Notes such as transfer cache, mocked, failed by a fault rule or cancelled go in each entry's `comment`. The file is written from the masked copy the panel holds, so secrets stay `[redacted]`. Request bodies are not recorded, and response bodies are the previews, clipped at 2000 characters. Relative client URLs get the panel's origin, which is the app's when the app's dev server serves the panel; in the Chrome extension they stay relative. Open the file in Chrome's Network panel, or attach it to a bug report.
 
+### HTTP lint
+
+Checks the selected page's client calls for requests that cost time. Transfer cache hits, mocked and cancelled calls are left out.
+
+| Finding                  | When                                                                                                       |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| **Duplicate**            | A GET to the same URL ran again within 2000 ms on the same page URL.                                       |
+| **Waterfall**            | 3 or more calls ran one after another: each started within 50 ms after the previous one ended.             |
+| **Repeated server call** | A call the server made while rendering the page ran again in the browser, so the transfer cache missed it. |
+
+Each finding says what happened, how many milliseconds it costs where that can be told, and what to try, such as sharing one request or starting the calls together with `forkJoin`. A waterfall can be on purpose, when a call needs the response before it. **Show first call** opens the first call of the finding in the timeline preview. The `lint-http` agent tool runs the same checks.
+
 ### Fault injection
 
 Add a rule with these fields:
@@ -306,6 +318,7 @@ The interceptor works in development builds only. In production it passes reques
 | `pangular:list-ssr-requests`      | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                                                                | `limit`                                                                     |
 | `pangular:explain-ssr-request`    | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again.                                                | `id`, `url`                                                                 |
 | `pangular:list-http-calls`        | The app's HttpClient calls, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, redirected, transfer cache hit and the matched rule. With `view: "waterfall"`, one tab's client calls as a waterfall, grouped by navigation. | `page`, `url`, `failed`, `limit`, `preview`, `headers`, `view`              |
+| `pangular:lint-http`              | The [HTTP lint](#http-lint) of one tab: duplicate GETs, waterfalls and server calls the browser made again, with call ids and a fix.                                                                                                                                                  | `page`                                                                      |
 | `pangular:list-http-rules`        | The [fault rules](#fault-injection) in match order: id, on or off, method, URL pattern, where it applies and its effect.                                                                                                                                                              | none                                                                        |
 | `pangular:set-http-rule`          | Adds a fault rule, or replaces the rule with `id`. Checks the input like the form does.                                                                                                                                                                                               | `pattern`, `id`, `method`, `target`, `status`, `delayMs`, `body`, `enabled` |
 | `pangular:remove-http-rule`       | Removes the fault rule with `id`.                                                                                                                                                                                                                                                     | `id`                                                                        |

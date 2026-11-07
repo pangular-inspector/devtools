@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Ninety-eight tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Ninety-nine tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -854,10 +854,13 @@ These tools read the HttpClient calls that `withPangular()` recorded and the SSR
 | `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                                                                                                                                                           | `limit`                                                |
 | `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again.                                                                                                                                           | `id`, `url`                                            |
 | `list-http-calls`     | The HttpClient calls of one tab and the server render that served it, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, redirected, transfer cache hit and the matched rule. With `preview`, the masked response body, for failed calls too. With `view: "waterfall"`, the tab's client calls as a waterfall instead. | `url`, `failed`, `limit`, `preview`, `headers`, `view` |
+| `lint-http`           | Checks one tab's recorded client calls for duplicate GETs, waterfalls (calls that ran one after another and could start together) and server calls the browser made again. Each finding lists the call ids and what to try.                                                                                                                                                      | `page`                                                 |
 
 `explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one.
 
 `list-http-calls` lists one tab and the server calls of the SSR request that served it: the tab `page` names, or the default page. With no tab connected, it lists the server calls. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview, including the body a failed call got back, such as a validation message or `problem+json`. `headers` adds each call's request and response headers. Secrets in URLs, errors, previews and headers are masked, and `url` matches the masked URL.
+
+`lint-http` reads the tab `page` names, or the default page, and the server calls of the SSR request that served it. It leaves out transfer cache hits, mocked and cancelled calls, and reports three kinds of findings: a GET to the same URL again within 2000 ms on the same page URL, 3 or more calls where each started within 50 ms after the previous one ended, and a server call whose method, path and query the browser requested again. Each finding names the calls by the ids `list-http-calls` uses, the time it costs where that can be told, and a fix. URLs are masked.
 
 `list-http-calls` with `view: "waterfall"` reads the tab `page` names, or the default page, and groups its client calls by navigation, newest first: each call's start offset in its navigation, duration, status and a text bar. A new navigation starts each time the page URL a call was made on changes. `limit` then sets how many navigations it shows, 5 by default (at most 50). `url`, `failed` and `preview` apply to the list only, and are refused with `view: "waterfall"`. `headers` adds each call's headers. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, as are names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value.
 

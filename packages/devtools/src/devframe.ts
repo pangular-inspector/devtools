@@ -200,6 +200,7 @@ import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import { httpWaterfallText } from './rpc/http-waterfall.ts';
+import { lintHttpText } from './rpc/http-lint.ts';
 import {
   httpRulesText,
   removeHttpRule,
@@ -1614,6 +1615,17 @@ const pangular = defineDevframe({
         const page = pageArgument(args) ?? defaultPage(snapshot.pages ?? [])?.pageId;
         return { markdown: listHttpCallsText(snapshot, { ...args, page }) };
       },
+    });
+
+    agent.registerTool({
+      id: 'pangular:lint-http',
+      title: 'Lint HTTP calls',
+      description:
+        "Checks a page's recorded HttpClient calls for duplicate GETs, waterfalls (calls run one after another that could start together) and server calls the browser repeated. Each finding lists call ids and a fix. Masked.",
+      inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
+      handler: async (args: { page?: string }) => ({
+        markdown: lintHttpText(httpSnapshot(), { page: pageArgument(args) }),
+      }),
     });
 
     agent.registerTool({

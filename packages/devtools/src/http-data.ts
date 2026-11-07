@@ -484,3 +484,179 @@ export function byteText(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Number((bytes / 1024).toFixed(1))} KB`;
   return `${Number((bytes / 1024 / 1024).toFixed(1))} MB`;
 }
+
+/** The fields of a recorded call the HTTP lint reads. */
+export interface LintCall extends CallLike {
+  status: number;
+  durationMs: number;
+  at: number;
+  cacheHit: boolean;
+  mocked?: boolean;
+  cancelled?: boolean;
+  pageUrl?: string;
+}
+
+export type HttpLintKind = 'duplicate' | 'waterfall' | 'refetch';
+
+export interface HttpLintFinding {
+  kind: HttpLintKind;
+  /** One line for people and agents. */
+  message: string;
+  /** What to try. */
+  hint: string;
+  /** The calls involved, in start order. */
+  callIds: string[];
+  /** The time the issue costs, when it can be told: repeated time, or the time a parallel start could save. */
+  wastedMs?: number;
+}
+
+export interface HttpLintOptions {
+  /** The SSR calls of the render that served the page, for the refetch check. */
+  serverCalls?: readonly LintCall[];
+  /** Repeats of one request closer than this count as duplicates. Default 2000 ms. */
+  duplicateWindowMs?: number;
+  /** A call that starts within this long after the previous one ended continues a chain. Default 50 ms. */
+  chainGapMs?: number;
+  /** Chains this long or longer are reported. Default 3. */
+  minChain?: number;
+}
+
+export const HTTP_LINT_DEFAULTS = { duplicateWindowMs: 2000, chainGapMs: 50, minChain: 3 } as const;
+
+function pathAndQuery(url: string): string {
+  try {
+    const parsed = new URL(url, 'http://x');
+    return parsed.pathname + parsed.search;
+  } catch {
+    return url;
+  }
+}
+
+/** Calls that went to the network: no transfer cache hit, no mock, not cancelled. */
+function networkCalls(calls: readonly LintCall[]): LintCall[] {
+  return calls
+    .filter((c) => c.side === 'client' && !c.cacheHit && !c.mocked && !c.cancelled)
+    .sort((a, b) => a.at - b.at);
+}
+
+function label(call: LintCall): string {
+  return `${call.method} ${pathAndQuery(call.url)}`;
+}
+
+function duplicates(calls: readonly LintCall[], windowMs: number): HttpLintFinding[] {
+  const groups = new Map<string, LintCall[]>();
+  for (const call of calls) {
+    if (call.method.toUpperCase() !== 'GET') continue;
+    const key = `${call.pageUrl ?? ''} ${call.method.toUpperCase()} ${call.url}`;
+    groups.set(key, [...(groups.get(key) ?? []), call]);
+  }
+  const findings: HttpLintFinding[] = [];
+  for (const group of groups.values()) {
+    let run: LintCall[] = [];
+    const flush = () => {
+      if (run.length > 1) {
+        const span = run[run.length - 1].at - run[0].at;
+        findings.push({
+          kind: 'duplicate',
+          message: `${label(run[0])} ran ${run.length} times within ${span} ms.`,
+          hint: 'Share one request (a service with shareReplay, one resource, or a signal store) instead of fetching it from each place that needs it.',
+          callIds: run.map((c) => c.id),
+          wastedMs: run.slice(1).reduce((sum, c) => sum + Math.max(c.durationMs, 0), 0),
+        });
+      }
+    };
+    for (const call of group) {
+      if (run.length && call.at - run[run.length - 1].at > windowMs) {
+        flush();
+        run = [];
+      }
+      run.push(call);
+    }
+    flush();
+  }
+  return findings;
+}
+
+function waterfalls(
+  calls: readonly LintCall[],
+  gapMs: number,
+  minChain: number,
+): HttpLintFinding[] {
+  const chains: LintCall[][] = [];
+  for (const call of calls) {
+    const chain = chains.find((c) => {
+      const last = c[c.length - 1];
+      const end = last.at + Math.max(last.durationMs, 0);
+      return (
+        (last.pageUrl ?? '') === (call.pageUrl ?? '') && call.at >= end && call.at - end <= gapMs
+      );
+    });
+    if (chain) chain.push(call);
+    else chains.push([call]);
+  }
+  return chains
+    .filter((chain) => chain.length >= minChain)
+    .map((chain) => {
+      const first = chain[0];
+      const last = chain[chain.length - 1];
+      const span = last.at + Math.max(last.durationMs, 0) - first.at;
+      const longest = Math.max(...chain.map((c) => Math.max(c.durationMs, 0)));
+      return {
+        kind: 'waterfall' as const,
+        message: `${chain.length} calls ran one after another, ${span} ms in all: ${chain.map(label).join(' → ')}.`,
+        hint: 'If a call does not need the response before it, start them together (forkJoin, Promise.all, or separate resources). Run in parallel they would take about as long as the slowest one.',
+        callIds: chain.map((c) => c.id),
+        wastedMs: Math.max(0, span - longest),
+      };
+    });
+}
+
+function refetches(
+  calls: readonly LintCall[],
+  serverCalls: readonly LintCall[],
+): HttpLintFinding[] {
+  const server = new Map<string, LintCall>();
+  for (const call of serverCalls) {
+    if (call.side !== 'server' || call.status === 0 || call.status >= 400) continue;
+    server.set(`${call.method.toUpperCase()} ${pathAndQuery(call.url)}`, call);
+  }
+  const seen = new Set<string>();
+  const findings: HttpLintFinding[] = [];
+  for (const call of calls) {
+    const key = `${call.method.toUpperCase()} ${pathAndQuery(call.url)}`;
+    const match = server.get(key);
+    if (!match || seen.has(key)) continue;
+    seen.add(key);
+    findings.push({
+      kind: 'refetch',
+      message: `${label(call)} ran on the server and again in the browser.`,
+      hint: 'The transfer cache did not answer it. Check that the browser request matches the server one (URL, params, headers) and that Angular may cache it; explain-ssr-request says why it was not stored.',
+      callIds: [match.id, call.id],
+      wastedMs: Math.max(call.durationMs, 0),
+    });
+  }
+  return findings;
+}
+
+/**
+ * Checks one page's recorded client calls for requests that cost time:
+ * the same GET fired again within a short window, calls that ran one
+ * after another and could start together, and server calls the browser
+ * made again because the transfer cache did not answer them. Transfer
+ * cache hits, mocks and cancelled calls are left out.
+ */
+export function lintHttp(
+  calls: readonly LintCall[],
+  options: HttpLintOptions = {},
+): HttpLintFinding[] {
+  const network = networkCalls(calls);
+  return [
+    ...duplicates(network, options.duplicateWindowMs ?? HTTP_LINT_DEFAULTS.duplicateWindowMs),
+    ...waterfalls(
+      network,
+      options.chainGapMs ?? HTTP_LINT_DEFAULTS.chainGapMs,
+      options.minChain ?? HTTP_LINT_DEFAULTS.minChain,
+    ),
+    ...(options.serverCalls ? refetches(network, options.serverCalls) : []),
+  ];
+}

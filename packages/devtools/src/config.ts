@@ -1186,6 +1186,7 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'list-ssr-requests': { kind: 'tool', inspectors: ['http'], page: true },
   'explain-ssr-request': { kind: 'tool', inspectors: ['http'], page: true },
   'list-http-calls': { kind: 'tool', inspectors: ['http'], page: true },
+  'lint-http': { kind: 'tool', inspectors: ['http'], page: true },
   'list-http-rules': { kind: 'tool', inspectors: ['http'], page: true },
   'set-http-rule': {
     kind: 'tool',

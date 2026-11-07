@@ -33,6 +33,7 @@ import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
 import { CallCopy } from './network/call-copy';
 import { HarExport } from './network/har-export';
+import { HttpLint } from './network/http-lint';
 import { PayloadInsights } from './network/payload-insights';
 import { RuleMatchCount } from './network/rule-match-count';
 import { RulePresets } from './network/rule-presets';
@@ -322,6 +323,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
     HarExport,
     JsonPipe,
     HttpHeadersView,
+    HttpLint,
     LimitNote,
     NetworkWaterfall,
     PayloadInsights,
@@ -847,6 +849,15 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             />
           </div>
         }
+      </section>
+
+      <section class="panel wide" aria-labelledby="lint-heading">
+        <h2 id="lint-heading">HTTP lint</h2>
+        <app-http-lint
+          [calls]="selected()?.calls ?? []"
+          [serverCalls]="renderServerCalls()"
+          (open)="openCall($event)"
+        />
       </section>
 
       <section class="panel" aria-labelledby="rules-heading">
@@ -2353,6 +2364,12 @@ export class NetworkInspector {
     const initialUrl = this.selected()?.initialUrl;
     if (!initialUrl) return this.serverCalls();
     return this.serverCalls().filter((c) => !c.pageUrl || c.pageUrl === initialUrl);
+  });
+
+  /** The server calls of the SSR request that served the selected page, for the HTTP lint. */
+  readonly renderServerCalls = computed(() => {
+    const id = this.pageRequestId();
+    return id ? this.serverCalls().filter((c) => c.requestId === id) : [];
   });
 
   readonly timeline = computed(() =>
