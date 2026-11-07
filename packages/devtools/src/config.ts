@@ -84,7 +84,12 @@ export const CACHE_SKIP_TEXT = {
 
 export type CacheSkip = keyof typeof CACHE_SKIP_TEXT;
 
+/**
+ * The statuses a fault rule can answer with. `0` fails the request the way a
+ * dropped connection does: an `HttpErrorResponse` with status 0.
+ */
 export const HTTP_RULE_STATUSES: readonly (readonly [status: number, reason: string])[] = [
+  [0, 'Network error (offline)'],
   [200, 'OK'],
   [201, 'Created'],
   [202, 'Accepted'],
@@ -153,6 +158,17 @@ export const HTTP_RULE_STATUSES: readonly (readonly [status: number, reason: str
 export function isHttpRuleStatus(status: unknown): status is number {
   return HTTP_RULE_STATUSES.some(([code]) => code === status);
 }
+
+/** A rule status that fails the request: a network error (0) or 400 and up. */
+export function isFailingRuleStatus(status: number): boolean {
+  return status === 0 || status >= 400;
+}
+
+/** The share of matching requests a fault rule with `chance` applies to, in percent. */
+export const HTTP_RULE_CHANCE: { readonly min: number; readonly max: number } = {
+  min: 1,
+  max: 99,
+};
 
 /**
  * Options shared by `initPangularHub()`, the Vite plugin and
@@ -1172,6 +1188,7 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'list-ssr-requests': { kind: 'tool', inspectors: ['http'], page: true },
   'explain-ssr-request': { kind: 'tool', inspectors: ['http'], page: true },
   'list-http-calls': { kind: 'tool', inspectors: ['http'], page: true },
+  'lint-http': { kind: 'tool', inspectors: ['http'], page: true },
   'list-http-rules': { kind: 'tool', inspectors: ['http'], page: true },
   'set-http-rule': {
     kind: 'tool',
