@@ -51,12 +51,26 @@ export interface SignalGraphNode {
    * match (see `signal-locator.ts`).
    */
   locator?: SignalWriteLocator;
+  /**
+   * On an `effect` node: how many times it ran, and the total and last run
+   * time in ms. Only where Angular's profiler reports effect runs
+   * (`effect-runs.ts`); no Angular up to 22.1 does.
+   */
+  runs?: number;
+  runMs?: number;
+  lastRunMs?: number;
 }
 
-/** Where a writable signal lives: the component instance id and its property. */
+/**
+ * Where a writable signal lives: the component instance id and its property,
+ * or, with `owner: 'service'`, the environment injector id and the property
+ * of the service it created (`service` names its class).
+ */
 export interface SignalWriteLocator {
   id: string;
   key: string;
+  owner?: 'service';
+  service?: string;
 }
 
 export interface SignalGraphEdge {
@@ -81,6 +95,16 @@ export interface SignalChange {
 export interface SignalWatchReport {
   ids: string[];
   stacks: boolean;
+}
+
+export interface SignalGraphElement {
+  /** The host's id in the component tree. */
+  id: string;
+  tag: string;
+  /** The directive classes on the host. */
+  directives: string[];
+  /** The element injector id from the injector tree, when the graph was asked for by it. */
+  injectorId?: string;
 }
 
 export interface SignalGraphComponent {
@@ -125,6 +149,12 @@ export interface SignalGraph {
   component?: SignalGraphComponent;
   /** Set instead of `component` when the graph belongs to an environment injector. */
   injector?: SignalGraphInjector;
+  /**
+   * The element injector the graph was read from: set for a host with
+   * directives but no component (then without `component`), and for a graph
+   * asked for by an element injector id from the injector tree (`injectorId`).
+   */
+  element?: SignalGraphElement;
   /** Environment injectors (root and route) the page can report a graph for. */
   environments?: SignalGraphInjector[];
   resources?: SignalResource[];
@@ -399,7 +429,21 @@ export interface InjectorTreeReport {
   roots: InjectorTreeNode[];
   environment: InjectorTreeNode[];
   truncated?: boolean;
+  /**
+   * Set by the server with `truncated`: the caps that cut the tree, so the
+   * panel and agents name the real numbers.
+   */
+  limits?: InjectorTreeLimits;
   zone?: ZoneMode;
+}
+
+export interface InjectorTreeLimits {
+  /** Most element injectors a page reports. */
+  elements: number;
+  /** Most injectors in all, element and environment. */
+  injectors: number;
+  /** Deepest an injector can sit before it is left out. */
+  depth: number;
 }
 
 export interface InjectorPage extends InjectorTreeReport {

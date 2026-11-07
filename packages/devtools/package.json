@@ -50,7 +50,8 @@
     "./ssr": "./src/ssr.ts",
     "./package.json": "./package.json",
     "./vite": "./src/entries/vite.ts",
-    "./internal/config": "./src/config.ts"
+    "./internal/config": "./src/config.ts",
+    "./internal/types": "./src/panel-types.ts"
   },
   "publishConfig": {
     "main": "./dist/devframe.mjs",

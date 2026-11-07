@@ -605,6 +605,35 @@ function offPathRouteInjectors<H extends object>(
   );
 }
 
+/**
+ * The injector object behind an id the injector tree or the signal graph
+ * gave out: an environment injector itself, or an element injector's host
+ * element. Undefined once it is gone.
+ */
+export function injectorKeyById(id: string): { key: object; element: boolean } | undefined {
+  const key = byId.get(id)?.deref();
+  return key ? { key, element: elementHosts.has(key) } : undefined;
+}
+
+/** Most services {@link createdServices} returns. */
+const MAX_CREATED_SERVICES = 200;
+
+/**
+ * The service instances an environment injector already created, read from
+ * its records without creating anything: class and factory records whose
+ * value is an object.
+ */
+export function createdServices(injector: unknown): object[] {
+  const out: object[] = [];
+  for (const [, record] of ownRecords(injector)) {
+    if (out.length >= MAX_CREATED_SERVICES) break;
+    if (record.multi || !isCreated(record)) continue;
+    const value = record.value;
+    if (value && typeof value === 'object' && !out.includes(value)) out.push(value);
+  }
+  return out;
+}
+
 export function collectInjectorTree<H extends object = Element>(
   ng: DebugNg<H> | undefined,
   tree: HostTree<H> = pageTree<H>(),

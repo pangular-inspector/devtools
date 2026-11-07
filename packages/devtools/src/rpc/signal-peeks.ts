@@ -72,8 +72,9 @@ interface ComponentHit {
 /**
  * What inspect-signals asks the page for when no pushed graph matches: the
  * CSS `selector` as given, an environment injector for `root`, a route path
- * or an injector id, or the first component instance `hits` found for a tag,
- * class name or instance id. `pageId` is the page that instance is on. Null
+ * or an injector id (an element injector id reads that element's graph), or
+ * the first component instance `hits` found for a tag, class name or
+ * instance id, else the first directive host. `pageId` is the page that instance is on. Null
  * when nothing can be asked: the component tree has no such component.
  */
 export function signalPeekFor(
@@ -83,7 +84,8 @@ export function signalPeekFor(
   if (args.selector !== undefined) return { target: { selector: args.selector } };
   const wanted = args.component ?? '';
   if (isEnvironmentRequest(wanted)) return { target: { env: wanted } };
-  const hit = hits.find((entry) => entry.node.kind !== 'directive');
+  // A component first; a host with directives but no component has a graph too.
+  const hit = hits.find((entry) => entry.node.kind !== 'directive') ?? hits[0];
   return hit ? { target: { id: hit.node.id }, pageId: hit.pageId } : null;
 }
 

@@ -34,7 +34,7 @@ import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { TOKEN_ID_ARGUMENT } from './rpc/token-match.ts';
 import { registerInjectionExplain } from './rpc/injection-explain.ts';
-import { sanitizeInjectorTree } from './rpc/injector-report.ts';
+import { INJECTOR_TREE_LIMITS, sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
@@ -2538,7 +2538,9 @@ const pangular = defineDevframe({
           pageId,
           roots: tree.roots,
           environment: tree.environment,
-          ...(report?.truncated === true || tree.truncated ? { truncated: true } : {}),
+          ...(report?.truncated === true || tree.truncated
+            ? { truncated: true, limits: INJECTOR_TREE_LIMITS }
+            : {}),
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
         };
@@ -3543,7 +3545,14 @@ const pangular = defineDevframe({
         }
         const matches = (g: PageGraph) =>
           !bySelector &&
-          ([g.componentSelector, g.component?.name, g.component?.id].includes(wanted) ||
+          ([
+            g.componentSelector,
+            g.component?.name,
+            g.component?.id,
+            g.element?.id,
+            g.element?.injectorId,
+          ].includes(wanted) ||
+            (!!g.element && g.element.directives.includes(wanted)) ||
             (!!g.injector && injectorMatches(g.injector, wanted)));
         const latestMatch = () =>
           byRecency(

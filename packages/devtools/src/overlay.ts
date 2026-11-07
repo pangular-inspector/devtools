@@ -28,6 +28,7 @@ import { uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
 import { attachTanstackQuery } from './query-collector.ts';
 import { collectInjectorTree } from './injector-tree.ts';
 import { registerInjectorRefresh } from './injector-refresh.ts';
+import { trackEffectRuns } from './effect-runs.ts';
 import { registerProviderValues } from './provider-values.ts';
 import {
   clearNavigations,
@@ -433,6 +434,10 @@ async function startOverlay(
   if (!own(restoreSignalHook ?? (() => {}))) return;
   const writeHookMissing = on.signals && !restoreSignalHook;
 
+  // Effect run counts, where the page's Angular profiler reports effect runs.
+  const effectRuns = on.signals ? trackEffectRuns(getNg) : null;
+  if (effectRuns) own(effectRuns.stop);
+
   let signalTarget: SignalTarget = null;
   let lastSignalKey = '';
   let signalSentAt = 0;
@@ -442,6 +447,7 @@ async function startOverlay(
   async function pushSignalGraph(force = false) {
     const graph = signalWatch.attach(collectSignalGraph(getNg(), signalTarget));
     if (!graph) return;
+    effectRuns?.attach(graph.nodes);
     const key = graphKey(graph);
     if (!force && key === lastSignalKey) {
       if (!keepaliveDue(signalSentAt, tickMs())) return;
