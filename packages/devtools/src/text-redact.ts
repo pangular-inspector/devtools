@@ -168,8 +168,11 @@ type PairReplacer = (
  */
 /** A pair value that is one key name and its `:` or `=`, read again as the next pair. */
 const NEXT_KEY_VALUE = /^[\w$%.[\]-]+[:=]$/;
-/** A pair value that is a chain of key names, each with its `:` (`context:password:`). */
-const KEY_CHAIN_VALUE = /^(?:[\w$%.[\]-]+:)+$/;
+/**
+ * A pair value that is a chain of key names (`context:password:`), the last one
+ * possibly ending in `=` (`context:password=`).
+ */
+const KEY_CHAIN_VALUE = /^(?:[\w$%.[\]-]+:)+[\w$%.[\]-]*[:=]$/;
 
 function replacePairs(text: string, pair: PairReplacer): string {
   const re = new RegExp(TEXT_PAIR.source, TEXT_PAIR.flags);
@@ -195,7 +198,12 @@ function replacePairs(text: string, pair: PairReplacer): string {
     // value counts only after `: ` with a space, so `xmlns:auth="urn:a"` stays one name.
     // For a chain such as `context:password:` only its last key is read again, so a chain
     // like `a:a:a:` is skipped in one step and the scan stays linear.
-    const chain = !NEXT_KEY_VALUE.test(value) && KEY_CHAIN_VALUE.test(value);
+    // A chain ending in `=` counts only when a space follows, as in `context:password= "x"`,
+    // so `xmlns:auth="urn:a"` stays one attribute.
+    const chain =
+      !NEXT_KEY_VALUE.test(value) &&
+      KEY_CHAIN_VALUE.test(value) &&
+      (value.endsWith(':') || /\s/.test(text.charAt(at + match.length)));
     const nextKey = chain || (NEXT_KEY_VALUE.test(value) && (value.endsWith(':') || /\s/.test(eq)));
     if (replaced === match && value && !/^["']/.test(value) && nextKey) {
       const lastKey = chain ? value.lastIndexOf(':', value.length - 2) + 1 : 0;
