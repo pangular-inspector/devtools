@@ -80,6 +80,8 @@ interface AnalogCall {
   location?: string;
   seeded?: boolean;
   preview?: string;
+  /** The tab the call came from, when the dev server could tell. */
+  pageId?: string;
 }
 
 interface AnalogPage {
@@ -356,7 +358,7 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
         </div>
         <div class="stat">
           <span class="label">Server calls</span>
-          <span class="value">{{ allCalls().length }}</span>
+          <span class="value">{{ tabCalls().length }}</span>
         </div>
         <div class="stat" [attr.data-tone]="lintTone() || 'good'">
           <span class="label">Issues</span>
@@ -626,8 +628,19 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 />
                 Failed only
               </label>
+              @if (scopePageId()) {
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    data-testid="analog-all-tabs"
+                    [checked]="allTabs()"
+                    (change)="allTabs.set($any($event.target).checked)"
+                  />
+                  All tabs (including untagged)
+                </label>
+              }
               <span class="total" aria-live="polite"
-                >{{ matchingCalls().length }} of {{ allCalls().length }}</span
+                >{{ matchingCalls().length }} of {{ tabCalls().length }}</span
               >
             </div>
             @if (shownCount() < matchingCalls().length || serverFull()) {
@@ -720,14 +733,14 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                   </tbody>
                 </table>
               </div>
-            } @else if (allCalls().length && callFiltered()) {
+            } @else if (tabCalls().length && callFiltered()) {
               <div class="empty-box no-match" role="status">
                 <p class="empty-lead">No calls match.</p>
                 <p class="muted">
                   @if (callQuery().trim()) {
                     Nothing matches “{{ callQuery().trim() }}” with these filters.
                   } @else {
-                    None of the {{ allCalls().length }} calls fit these filters.
+                    None of the {{ tabCalls().length }} calls fit these filters.
                   }
                 </p>
                 <div class="empty-actions">
@@ -739,8 +752,10 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
             } @else {
               <div class="empty-box">
                 <p class="empty-lead">
-                  @if (allCalls().length) {
+                  @if (tabCalls().length) {
                     No calls of this kind yet.
+                  } @else if (allCalls().length) {
+                    No calls from this tab yet.
                   } @else {
                     No calls yet.
                   }
@@ -748,6 +763,10 @@ function walk(routes: AnalogRoute[], depth = 0, out: { route: AnalogRoute; depth
                 <p class="muted">
                   Navigate in the app to see page renders, load() fetches, form actions, server
                   functions and API calls.
+                  @if (!tabCalls().length && allCalls().length) {
+                    Tick “All tabs (including untagged)” to see the
+                    {{ allCalls().length }} calls from other tabs or tied to no tab.
+                  }
                 </p>
               </div>
             }
@@ -2212,7 +2231,18 @@ export class AnalogInspector {
     }
     return open;
   });
+  /** Every call the dev server keeps, from every tab. */
   readonly allCalls = computed(() => this.state().calls ?? []);
+  /** The tab the Server view shows by default: the panel's page. */
+  readonly scopePageId = computed(() => this.page()?.pageId);
+  /** Shows the calls of every tab, and those the dev server tied to no tab. */
+  readonly allTabs = signal(false);
+  /** The calls of the panel's tab, or every call with "All tabs" on or no page reporting. */
+  readonly tabCalls = computed(() => {
+    const pageId = this.scopePageId();
+    const calls = this.allCalls();
+    return this.allTabs() || !pageId ? calls : calls.filter((c) => c.pageId === pageId);
+  });
   readonly maxServerCalls = MAX_SERVER_CALLS;
   readonly callQuery = signal('');
   readonly failedOnly = signal(false);
@@ -2224,7 +2254,7 @@ export class AnalogInspector {
     const kind = this.kind();
     const query = this.callQuery().trim().toLowerCase();
     const failedOnly = this.failedOnly();
-    return this.allCalls().filter(
+    return this.tabCalls().filter(
       (c) =>
         (kind === 'all' || c.kind === kind) &&
         (!failedOnly || this.isFailed(c)) &&
@@ -2249,13 +2279,27 @@ export class AnalogInspector {
   });
   readonly serverFns = computed(() => this.project()?.serverFns ?? []);
   private readonly fnById = computed(() => new Map(this.serverFns().map((fn) => [fn.id, fn])));
+  /** The routes and server functions the shown calls touch, so a warning about another tab stays hidden. */
+  private readonly shownRoutes = computed(
+    () => new Set(this.tabCalls().map((c) => `${c.kind} ${c.route ?? ''}`)),
+  );
   readonly refetchedFns = computed(() =>
     Array.from(
-      new Set((this.state().refetches ?? []).map((r) => this.fnById().get(r.id)?.name ?? r.id)),
+      new Set(
+        (this.state().refetches ?? [])
+          .filter((r) => this.shownRoutes().has(`fn ${r.id}`))
+          .map((r) => this.fnById().get(r.id)?.name ?? r.id),
+      ),
     ),
   );
   readonly duplicates = computed(() =>
-    Array.from(new Set((this.state().duplicates ?? []).map((d) => d.route))),
+    Array.from(
+      new Set(
+        (this.state().duplicates ?? [])
+          .filter((d) => this.shownRoutes().has(`load ${d.route}`))
+          .map((d) => d.route),
+      ),
+    ),
   );
   readonly modeCounts = computed(() =>
     (['ssr', 'ssg', 'cached', 'client', 'redirect'] as const)
@@ -2310,7 +2354,7 @@ export class AnalogInspector {
     const { errors, warnings } = this.lintCount();
     return [
       { id: 'routes' as View, label: 'Routes', count: this.pageCount(), tone: '' },
-      { id: 'server' as View, label: 'Server', count: this.allCalls().length, tone: '' },
+      { id: 'server' as View, label: 'Server', count: this.tabCalls().length, tone: '' },
       { id: 'render' as View, label: 'Render', count: this.renderRows().length, tone: '' },
       {
         id: 'content' as View,
@@ -2432,8 +2476,8 @@ export class AnalogInspector {
 
   kindCount(kind: Kind): number {
     return kind === 'all'
-      ? this.allCalls().length
-      : this.allCalls().filter((c) => c.kind === kind).length;
+      ? this.tabCalls().length
+      : this.tabCalls().filter((c) => c.kind === kind).length;
   }
 
   modeLabel(mode: RenderRow['mode']): string {
@@ -2450,7 +2494,7 @@ export class AnalogInspector {
   }
 
   fnCalls(id: string): number {
-    return this.allCalls().filter((c) => c.kind === 'fn' && c.route === id).length;
+    return this.tabCalls().filter((c) => c.kind === 'fn' && c.route === id).length;
   }
 
   outcomeLabel(outcome: ActionOutcome): string {

@@ -46,7 +46,8 @@ import {
   noteSsrFetch,
   ssrRegistry,
 } from './ssr-registry.ts';
-import { currentSsrRequest } from './ssr-context.ts';
+import { currentAnalogRender, currentSsrRequest } from './ssr-context.ts';
+import { analogTagged } from './http-analog-tag.ts';
 import { matchingOverrides } from './ssr-overrides.ts';
 import { watchSsrNavigations } from './ssr-navigation.ts';
 import { tapConsole } from './console-tap.ts';
@@ -224,7 +225,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
             }),
           );
   } else {
-    source = next(req);
+    source = next(analogTagged(req, side, () => currentAnalogRender(inject(Injector))));
   }
   const cacheable = side === 'client' && !mocked && transferWindowOpen();
   const claimable = cacheable && transferCacheEligible(req);

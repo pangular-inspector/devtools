@@ -55,6 +55,8 @@ export interface HttpCall {
 }
 
 export interface HttpRegistry {
+  /** Browser only: the page id the Analog collector reports under, sent on same-origin requests. */
+  pageId?: string;
   rules?: HttpRule[];
   calls?: HttpCall[];
   warnings?: string[];

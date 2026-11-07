@@ -148,3 +148,55 @@ describe('Analog open pages', () => {
     expect(inspector.isOpen(route('/src/app/pages/about.page.ts'))).toBe(false);
   });
 });
+
+describe('Analog server calls of the tab', () => {
+  afterEach(() => {
+    scopeToPage(null);
+    document.body.innerHTML = '';
+  });
+
+  const call = (id: number, url: string, pageId?: string) => ({
+    id,
+    at: id,
+    kind: 'load',
+    method: 'GET',
+    url,
+    status: 200,
+    ms: 1,
+    from: 'browser',
+    ...(pageId ? { pageId } : {}),
+  });
+  const state = {
+    pages: [page('A', '/a'), page('B', '/b')],
+    calls: [call(1, '/from-a', 'A'), call(2, '/from-b', 'B'), call(3, '/untagged')],
+    duplicates: [{ route: '/only-b', ssrAt: 1, browserAt: 2 }],
+  };
+
+  it('shows only the panel tab\'s calls until "All tabs" is ticked', async () => {
+    scopeToPage('A');
+    const fixture = await render(client({ state }));
+    const inspector = fixture.componentInstance;
+    inspector.view.set('server');
+    await settle(fixture);
+    const root: HTMLElement = fixture.nativeElement;
+    const urls = () => Array.from(root.querySelectorAll('td.request .url'), (e) => e.textContent);
+    expect(urls()).toEqual(['/from-a']);
+    // A warning about a route this tab never called stays hidden.
+    expect(inspector.duplicates()).toEqual([]);
+
+    const toggle = root.querySelector<HTMLInputElement>('[data-testid="analog-all-tabs"]')!;
+    expect(toggle.parentElement?.textContent).toContain('All tabs (including untagged)');
+    toggle.click();
+    await settle(fixture);
+    expect(urls()).toEqual(['/untagged', '/from-b', '/from-a']);
+  });
+
+  it('shows every call when no page reports', async () => {
+    const fixture = await render(client({ state: { calls: state.calls } }));
+    fixture.componentInstance.view.set('server');
+    await settle(fixture);
+    const root: HTMLElement = fixture.nativeElement;
+    expect(root.querySelectorAll('td.request .url')).toHaveLength(3);
+    expect(root.querySelector('[data-testid="analog-all-tabs"]')).toBeNull();
+  });
+});

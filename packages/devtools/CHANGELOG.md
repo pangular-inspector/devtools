@@ -202,6 +202,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `@pangular-inspector/devtools/devframe` (and the package root) load Devframe from `node_modules` when imported, as the hub entry does, so an Angular 20 server bundle that imports them no longer fails with `Identifier 'createRequire' has already been declared` (#427).
 - Picking works inside shadow roots and `ShadowDom` components.
 - Analog server calls link only to the request they ran under (#405).
+- Analog server calls no longer mix across tabs. Each call carries the `pageId` of its tab when the dev server can tell (an `x-pangular-page` header that `withPangular()` sends on same-origin requests in dev builds, the page render's id from `Server-Timing`, or a `Referer` only one open tab matches), and leaves with that tab. The **Server** tab shows its own tab's calls, with an **All tabs (including untagged)** switch, and `analog-list-server-calls` takes `page` (#369).
+- The Analog source scan is kept until a file changes (the Vite watcher, or `fs.watch` outside Vite) instead of running again every 2 seconds, and an Analog report no longer waits for it: the rescan runs after the push and the open pages are checked again (#369).
 - The Analog page chain includes pages in named outlets and sibling child routes, not only the first child. The primary chain comes first, and each other page names its outlet in the **Routes** tab and in `analog-inspect-page` (#369).
 - Signal Forms checkboxes, radios and selects are written in user mode (#360).
 - Live counts in **Timeline**, **Errors** and **Audit** speak only after a filter change, so they no longer flood screen readers.

@@ -13,6 +13,8 @@ import { activeSsrRequest, ssrRegistry } from './ssr-registry.ts';
 /** What a tracer knows about the request being handled. No `requestId` means it was not traced. */
 export interface SsrRequestContext {
   readonly requestId?: string;
+  /** The Analog page render the code runs for, set by the Vite plugin's call log. */
+  readonly analogRenderId?: string;
 }
 
 /** The part of Node's `AsyncLocalStorage` used here. */
@@ -46,7 +48,17 @@ function storage(): SsrContextStorage | undefined {
 }
 
 function contextFor(requestId: string | undefined): SsrRequestContext {
+  // A tracer inside the Vite plugin's Analog call log keeps the render id it set.
+  const analogRenderId = storage()?.getStore()?.analogRenderId;
+  if (analogRenderId) return requestId ? { requestId, analogRenderId } : { analogRenderId };
   return requestId ? { requestId } : UNTRACED;
+}
+
+/** Runs `callback`, and everything it starts, as part of the Analog page render `renderId`. */
+export function runInAnalogRender<R>(renderId: string, callback: () => R): R {
+  const context = storage();
+  if (!context) return callback();
+  return context.run({ ...context.getStore(), analogRenderId: renderId }, callback);
 }
 
 /** Runs `callback`, and everything it starts, as part of the request `requestId` (none: untraced). */
@@ -77,10 +89,22 @@ const pinned = new WeakMap<object, SsrRequestContext>();
  * the request or it was not traced.
  */
 export function currentSsrRequest(app?: object): string | undefined {
+  return activeSsrRequest(pinnedContext(app)?.requestId);
+}
+
+function pinnedContext(app: object | undefined): SsrRequestContext | undefined {
   let context = app ? pinned.get(app) : undefined;
   if (!context) {
     context = ssrRegistry().context?.getStore();
     if (context && app) pinned.set(app, context);
   }
-  return activeSsrRequest(context?.requestId);
+  return context;
+}
+
+/**
+ * The Analog page render `app` runs for, pinned the same way as
+ * {@link currentSsrRequest}. The dev server checks the id before it trusts it.
+ */
+export function currentAnalogRender(app?: object): string | undefined {
+  return pinnedContext(app)?.analogRenderId;
 }

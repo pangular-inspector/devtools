@@ -58,10 +58,13 @@ Page renders (server rendered or client only), `load()` fetches, form actions, s
 
 | Control                                 | What it does                                                                                           |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Kind filter                             | Show one kind of call. Each choice counts every call of that kind.                                     |
+| Kind filter                             | Show one kind of call. Each choice counts the listed calls of that kind.                               |
 | **Find a URL, path or function** search | Keeps calls whose URL, route path, server function name or file contains the text. `Escape` clears it. |
 | **Failed only**                         | Keeps calls with a status of 400 or more, no status, or a form action that failed.                     |
+| **All tabs (including untagged)**       | Shows the calls of every tab, and calls the dev server could not tie to a tab. Off by default.         |
 | **Clear calls**                         | Empties the list on the dev server. The tab says **Calls cleared.** or **Could not clear the calls.**  |
+
+The list shows the calls of the tab the panel belongs to (with no page id, the tab that reported last). **All tabs (including untagged)** appears while a page reports. See [Which tab a call belongs to](#which-tab-a-call-belongs-to).
 
 The filters combine, and the count next to them reads like **12 of 80**. If nothing matches, click **Clear filters** to reset the search, **Failed only** and the kind.
 
@@ -113,6 +116,18 @@ Checks grouped by rule, each with a fix. The count on the tab adds up errors and
     The overlay reports the open page, the <code>load()</code> data it received, and its hydration state.
   </ngmd-card>
 </ngmd-card-grid>
+
+### Which tab a call belongs to
+
+The dev server ties each call to a tab from the best source it has:
+
+| Source                   | Calls it covers                                                                                                                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `x-pangular-page` header | Browser `HttpClient` calls, such as `load()` fetches on navigation and server functions. With `providePangularHttp()` or `withPangular()`, a dev build sends the tab's page id on requests to its own origin only.                         |
+| Render id                | Page renders, and the `load()` and server function requests a render makes over HTTP. The Vite plugin sends the render an id in `Server-Timing` (`pangular-analog`), and the page reports it. Needs a secure context, such as `localhost`. |
+| `Referer`                | Other requests, such as form actions sent with `fetch()`, when exactly one open tab shows that path.                                                                                                                                       |
+
+A call none of these covers stays untagged, and shows only with **All tabs (including untagged)** or in `analog-list-server-calls` without `page`. A tab's calls leave with the tab: when it closes or reloads, or 30 seconds after its last report or heartbeat.
 
 ### Supported layouts
 
@@ -190,7 +205,7 @@ If an option comes from a variable, a spread (`...`), a template string or a com
 | `pangular:analog-scan-routes`           | `filter`                                       | File routes in match order, with page, layout and server files.         |
 | `pangular:analog-scan-url`              | `url` (required)                               | Which files render a URL, or the closest candidates.                    |
 | `pangular:analog-inspect-page`          | `page`                                         | The open page: its files, `load()` data, rendering and hydration state. |
-| `pangular:analog-list-server-calls`     | `kind`, `route`, `limit`                       | Recent server calls, with server function names and action outcomes.    |
+| `pangular:analog-list-server-calls`     | `kind`, `route`, `limit`, `page`               | Recent server calls, with server function names and action outcomes.    |
 | `pangular:analog-scan-api-routes`       |                                                | Server routes with method, URL and file, plus middleware.               |
 | `pangular:analog-scan-server-functions` |                                                | Server functions with name, method, file, id and call counts.           |
 | `pangular:analog-run-api`               | `path` (required), `method`, `body`, `confirm` | Sends a real request to the dev server.                                 |
@@ -213,7 +228,7 @@ Response previews and `load()` data redact secret-looking keys, tokens, `Bearer`
 
 ### Call history size
 
-The server keeps the last 200 calls, and the **Server** tab renders the newest 150 that match its filters. The server cuts previews to 1000 characters, and page renders have no preview.
+The server keeps the last 200 calls of all tabs, and the **Server** tab renders the newest 150 that match its filters. The server cuts previews to 1000 characters, and page renders have no preview.
 
 ## FAQ
 
