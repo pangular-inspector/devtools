@@ -41,9 +41,44 @@ export interface CdPlatform {
   hostId: (host: unknown) => string | null;
 }
 
+const RECORDING_KEY = 'pangular:cd-recording:';
+
+/** The tab's session storage, or null where there is none or it is blocked. */
+function sessionStore(): Storage | null {
+  try {
+    return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a recording was on for `pageId` when this tab last unloaded. */
+export function recordingWasOn(pageId: string, store = sessionStore()): boolean {
+  try {
+    return store?.getItem(RECORDING_KEY + pageId) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Remembers for this tab whether a recording is on, so a reload, which keeps
+ * the `pageId`, starts recording again. A blocked store only loses that.
+ */
+export function rememberRecording(pageId: string, on: boolean, store = sessionStore()): void {
+  try {
+    if (on) store?.setItem(RECORDING_KEY + pageId, '1');
+    else store?.removeItem(RECORDING_KEY + pageId);
+  } catch {
+    // Storage full or blocked: the recording runs, it just won't resume after a reload.
+  }
+}
+
 /**
  * Records change detection cycles while the panel or an agent turns recording
- * on, and reports them. It does nothing until then.
+ * on, and reports them. It does nothing until then. In a browser, a recording
+ * that was on when the tab reloaded starts again (`sessionStorage` per
+ * `pageId`); the cycles before the reload are gone with the old page.
  */
 export function attachChangeDetection(
   my: RpcScope,
@@ -163,7 +198,11 @@ export function attachChangeDetection(
     jsonSerializable: true,
     handler: (message: { pageId?: unknown; on?: unknown; clear?: unknown } | null) => {
       if (typeof message?.pageId === 'string' && message.pageId !== pageId) return;
-      if (typeof message?.on === 'boolean') setRecording(message.on);
+      if (typeof message?.on === 'boolean') {
+        setRecording(message.on);
+        // Only the user's choice is remembered, so leaving the page on teardown keeps it.
+        if (!platform) rememberRecording(pageId, message.on);
+      }
       if (message?.clear === true) {
         recorder.clear();
         diagnosis.clear();
@@ -171,6 +210,9 @@ export function attachChangeDetection(
       void push(true).catch(() => {});
     },
   });
+
+  // Angular may not have started yet; `push` attaches once it has.
+  if (!platform && recordingWasOn(pageId)) setRecording(true);
 
   my.rpc.register({
     name: 'change-detection-options',

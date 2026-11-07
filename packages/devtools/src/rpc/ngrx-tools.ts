@@ -1,5 +1,6 @@
 import * as v from 'valibot';
 import type {
+  NgrxActionStat,
   NgrxClassicStoreInfo,
   NgrxLogEntry,
   NgrxPage,
@@ -67,6 +68,18 @@ const LogEntrySchema = v.looseObject({
   diff: v.array(v.looseObject({ path: v.string(), op: v.picklist(['add', 'remove', 'change']) })),
   restorable: v.boolean(),
 });
+
+const StatSchema = v.looseObject({
+  source: v.picklist(['signal-store', 'store', 'event']),
+  storeId: v.string(),
+  type: v.string(),
+  count: v.number(),
+  lastAt: v.number(),
+  burst: v.number(),
+});
+
+/** At most this many stats are kept per page, as the collector sends. */
+const MAX_STATS = 100;
 
 const ClassicSchema = v.looseObject({
   state: v.unknown(),
@@ -174,9 +187,21 @@ export function mergeNgrxReport(
     classic: v.is(ClassicSchema, report.classic) ? (report.classic as NgrxClassicStoreInfo) : null,
     log,
     dropped: Math.max(0, (log[0]?.seq ?? 1) - 1),
+    // The page sends its stats only when they changed; until then the last ones stay.
+    ...statsOf(report, known ? previous : undefined),
     reportedAt: now,
   });
   return log.at(-1)?.seq ?? 0;
+}
+
+function statsOf(
+  report: NgrxPageReport,
+  previous: NgrxPageRecord | undefined,
+): { stats?: NgrxActionStat[] } {
+  if (Array.isArray(report.stats)) {
+    return { stats: validItems<NgrxActionStat>(report.stats.slice(0, MAX_STATS), StatSchema) };
+  }
+  return previous?.stats ? { stats: previous.stats } : {};
 }
 
 export function expireNgrxPages(

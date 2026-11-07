@@ -90,7 +90,7 @@ describe('other stores in the store inspector', () => {
     await settle(fixture);
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.detail-head h3')?.textContent).toBe('NGXS');
-    expect(root.querySelector('pre.tree')?.textContent).toContain('booked');
+    expect(root.querySelector('app-state-tree .tree')?.textContent).toContain('booked');
     expect(text(fixture)).toContain('Action log');
     // No Store as global, Restore or Dispatch again for a store the panel only reads.
     expect(root.querySelector('app-store-global')).toBeNull();

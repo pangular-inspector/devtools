@@ -143,11 +143,18 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 #### Inspectors
 
 - **Components:** edit inputs, properties and writable signals; `@for` blocks; directive hosts; hydration status per component with an outline on the page; nested values on demand; console handles; expand all and collapse all.
-- **Change detection:** a per-cycle chart, a flame graph, hook timing, export and import of recordings, flash checks on the page, a Pangular track in the Chrome Performance panel, an Angular profiling toggle, and what triggered each check, with wasted checks, OnPush hints and components that need zone.js.
+- **Components:** **Copy as JSON** (the redacted values the panel shows) and **Copy host path** (a CSS selector for `document.querySelector`) in the detail header; an outline that fades over one second on a value that changed since the last refresh; **Show in Signals** for the component and for each signal property, also as a `#tab=signals&id=` deep link and through `open-in-panel`; and the `@defer` blocks of the selected component's template.
+- **Components:** pick a component with the keyboard: the arrow keys move the highlight through the components on the page and Enter picks, from the panel or the page. Directives show a **Likely** source file from the source scan, matched by class name.
+- **Defer blocks:** a block that hydrated before the devtools attached shows **hydrated before inspection** in the panel and in the `defer-blocks` tool. Each row opens its details: id, state and hydration times, root elements, triggers, its last state transitions, and a link to a hydration mismatch inside it, marked with a **mismatch** badge.
+- **Change detection:** a recording that keeps running when the tab reloads (until **Stop recording**), a **Most often checked** table next to **Slowest components** with class names that select an instance, a per-cycle chart, a flame graph, hook timing, export and import of recordings, flash checks on the page, a Pangular track in the Chrome Performance panel, an Angular profiling toggle, and what triggered each check, with wasted checks, OnPush hints and components that need zone.js.
 - **Leaks:** live subscriptions and effects per component, and components that stay alive after they are destroyed.
 - **Signals:** the live signal graph drawn, watched signals, and links from components to injectors.
 - **Injectors:** a page picker, a created provider's value, startup timing and the slowest providers.
 - **NgRx Store:** full state for every entry still in the log, session export and import, generated tests, and NGXS, Elf and MiniRx through their Redux DevTools integration.
+- **NgRx Store:** the state is a tree with search, **Copy path** and the paths of the newest change marked. Store DevTools gets **Pause recording**, **Jump to committed state**, **Commit**, **Reset…** and **Skip this action** (#368).
+- **NgRx Store:** an **Action frequency** table counts each action, method and write since load, with durations and the peak per second, and flags an effect that dispatches the same action 20 times within a second (#368).
+- **NgRx Store:** the opt-in `ngrx.trace` option records the redacted app frames each change log entry came from, shown as source links in the entry (#368).
+- **NgRx Store:** a signal store that uses `withDevtools()` is watched through `watchState` only, without wrapping its methods or signals (#368).
 - **TanStack Query:** a tab for queries and mutations, with invalidate and refetch.
 - **SSR & HTTP:** a network waterfall, search and filters on the timeline, response preview format, copy and mock, TransferState keys and edits in SSR overrides, and SSR tracing for fetch handlers such as Hono, h3 and Nitro.
 - **Errors:** a tab for `ErrorHandler` errors, uncaught errors, unhandled rejections and the console, with NG0xxx codes and explainers for NG0100, hydration mismatches and missing providers.
@@ -155,11 +162,25 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
+- **Forms:** a **Schema** view of the rules a Signal Form's schema sets on each field; edit a control's value, touched and dirty state in its row of the **Fields** view (behind `actions.forms`); a WebMCP tool's input schema, and **Try this tool** to run it on its form from the panel (`try-webmcp` in `run-form-action`); a form's history exported as a Playwright test from the **Timeline** view and from `export-form` (`format: "playwright"`); timeline origins worked out per form, so typing in one form no longer tags code changes in another form as user; the `missing-autocomplete` and `submit-disabled-while-invalid` accessibility rules in the forms lint; while a WebMCP call's submit runs, only its status and submit outcome is tagged agent, not values app code writes meanwhile.
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
 - **Pipes:** while recording, a pipe that returns an equal result 20 calls in a row is marked **churning**, in the panel and in `explain-pipe`. **Sort pipes** orders the list by calls or by time in `transform`, and **Called while recording** shows only the recorded pipes (#369).
 - **Components:** a **Pipes in template** block lists the pipes the selected component's template uses on the page, and opens one in the **Pipes** tab (#369).
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
+- **Injectors:** selecting an element injector reads it again on the page, and **Refresh** in the toolbar reads every injector again. Element injectors are still cached between updates, since reading what they inject is costly.
+- **Injectors:** the Environment view lists lazy route injectors the router already loaded but no rendered element uses, with an **inactive** chip. `inspect-providers` and the `injector-tree` resource mark them `inactive: true`.
+- **Injectors:** a collapsed **Hint** above the live tree lists providers your source declares that nothing on the page injected so far. It is a hint, not an error.
+- **Injectors:** source mode lists `provide*()` calls it can't resolve to tokens, such as your own provider functions, under a collapsed **Helpers (unresolved)** group instead of dropping them. `scan-providers` gives them `type: "helper"`.
+- **Injectors:** each **Injected here** row has a **Resolution** button that draws the lookup path for that token: asked, provides it, not asked, skipped, or the null injector.
+- **Injectors:** live provider rows say where the source scan declares the token, with links.
+- **Injectors:** a truncated tree carries the server's `limits`, and the notice names them.
+- **Signals:** a node's details link it to its declaration in the source scan, or list the candidates when the name matches several.
+- **Signals:** a history entry shows what changed from the entry before, path by path.
+- **Signals:** **Restore** works on writable signal fields (`signal()`, `linkedSignal()`, `model()`) of services in root and route graphs, not on computed ones.
+- **Signals:** hosts with directives but no component have a graph, in the **Graph of** picker and in `inspect-signals`, which also takes an element injector id such as `inj-12`.
+- **Signals:** effect run counts and times, where Angular's profiler reports effect runs. No Angular version up to 22.1 does, so the line stays hidden there.
+- **Signals:** the unnamed signal hint says that the compiler names signals from Angular 20.1.
 
 #### SSR & HTTP tools
 
@@ -174,7 +195,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 #### Agents and MCP
 
-- 103 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
+- 106 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `load-defer-block` (loads one `@defer` block as if its trigger fired, behind `actions.components`), `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, `ngrx-store-devtools`, `ngrx-explain-change` (#368), the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.
@@ -209,6 +230,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Pages push deltas instead of full snapshots, at most about once a second, and idle pages send only a small heartbeat.
 - NgRx store updates no longer slow down as the store grows (#432).
 - The NgRx collector serializes a signal store or the classic `Store` only when its state, computed values or method stats changed, and the overlay compares a report version instead of the serialized report, so an unchanged store costs no serialization on each check. A change made in place, without a new state object, can show late (#368).
+- The forms collector skips reading and serializing the forms after change detection when nothing changed since the last read (no form event, input, DOM change, WebMCP call or panel action, and the same Signal Form values, errors and root flags), and reads again at least every 5 seconds (#368).
 - Collectors schedule their work outside the Angular zone, so an app that writes a signal or logs during change detection settles again on zone.js.
 - Long lists and trees in the panel render only the visible rows.
 - The pipe source scan behind `scan-pipes`, `explain-pipe`, the pipe lint and the audit keeps each file's result until the file or its `templateUrl` changes, and skips the walk while the Vite watcher saw no change (#369).

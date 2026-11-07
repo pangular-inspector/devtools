@@ -61,11 +61,17 @@ describe('lists with repeated keys', () => {
     await settle(fixture);
     fixture.componentRef.setInput('page', cdPage([2, 7]));
     await settle(fixture);
-    const rows = Array.from(
-      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'),
-      (row) => Array.from(row.querySelectorAll('td'), (cell) => cell.textContent?.trim()).join('|'),
-    );
-    expect(rows).toEqual(['ItemComponent|1|7.00 ms|7.00 ms', 'ItemComponent|1|2.00 ms|2.00 ms']);
+    const rows = (table: number) =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement)
+          .querySelectorAll('.cd-grid table')
+          [table]!.querySelectorAll('tbody tr'),
+        (row) =>
+          Array.from(row.querySelectorAll('td'), (cell) => cell.textContent?.trim()).join('|'),
+      );
+    expect(rows(0)).toEqual(['ItemComponent|1|7.00 ms|7.00 ms', 'ItemComponent|1|2.00 ms|2.00 ms']);
+    // The "Most often checked" table lists the same two classes.
+    expect(rows(1)).toEqual(['ItemComponent|1|1|7.00 ms', 'ItemComponent|1|1|2.00 ms']);
     expect(logs(spies)).not.toContain('NG0955');
   });
 
@@ -85,5 +91,31 @@ describe('lists with repeated keys', () => {
     );
     expect(states).toEqual(['submitted', 'failed']);
     expect(logs(spies)).not.toContain('NG0955');
+  });
+});
+
+describe('change detection component tables', () => {
+  it('lists the most checked classes and selects one from its name', async () => {
+    const fixture = TestBed.createComponent(CdRecording);
+    const stat = (name: string, checks: number, ms: number) => ({
+      name,
+      checks,
+      ms,
+      maxMs: ms,
+      cycles: checks,
+    });
+    fixture.componentRef.setInput('page', {
+      ...cdPage([1, 1]),
+      components: [stat('Slow', 1, 9), stat('Busy', 12, 1)],
+    });
+    await settle(fixture);
+    const shown: string[] = [];
+    fixture.componentInstance.showComponent.subscribe((name) => shown.push(name));
+    const tables = (fixture.nativeElement as HTMLElement).querySelectorAll('.cd-grid table');
+    const first = (table: Element) => table.querySelector('tbody .name-link')!;
+    expect(first(tables[0]!).textContent?.trim()).toBe('Slow');
+    expect(first(tables[1]!).textContent?.trim()).toBe('Busy');
+    (first(tables[1]!) as HTMLButtonElement).click();
+    expect(shown).toEqual(['Busy']);
   });
 });

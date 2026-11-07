@@ -7,6 +7,11 @@ export interface DomFacts {
   disabled?: boolean;
   drift?: string | true;
   classes?: string[];
+  /**
+   * The `autocomplete` token the field seems to need (WCAG 1.3.5), from its input type or
+   * name, when it has no `autocomplete` attribute.
+   */
+  autocomplete?: string;
 }
 
 export interface SubmitDom {
@@ -132,6 +137,46 @@ function sameValue(dom: string | boolean, model: unknown): boolean {
   return true;
 }
 
+const INPUT_TYPES: Record<string, string> = { email: 'email', tel: 'tel' };
+
+/** Name tokens of personal data and the `autocomplete` value each one takes. */
+const PURPOSES: [RegExp, string][] = [
+  [/^e-?mail(address)?$/, 'email'],
+  [/^(phone|tel|telephone|mobile|phonenumber|mobilenumber)$/, 'tel'],
+  [/^(first-?name|given-?name|fname)$/, 'given-name'],
+  [/^(last-?name|family-?name|surname|lname)$/, 'family-name'],
+  [/^(full-?name|your-?name)$/, 'name'],
+  [/^(user-?name|login)$/, 'username'],
+  [/^(street|street-?address|address-?line-?1|address1)$/, 'address-line1'],
+  [/^(zip|zip-?code|postal-?code|post-?code)$/, 'postal-code'],
+  [/^(city|town)$/, 'address-level2'],
+  [/^country$/, 'country-name'],
+  [/^(birthday|birth-?date|dob)$/, 'bday'],
+  [/^(organization|organisation|company)$/, 'organization'],
+];
+
+const TEXT_TYPES = new Set(['', 'text', 'email', 'tel', 'search', 'url', 'date']);
+
+/** The `autocomplete` token a field without one seems to need, or undefined. */
+export function autocompleteHint(el: Element): string | undefined {
+  if (!(el instanceof HTMLInputElement) || el.hasAttribute('autocomplete')) return undefined;
+  const type = (el.getAttribute('type') ?? '').toLowerCase();
+  if (!TEXT_TYPES.has(type)) return undefined;
+  if (INPUT_TYPES[type]) return INPUT_TYPES[type];
+  const names = [el.getAttribute('name'), el.getAttribute('formcontrolname'), el.id].map((name) =>
+    (name ?? '')
+      .split(/[.[\]]/)
+      .pop()!
+      .replace(/_/g, '-')
+      .toLowerCase(),
+  );
+  for (const name of names) {
+    const purpose = PURPOSES.find(([pattern]) => pattern.test(name));
+    if (purpose) return purpose[1];
+  }
+  return undefined;
+}
+
 export function domFacts(
   el: Element,
   model: { value?: unknown; disabled?: boolean; secret?: boolean; hasErrors?: boolean },
@@ -164,6 +209,8 @@ export function domFacts(
   }
   const classes = Array.from(el.classList).filter((c) => STATUS_CLASS.test(c));
   if (classes.length) facts.classes = classes;
+  const autocomplete = autocompleteHint(el);
+  if (autocomplete) facts.autocomplete = autocomplete;
   return facts;
 }
 

@@ -55,13 +55,25 @@ export interface NgrxSignalStoreInfo {
   }[];
   references: string[];
   writable: boolean;
+  /**
+   * The store uses `withDevtools()` (`@angular-architects/ngrx-toolkit`), so the
+   * collector leaves it as it is: no wrapped methods or signals, only
+   * `watchState()` (or a compare on each collect when `watchState` is not
+   * registered). Method calls are then not counted or named in the log.
+   */
+  watchOnly?: true;
 }
 
 export interface NgrxClassicStoreInfo {
   state: unknown;
   devtools: boolean;
   scope: string;
+  /** Store DevTools shows a past state (time travel), not the latest. */
   paused?: boolean;
+  /** Store DevTools recording is paused (`pauseRecording`): new actions are not recorded. */
+  recordingPaused?: true;
+  /** Log entries whose actions Store DevTools skips (`toggleAction`), so the state is computed without them. */
+  skipped?: number[];
 }
 
 export interface NgrxDiffEntry {
@@ -111,7 +123,44 @@ export interface NgrxLogEntry {
    * Absent when `diff` is complete.
    */
   diffTruncated?: number;
+  /**
+   * With `ngrx.trace` on: the app frames of the call that made this entry
+   * (the dispatch, the method call or the `patchState`), as
+   * `name (file:line:column)` with origins and query strings removed and the
+   * redaction helpers applied. Absent when tracing is off or no app frame was found.
+   */
+  trace?: string[];
 }
+
+/** App frames kept per entry with `ngrx.trace` on. */
+export const NGRX_TRACE_FRAMES = 8;
+
+/**
+ * How often one action type, method or event ran since the page loaded, not
+ * only within the kept log. `burst` is the most entries seen within any
+ * {@link NGRX_BURST_WINDOW_MS}; `loop` flags a type an NgRx effect dispatched
+ * at least {@link NGRX_LOOP_BURST} times within that window.
+ */
+export interface NgrxActionStat {
+  source: NgrxLogEntry['source'];
+  storeId: string;
+  type: string;
+  count: number;
+  /** Entries with a `durationMs` (signal store method calls), and their average and longest. */
+  timed?: number;
+  avgMs?: number;
+  maxMs?: number;
+  /** Entries an NgRx effect dispatched (`origin: 'effect'`). */
+  effects?: number;
+  lastAt: number;
+  burst: number;
+  loop?: true;
+}
+
+export const NGRX_BURST_WINDOW_MS = 1000;
+export const NGRX_LOOP_BURST = 20;
+/** Most action stats a page keeps and reports. */
+export const NGRX_MAX_STATS = 100;
 
 /** The most changes counted past a full `diff`; `diffTruncated` stops there. */
 export const NGRX_DIFF_MORE_CAP = 1000;
@@ -152,6 +201,8 @@ export interface NgrxPageReport {
    * after it logged them (a write after an `await`).
    */
   argsRedacted?: number[];
+  /** Per-type counts since the page loaded; sent when they changed, kept by the server otherwise. */
+  stats?: NgrxActionStat[];
 }
 
 export interface NgrxPage extends Omit<
@@ -174,7 +225,54 @@ export type NgrxRequest =
   | { type: 'dispatch-again'; seq: number }
   // Read-only: the State and Diff of one entry, and a session export (`ngrx-history.ts`).
   | { type: 'entry'; seq: number }
-  | { type: 'export'; storeId?: string; from?: number; to?: number };
+  | { type: 'export'; storeId?: string; from?: number; to?: number }
+  // Store DevTools history operations (`@ngrx/store-devtools`).
+  | NgrxDevtoolsRequest;
+
+/** Store DevTools history operations the panel and the `ngrx-store-devtools` tool run. */
+export const NGRX_DEVTOOLS_OPS = ['toggle', 'jump', 'commit', 'reset', 'pause'] as const;
+export type NgrxDevtoolsOp = (typeof NGRX_DEVTOOLS_OPS)[number];
+
+/**
+ * `toggle` skips or includes the action of log entry `seq`; `jump` shows the
+ * state after log entry `seq`, or Store DevTools state `index` (0 is the
+ * committed state); `commit` makes the current state the new start and drops
+ * the history; `reset` goes back to the initial state and drops the history;
+ * `pause` stops (`paused: true`) or starts recording new actions.
+ */
+export interface NgrxDevtoolsRequest {
+  type: 'devtools';
+  op: NgrxDevtoolsOp;
+  seq?: number;
+  index?: number;
+  paused?: boolean;
+}
+
+/** Checks a Store DevTools request sent from the panel or an agent. Returns the problem, or null. */
+export function devtoolsProblem(
+  request: Partial<NgrxDevtoolsRequest> | null | undefined,
+): string | null {
+  const op = request?.op;
+  if (!(NGRX_DEVTOOLS_OPS as readonly unknown[]).includes(op)) {
+    return `Pass \`op\`: one of ${NGRX_DEVTOOLS_OPS.map((name) => `\`${name}\``).join(', ')}.`;
+  }
+  const whole = (value: unknown) =>
+    typeof value === 'number' && Number.isInteger(value) && value >= 0;
+  if (op === 'toggle' && !whole(request?.seq))
+    return 'Pass `seq`, the log entry of the action to skip or include.';
+  if (op === 'jump') {
+    const bySeq = request?.seq !== undefined;
+    const byIndex = request?.index !== undefined;
+    if (bySeq === byIndex)
+      return 'Pass either `seq` (a log entry) or `index` (a Store DevTools state; 0 is the committed state).';
+    if (bySeq && !whole(request?.seq)) return '`seq` must be a log entry number.';
+    if (byIndex && !whole(request?.index)) return '`index` must be a whole number from 0.';
+  }
+  if (op === 'pause' && request?.paused !== undefined && typeof request.paused !== 'boolean') {
+    return '`paused` must be true or false.';
+  }
+  return null;
+}
 
 export interface NgrxRequestResult {
   ok?: boolean;

@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { deferNotes } from '../config.ts';
-import { MAX_DEFER_BLOCKS, createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
+import { deferHydrationLabel, deferNotes } from '../config.ts';
+import {
+  MAX_DEFER_BLOCKS,
+  MAX_DEFER_TRANSITIONS,
+  createDeferTracker,
+  type DeferDebugNg,
+} from '../defer-blocks.ts';
 import { elementById } from '../element-id.ts';
 import { DEFER_ROWS, deferBlocksText, toComponentPage } from '../rpc/component-tools.ts';
 import { MAX_TOOL_CHARS } from '../rpc/router-tools.ts';
@@ -162,6 +167,8 @@ describe('createDeferTracker', () => {
     expect(second.map((b) => b.id)).toEqual(first.map((b) => b.id));
     expect(second[0].since).toBe(1000);
     expect(second[1]).toMatchObject({ hydration: 'hydrated', since: 5000, hydratedAt: 5000 });
+    expect(tracker.find(second[1].id)).toEqual({ host: lazy, block: second[1] });
+    expect(tracker.find('nope')).toBeUndefined();
   });
 
   it('flags hydrate never blocks and falls back to ɵgetDeferBlocks', () => {
@@ -327,6 +334,30 @@ describe('deferBlocksText', () => {
     expect(text).toContain('`d8` in TripReviews (`c2`): on its placeholder for 29s');
   });
 
+  it('says when a block hydrated before the overlay attached', () => {
+    const text = deferBlocksText(
+      [
+        report([
+          info({ id: 'd1', hydration: 'hydrated' }),
+          info({ id: 'd2', hydration: 'hydrated', hydratedAt: 5000 }),
+        ]),
+      ],
+      30_000,
+    );
+    expect(text).toMatch(/\| `d1` .*\| complete \| hydrated before inspection \|/);
+    expect(text).toMatch(/\| `d2` .*\| complete \| hydrated \|/);
+    expect(text).toContain('"hydrated before inspection" means');
+    expect(deferBlocksText([report([info({ id: 'd3' })])], 30_000)).not.toContain(
+      'before inspection',
+    );
+  });
+
+  it('labels hydration the same way for the panel and the tool', () => {
+    expect(deferHydrationLabel({ hydration: 'hydrated' })).toBe('hydrated before inspection');
+    expect(deferHydrationLabel({ hydration: 'hydrated', hydratedAt: 1 })).toBe('hydrated');
+    expect(deferHydrationLabel({ hydration: 'dehydrated' })).toBe('dehydrated');
+  });
+
   it('ages blocks on the page clock, not the server clock', () => {
     const hour = 3_600_000;
     const serverNow = 1_700_000_000_000;
@@ -434,5 +465,56 @@ describe('deferNotes', () => {
       since: 0,
     };
     expect(deferNotes(block, Date.now()).map((note) => note.kind)).toEqual([]);
+  });
+});
+
+describe('defer block transitions', () => {
+  it('keeps the state changes the overlay saw, and none for a block that never changed', () => {
+    const { anchor, lazy, instances } = page();
+    let raw: unknown[] = [block({ hostNode: anchor }), block({ hostNode: lazy })];
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetControlFlowBlocks: () => raw,
+    };
+    let clock = 1000;
+    const tracker = createDeferTracker(() => clock);
+    expect(tracker.collect(ng)![0].transitions).toBeUndefined();
+    clock = 2000;
+    raw = [block({ hostNode: anchor, state: 'loading' }), block({ hostNode: lazy })];
+    tracker.collect(ng);
+    clock = 3000;
+    raw = [block({ hostNode: anchor, state: 'complete' }), block({ hostNode: lazy })];
+    const [loaded, idle] = tracker.collect(ng)!;
+    expect(loaded.transitions).toEqual([
+      { state: 'placeholder', hydration: 'not-configured', at: 1000 },
+      { state: 'loading', hydration: 'not-configured', at: 2000 },
+      { state: 'complete', hydration: 'not-configured', at: 3000 },
+    ]);
+    expect(idle.transitions).toBeUndefined();
+    for (let i = 0; i < 10; i++) {
+      clock += 1000;
+      raw = [block({ hostNode: anchor, state: i % 2 ? 'complete' : 'error' })];
+      tracker.collect(ng);
+    }
+    expect(tracker.collect(ng)![0].transitions).toHaveLength(MAX_DEFER_TRANSITIONS);
+  });
+});
+
+describe('guardDeferBlocks transitions', () => {
+  it('keeps valid steps only, at most six', async () => {
+    const { guardDeferBlocks } = await import('../rpc/component-report-guard.ts');
+    const steps = [
+      { state: 'placeholder', hydration: 'dehydrated', at: 1 },
+      { state: 2, at: 2 },
+      { state: 'complete', hydration: 'bogus', at: 3 },
+      { state: 'complete', at: 'later' },
+    ];
+    const [out] = guardDeferBlocks([{ id: 'd1', state: 'complete', transitions: steps }]);
+    expect(out!.transitions).toEqual([
+      { state: 'placeholder', hydration: 'dehydrated', at: 1 },
+      { state: 'complete', hydration: 'not-configured', at: 3 },
+    ]);
+    const many = Array.from({ length: 9 }, (_, i) => ({ state: 's', at: i }));
+    expect(guardDeferBlocks([{ id: 'd1', transitions: many }])[0]!.transitions).toHaveLength(6);
   });
 });

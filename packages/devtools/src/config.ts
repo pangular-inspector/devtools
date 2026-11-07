@@ -250,6 +250,15 @@ export interface PangularConfig {
     /** Rule status by rule name. `false` turns the rule off; `true` or omitted keeps it on. */
     rules?: Record<string, boolean>;
   };
+  ngrx?: {
+    /**
+     * Record where each NgRx change log entry came from: the app frames of the
+     * dispatch, method call or `patchState`, with origins and query strings
+     * removed and secrets masked. Off by default, since taking a stack on every
+     * write costs time.
+     */
+    trace?: boolean;
+  };
 }
 
 /** What a `plugins` entry can turn off; each is on when left out. */
@@ -287,6 +296,7 @@ export interface ResolvedPangularConfig {
   lint: {
     rules: Record<string, boolean>;
   };
+  ngrx: { trace: boolean };
 }
 
 /** The switches of one plugin under `config`, whether or not it has a `plugins` entry. */
@@ -441,6 +451,7 @@ export function enabledPanelTabs(config: ResolvedPangularConfig): (typeof PANEL_
 export const PANEL_LINK_ITEMS: Partial<Record<PanelTab, string>> = {
   components: 'a component instance, by its id in the component tree',
   injectors: "a component's element injector, by the component's id",
+  signals: "a component's signal graph, by the component's id",
   forms: 'a form, by its id',
 };
 
@@ -673,6 +684,7 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
     popup: { hotkey: popupHotkey(record(input['popup'])['hotkey']) },
     plugins: pluginEntries(input['plugins']),
     lint: { rules: lintRules(input['lint']) },
+    ngrx: { trace: flag(record(input['ngrx'])['trace'], false) },
   };
 }
 
@@ -766,6 +778,7 @@ const CONFIG_KEYS = [
   'popup',
   'plugins',
   'lint',
+  'ngrx',
 ] as const;
 
 /**
@@ -902,6 +915,8 @@ export function pangularConfigProblems(config: unknown): string[] {
       }
     }
   }
+  const ngrx = object('ngrx', input['ngrx'], ['trace']);
+  boolean('ngrx.trace', ngrx['trace'], 'off');
   return problems;
 }
 
@@ -936,8 +951,12 @@ export function configFromConnection(
 export function pickPangularConfig<T extends PangularConfig>(
   options: T,
 ): { config: PangularConfig; rest: Omit<T, keyof PangularConfig> } {
-  const { inspectors, agent, actions, redaction, limits, popup, plugins, lint, ...rest } = options;
-  return { config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint }, rest };
+  const { inspectors, agent, actions, redaction, limits, popup, plugins, lint, ngrx, ...rest } =
+    options;
+  return {
+    config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint, ngrx },
+    rest,
+  };
 }
 
 /**
@@ -999,6 +1018,7 @@ export const FORM_WRITE_ACTIONS: readonly string[] = [
   'disable',
   'submit',
   'restore',
+  'try-webmcp',
 ];
 
 /** Router actions that start, stop, repeat or probe a navigation. */
@@ -1074,6 +1094,13 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'inspect-component': { kind: 'tool', inspectors: ['components'], page: true },
   'list-components': { kind: 'tool', inspectors: ['components'], page: true },
   'defer-blocks': { kind: 'tool', inspectors: ['components'], page: true },
+  'load-defer-block': {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    actions: ['components'],
+    page: true,
+  },
   'for-blocks': { kind: 'tool', inspectors: ['components'], page: true },
   hydration: { kind: 'tool', inspectors: ['components'], page: true },
   'change-detection': { kind: 'tool', inspectors: ['components'], page: true },
@@ -1145,6 +1172,16 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
     actions: ['ngrx'],
     page: true,
   },
+  // Toggle, jump, commit, reset and pause in the Store DevTools history.
+  // Destructive: commit and reset erase the history they act on.
+  'ngrx-store-devtools': {
+    kind: 'tool',
+    inspectors: ['ngrx'],
+    safety: 'destructive',
+    actions: ['ngrx'],
+    page: true,
+  },
+  'ngrx-explain-change': { kind: 'tool', inspectors: ['ngrx'], page: true },
   'redux-inspect-stores': { kind: 'tool', inspectors: ['ngrx'], page: true },
 
   // tanstackQuery
@@ -1367,7 +1404,7 @@ export function actionBlockedMessage(action: PangularAction): string {
   const what = {
     forms: 'Writing to forms',
     router: 'Navigating and clearing navigations',
-    ngrx: 'Restoring NgRx state and dispatching actions',
+    ngrx: 'Restoring NgRx state, dispatching actions and changing the Store DevTools history',
     http: 'Changing HTTP mock rules and SSR overrides, and clearing HTTP calls',
     analog: 'Calling API routes and clearing server calls',
     components: 'Editing component properties and signals',
@@ -1448,11 +1485,13 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'select-component': 'components',
   'request-component-pick': 'components',
   'cancel-component-pick': 'components',
+  'request-component-pick-move': 'components',
   'component-pick-result': 'components',
   'request-page-highlight': 'components',
   'component-screenshot-result': 'components',
   'request-component-edit': 'components',
   'component-edit-result': 'components',
+  'defer-load-result': 'components',
   'request-hydration-overlay': 'components',
   'request-component-value': 'components',
   'component-value-result': 'components',
@@ -1483,6 +1522,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'request-ngrx-history': 'ngrx',
   'import-ngrx-session': 'ngrx',
   'request-provider-value': 'injectors',
+  'request-injector-refresh': 'injectors',
   'provider-value-result': 'injectors',
   'push-redux-stores': 'ngrx',
   'forget-redux-stores-page': 'ngrx',
@@ -1824,7 +1864,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
 const ACTION_LABEL: Record<PangularAction, string> = {
   forms: 'Form writes',
   router: 'Navigation',
-  ngrx: 'NgRx restore and dispatch',
+  ngrx: 'NgRx restore, dispatch and Store DevTools',
   http: 'HTTP mocking',
   analog: 'Analog API calls',
   components: 'Component edits',
@@ -2362,6 +2402,22 @@ export interface DeferNoteBlock {
   triggers: string[];
   /** Page clock, ms since epoch, when the state or hydration state last changed. */
   since: number;
+  /** Page clock, ms since epoch, when the overlay saw the block hydrate. */
+  hydratedAt?: number;
+}
+
+/**
+ * The hydration state of a block as the panel and the defer-blocks tool word
+ * it. A block that is `hydrated` without a `hydratedAt` hydrated before the
+ * overlay attached, so no one saw it happen.
+ */
+export function deferHydrationLabel(
+  block: Pick<DeferNoteBlock, 'hydration' | 'hydratedAt'>,
+): string {
+  if (block.hydration === 'hydrated' && block.hydratedAt === undefined) {
+    return 'hydrated before inspection';
+  }
+  return block.hydration;
 }
 
 export interface DeferNote {

@@ -28,6 +28,8 @@ import { attachReduxStores } from './redux-stores-collector.ts';
 import { uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
 import { attachTanstackQuery } from './query-collector.ts';
 import { collectInjectorTree } from './injector-tree.ts';
+import { registerInjectorRefresh } from './injector-refresh.ts';
+import { trackEffectRuns } from './effect-runs.ts';
 import { registerProviderValues } from './provider-values.ts';
 import {
   clearNavigations,
@@ -69,7 +71,12 @@ import {
   componentHostOf,
   selectedComponentDetail,
 } from './component-tree.ts';
-import { startComponentPick } from './component-pick.ts';
+import {
+  PICK_KEYS,
+  startComponentPick,
+  type PickKey,
+  type PickMoveResult,
+} from './component-pick.ts';
 import { registerComponentEdit } from './component-edit-overlay.ts';
 import { registerComponentValues } from './component-values-overlay.ts';
 import type { ScreenshotRequest } from './component-screenshot.ts';
@@ -117,7 +124,8 @@ import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 import { createDeltaChannel } from './delta-channel.ts';
 import { COMPONENT_TREE_SHAPE, INJECTOR_TREE_SHAPE } from './push-delta.ts';
 import { createDomDirty } from './dom-dirty.ts';
-import { domTree } from './host-tree.ts';
+import { angularRoots, domTree } from './host-tree.ts';
+import { angularDeferInternals, loadDeferBlock, registerDeferLoad } from './defer-load.ts';
 import { LEASED_PUSH_MS, createPageLease, throttle } from './page-lease.ts';
 import { setTimeoutOutside } from './outside-angular.ts';
 import { createPageHeartbeat, keepaliveAfter } from './page-heartbeat.ts';
@@ -438,6 +446,10 @@ async function startOverlay(
   if (!own(restoreSignalHook ?? (() => {}))) return;
   const writeHookMissing = on.signals && !restoreSignalHook;
 
+  // Effect run counts, where the page's Angular profiler reports effect runs.
+  const effectRuns = on.signals ? trackEffectRuns(getNg) : null;
+  if (effectRuns) own(effectRuns.stop);
+
   let signalTarget: SignalTarget = null;
   let lastSignalKey = '';
   let signalSentAt = 0;
@@ -447,6 +459,7 @@ async function startOverlay(
   async function pushSignalGraph(force = false) {
     const graph = signalWatch.attach(collectSignalGraph(getNg(), signalTarget));
     if (!graph) return;
+    effectRuns?.attach(graph.nodes);
     const key = graphKey(graph);
     if (!force && key === lastSignalKey) {
       if (!keepaliveDue(signalSentAt, tickMs())) return;
@@ -526,6 +539,8 @@ async function startOverlay(
   const injectorChannel = channel('push-injector-tree', 'ping-injector-tree', INJECTOR_TREE_SHAPE);
   // Reads the value of a provider the injectors already created, for the Injectors view.
   if (on.injectors) registerProviderValues(my.rpc, pageId, getNg);
+  // Re-reads the element injector the panel selected, or every injector on Refresh.
+  if (on.injectors) registerInjectorRefresh(my.rpc, pageId, () => pushInjectorTree(true));
   // Wakes up with a push of every leased report when a panel or an agent looks again.
   const lease = createPageLease(my, pageId, {
     wake: () =>
@@ -572,7 +587,9 @@ async function startOverlay(
   const cd = on.components
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => lease.active)
     : null;
-  const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
+  const ngrx = on.ngrx
+    ? attachNgrx(my, pageId, getNg, limits.changeLog, { trace: devtoolsConfig.ngrx.trace })
+    : null;
   // NGXS, Elf and MiniRx report through their Redux DevTools integration.
   if (!on.ngrx) uninstallReduxDevtoolsHook();
   const otherStores = on.ngrx ? attachReduxStores(my, pageId, { maxLog: limits.changeLog }) : null;
@@ -990,23 +1007,43 @@ async function startOverlay(
   });
 
   let cancelComponentPick: (() => void) | null = null;
+  let moveComponentPick: ((key: PickKey) => PickMoveResult) | null = null;
   if (on.components) {
     my.rpc.register({
       name: 'component-pick',
       type: 'event',
       jsonSerializable: true,
-      handler: (request: { requestId?: unknown; pageId?: unknown; cancel?: unknown } | null) => {
+      handler: (
+        request: { requestId?: unknown; pageId?: unknown; cancel?: unknown; move?: unknown } | null,
+      ) => {
         if (!request || (request.pageId && request.pageId !== pageId)) return;
+        // A key from the panel moves the running pick; it never starts or cancels one.
+        if (request.move !== undefined) {
+          const key = PICK_KEYS.find((k) => k === request.move);
+          const result: PickMoveResult = !key
+            ? { moved: false, error: 'Unknown key.' }
+            : (moveComponentPick?.(key) ?? { moved: false, error: 'No pick is running.' });
+          if (typeof request.requestId === 'string') {
+            void my.rpc
+              .call('component-pick-result', { requestId: request.requestId, pageId, result })
+              .catch(() => {});
+          }
+          return;
+        }
         cancelComponentPick?.();
         if (request.cancel === true || typeof request.requestId !== 'string') return;
         const requestId = request.requestId;
         const pick = startComponentPick({
           getNg,
-          highlight: { show: showHighlight, clear: clearHighlight },
+          highlight: { show: (el, reveal) => showHighlight(el, { reveal }), clear: clearHighlight },
         });
         cancelComponentPick = pick.cancel;
+        moveComponentPick = pick.move;
         void pick.result.then((result) => {
-          if (cancelComponentPick === pick.cancel) cancelComponentPick = null;
+          if (cancelComponentPick === pick.cancel) {
+            cancelComponentPick = null;
+            moveComponentPick = null;
+          }
           if (result.ok) {
             componentTarget = result.id;
             consoleGlobals.selectComponent(result.id);
@@ -1028,6 +1065,16 @@ async function startOverlay(
       getNg,
       allowed: devtoolsConfig.actions.components,
       edited: () => void pushTree(true).catch(() => {}),
+    });
+    registerDeferLoad(my.rpc, pageId, {
+      allowed: devtoolsConfig.actions.components,
+      load: (id) => {
+        const ng = getNg();
+        // A fresh read, so the load acts on the block as it is now.
+        deferTracker.collect(ng, document, controlFlowReader(ng));
+        return loadDeferBlock(ng, angularDeferInternals(), deferTracker.find(id), angularRoots());
+      },
+      loaded: () => void pushTree(true).catch(() => {}),
     });
     // Loaded on the first capture, so pages that never take one don't pay for it.
     my.rpc.register({

@@ -4,13 +4,20 @@ import { isRedactedKey, REDACTED, withRedactionScope } from './forms-privacy.ts'
 import { documentTree, type HostTree } from './host-tree.ts';
 import { className, tokenName } from './injector-tree.ts';
 import {
+  devtoolsProblem,
   diff,
   dispatchProblem,
+  NGRX_BURST_WINDOW_MS,
   NGRX_DIFF_MORE_CAP,
+  NGRX_LOOP_BURST,
+  NGRX_MAX_STATS,
+  NGRX_TRACE_FRAMES,
   referenceDiff,
   serialize,
   serializeSlice,
+  type NgrxActionStat,
   type NgrxClassicStoreInfo,
+  type NgrxDevtoolsRequest,
   type NgrxDiffEntry,
   type NgrxActionOrigin,
   type NgrxLogEntry,
@@ -25,6 +32,7 @@ import { historyRequest, type HistorySource } from './ngrx-history.ts';
 import { markSecretWriter, safeArgs, touchesSecret } from './ngrx-args.ts';
 import { SliceCache } from './ngrx-slice-cache.ts';
 import { ReportMemo, ReportVersion } from './ngrx-report-memo.ts';
+import { appFrames, captureStack } from './signal-stack.ts';
 
 /**
  * Angular's `untracked` (16.0+), read at runtime: a named import of it fails
@@ -111,6 +119,8 @@ interface Tracked {
     method?: unknown;
     /** Entries this call logged with arguments, masked after the fact once it writes a secret. */
     logged?: NgrxLogEntry[];
+    /** With `ngrx.trace`: where the method was called from. */
+    trace?: string[];
   }[];
   /**
    * Outer method calls that returned a promise not settled yet. A write after
@@ -119,6 +129,14 @@ interface Tracked {
    * masked after the fact, since one of them most likely made it.
    */
   asyncCalls: Set<Tracked['methodStack'][number]>;
+  /**
+   * The store uses `withDevtools()`: nothing is wrapped, changes come from
+   * `watchState()` or, without it, from a compare against `lastSeen` on each collect.
+   */
+  watchOnly: boolean;
+  lastSeen: Snapshot | null;
+  /** With `ngrx.trace`: the call site of the first write waiting for the microtask fallback. */
+  pendingTrace?: string[];
 }
 
 interface Classic {
@@ -128,6 +146,8 @@ interface Classic {
   last: unknown;
   lastRaw: unknown;
   origins: WeakMap<object, NgrxActionOrigin>;
+  /** With `ngrx.trace`: where each action was dispatched from. */
+  traces: WeakMap<object, string[]>;
   stop: () => void;
 }
 
@@ -293,6 +313,41 @@ function syncValue(observable: AnyRecord | null | undefined): unknown {
   return value;
 }
 
+/** Options of {@link createNgrxCollector}. */
+export interface NgrxCollectorOptions {
+  /** `ngrx.trace`: record a redacted call stack per entry. Off by default. */
+  trace?: boolean;
+}
+
+/**
+ * Whether a signal store uses `withDevtools()` from
+ * `@angular-architects/ngrx-toolkit`, which adds members such as
+ * `___uniqueDevtoolsId` and `___renameDevtoolsName`. Such a store already
+ * reports to Redux DevTools through `watchState`, so the collector leaves it
+ * unpatched.
+ */
+export function usesWithDevtools(value: object): boolean {
+  const keys = read(() => Object.keys(value), [] as string[]);
+  return keys.some((key) => /^_{2,}\w*devtools\w*$/i.test(key));
+}
+
+/** Entries the collector writes itself (restores, Store DevTools operations), left out of the stats. */
+const INTERNAL_TYPE = /^(Restore #\d+|Back to latest$|Store DevTools: )/;
+/**
+ * `@ngrx/signals` frames between a `patchState` call and a watcher, by name,
+ * for a build that bundles NgRx into a chunk without a package path.
+ */
+const NGRX_INTERNAL_FRAME =
+  /^(Object\.)?(patchState|notifyWatchers|executeWatcher|getWatchers|watchState|updateState)\b/;
+
+/** Timestamps kept per stat to measure bursts. */
+const BURST_SAMPLES = NGRX_LOOP_BURST;
+
+interface StatInfo extends NgrxActionStat {
+  totalMs: number;
+  recent: number[];
+}
+
 export interface NgrxCollector {
   collect(rediscover?: boolean): {
     stores: NgrxSignalStoreInfo[];
@@ -315,6 +370,8 @@ export interface NgrxCollector {
    * any other id a signal store's state fields. `null` when the store is gone.
    */
   rawState(storeId: string): { value: unknown } | null;
+  /** Per-type counts since the page loaded, and a number that goes up when they change. */
+  stats(): { stats: NgrxActionStat[]; version: number };
   stop(): void;
 }
 
@@ -323,7 +380,71 @@ export function createNgrxCollector<H extends object = Element>(
   onChange: () => void,
   tree: HostTree<H> = documentTree(),
   maxLog = MAX_LOG,
+  options: NgrxCollectorOptions = {},
 ): NgrxCollector {
+  /**
+   * The app frames of the code running now, when `ngrx.trace` is on. `own` is
+   * how many frames of this collector sit between `traceNow` and the code it
+   * reports: a bundled build puts the overlay in the app's own chunks, where
+   * the file filter of `appFrames` cannot tell them apart.
+   */
+  const traceNow = (own: number): string[] | undefined => {
+    if (!options.trace) return undefined;
+    const lines = (captureStack() ?? '').split('\n');
+    // V8 starts with an `Error` line; Firefox and Safari list frames only.
+    const header = lines[0] && !/^\s*at\s|@/.test(lines[0]) ? 1 : 0;
+    const stack = lines.slice(header + 2 + own).join('\n');
+    const frames = appFrames(stack, NGRX_TRACE_FRAMES + 4).filter(
+      (frame) => !NGRX_INTERNAL_FRAME.test(frame),
+    );
+    return frames.length ? frames.slice(0, NGRX_TRACE_FRAMES) : undefined;
+  };
+  const withTrace = (trace: string[] | undefined) => (trace ? { trace } : {});
+  const statsByKey = new Map<string, StatInfo>();
+  let statsVersion = 0;
+  const count = (entry: NgrxLogEntry) => {
+    if (INTERNAL_TYPE.test(entry.type)) return;
+    const key = `${entry.source}\u0000${entry.storeId}\u0000${entry.type}`;
+    let stat = statsByKey.get(key);
+    if (stat) statsByKey.delete(key);
+    else {
+      stat = {
+        source: entry.source,
+        storeId: entry.storeId,
+        type: entry.type,
+        count: 0,
+        lastAt: 0,
+        burst: 0,
+        totalMs: 0,
+        recent: [],
+      };
+    }
+    // Most recent last, so the oldest key is dropped at the cap.
+    statsByKey.set(key, stat);
+    while (statsByKey.size > NGRX_MAX_STATS) statsByKey.delete(statsByKey.keys().next().value!);
+    stat.count++;
+    stat.lastAt = entry.timestamp;
+    if (entry.durationMs !== undefined) {
+      stat.timed = (stat.timed ?? 0) + 1;
+      stat.totalMs += entry.durationMs;
+      stat.maxMs = Math.max(stat.maxMs ?? 0, entry.durationMs);
+    }
+    if (entry.origin === 'effect') stat.effects = (stat.effects ?? 0) + 1;
+    stat.recent.push(entry.timestamp);
+    if (stat.recent.length > BURST_SAMPLES) stat.recent.shift();
+    const inWindow = stat.recent.filter((t) => entry.timestamp - t < NGRX_BURST_WINDOW_MS).length;
+    stat.burst = Math.max(stat.burst, inWindow);
+    if (inWindow >= NGRX_LOOP_BURST && entry.origin === 'effect') stat.loop = true;
+    statsVersion++;
+  };
+  const statsReport = (): NgrxActionStat[] =>
+    [...statsByKey.values()]
+      .map(({ totalMs, recent: _recent, ...stat }) => ({
+        ...stat,
+        ...(stat.timed ? { avgMs: Math.round(totalMs / stat.timed) } : {}),
+      }))
+      .sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
+
   const ids = new WeakMap<object, string>();
   let nextId = 0;
   const idFor = (value: object) => {
@@ -374,10 +495,13 @@ export function createNgrxCollector<H extends object = Element>(
   // `pendingBefore` diffing — a mechanism `onWrite` skips for a watched store
   // (see `t.watched`), so it would never catch a watchState-recorded change.
   let currentDispatchedEvent: { type: string; payload?: unknown } | undefined;
+  /** With `ngrx.trace`: where the event flowing through `Dispatcher.dispatch()` was dispatched. */
+  let currentEventTrace: string[] | undefined;
 
   const append = (entry: Omit<NgrxLogEntry, 'seq'>, keep: Saved) => {
     const full = { ...entry, seq: ++seq };
     log.push(full);
+    count(full);
     saved.set(full.seq, keep);
     while (log.length > maxLog) saved.delete(log.shift()!.seq);
     if (lost.some((u) => u.seq < log[0].seq)) lost = lost.filter((u) => u.seq >= log[0].seq);
@@ -426,6 +550,7 @@ export function createNgrxCollector<H extends object = Element>(
     logNoop = false,
     durationMs?: number,
     method?: unknown,
+    trace?: string[],
   ) => {
     const after = snapshot(t);
     const changes = snapshotDiff(before, after, t.stateKeys);
@@ -440,6 +565,7 @@ export function createNgrxCollector<H extends object = Element>(
     // noop entry). Otherwise the next real `watchState` firing would diff
     // against stale state.
     if (t.watched) t.lastWatched = after;
+    if (t.watchOnly) t.lastSeen = after;
     if (!changes.diff.length) {
       if (!logNoop) return undefined;
       const noopAt = Date.now();
@@ -469,6 +595,7 @@ export function createNgrxCollector<H extends object = Element>(
         restorable: t.writable,
         ...(causedByEvent ? { causedByEvent } : {}),
         ...(durationMs !== undefined ? { durationMs } : {}),
+        ...withTrace(trace),
       },
       { kind: 'signal', tracked: t, before, after },
     );
@@ -487,10 +614,14 @@ export function createNgrxCollector<H extends object = Element>(
     if (t.watched) return;
     if (t.depth > 0 || t.pendingBefore) return;
     t.pendingBefore = snapshot(t);
+    // Under onWrite: the wrapped set or update.
+    t.pendingTrace = traceNow(2);
     queueMicrotaskOutside(() => {
       const before = t.pendingBefore;
+      const trace = t.pendingTrace;
       t.pendingBefore = null;
-      if (before) finish(t, 'patchState', undefined, before);
+      t.pendingTrace = undefined;
+      if (before) finish(t, 'patchState', undefined, before, false, undefined, undefined, trace);
     });
   };
 
@@ -502,8 +633,10 @@ export function createNgrxCollector<H extends object = Element>(
   const flushPending = (t: Tracked) => {
     const before = t.pendingBefore;
     if (!before) return;
+    const trace = t.pendingTrace;
     t.pendingBefore = null;
-    finish(t, 'patchState', undefined, before);
+    t.pendingTrace = undefined;
+    finish(t, 'patchState', undefined, before, false, undefined, undefined, trace);
   };
 
   /**
@@ -515,6 +648,7 @@ export function createNgrxCollector<H extends object = Element>(
     t: Tracked,
     before: Snapshot,
     call: Tracked['methodStack'][number] | undefined,
+    callTrace?: string[],
   ) => {
     const after = snapshot(t);
     const changes = snapshotDiff(before, after, t.stateKeys);
@@ -534,6 +668,7 @@ export function createNgrxCollector<H extends object = Element>(
       maskLogged(call.logged);
     }
     if (!call) maskAsyncCallers(t, before, after);
+    const trace = isRestore ? undefined : callTrace;
     const logged = append(
       {
         source: 'signal-store',
@@ -555,6 +690,7 @@ export function createNgrxCollector<H extends object = Element>(
         restorable: t.writable,
         ...(causedByEvent ? { causedByEvent } : {}),
         ...(durationMs !== undefined ? { durationMs } : {}),
+        ...withTrace(trace),
       },
       { kind: 'signal', tracked: t, before, after },
     );
@@ -589,7 +725,10 @@ export function createNgrxCollector<H extends object = Element>(
           // into one entry.
           if (!before) return;
           const call = t.methodStack[t.methodStack.length - 1];
-          appendChange(t, before, call);
+          // The outermost method call's site, or, for a patchState outside a
+          // method, this callback's own stack, which still holds its caller.
+          const trace = call ? t.methodStack.find((frame) => frame.trace)?.trace : traceNow(1);
+          appendChange(t, before, call, trace);
         },
         { injector: t.injector, manualCleanup: true },
       );
@@ -642,6 +781,8 @@ export function createNgrxCollector<H extends object = Element>(
           startedAt: now(),
           fired: 0,
           method: original,
+          // Under the proxy's apply.
+          ...(outer ? withTrace(traceNow(1)) : {}),
         };
         t.methodStack.push(frame);
         t.depth++;
@@ -662,13 +803,22 @@ export function createNgrxCollector<H extends object = Element>(
           // Microtask-fallback path: one entry per method call (with throttled noop).
           let entry: NgrxLogEntry | undefined;
           if (before && !t.watched) {
-            entry = finish(t, name, args, before, true, durationMs, original);
+            entry = finish(t, name, args, before, true, durationMs, original, frame.trace);
           }
           // watchState path: watchState already emitted one entry per patchState.
           // If the method did not patch at all (e.g. `isSaved` just reads state),
           // append a throttled noop entry so method calls stay visible.
           if (outer && t.watched && !frame.fired) {
-            entry = finish(t, name, args, t.lastWatched ?? snapshot(t), true, durationMs, original);
+            entry = finish(
+              t,
+              name,
+              args,
+              t.lastWatched ?? snapshot(t),
+              true,
+              durationMs,
+              original,
+              frame.trace,
+            );
           }
           if (entry?.args) (frame.logged ??= []).push(entry);
           if (outer && isThenable(result)) {
@@ -736,8 +886,28 @@ export function createNgrxCollector<H extends object = Element>(
       lastWatched: null,
       methodStack: [],
       asyncCalls: new Set(),
+      watchOnly: typeof value === 'object' && usesWithDevtools(value),
+      lastSeen: null,
     };
     tracked.set(value, t);
+    if (t.watchOnly) {
+      // withDevtools() already watches this store; patching it as well would
+      // clash with it, so the methods are only listed, not wrapped.
+      for (const key of Object.keys(value)) {
+        const member = (value as AnyRecord)[key];
+        if (typeof member === 'function' && !isSignal(member) && !/^_{2,}/.test(key)) {
+          t.methods.set(key, {
+            calls: 0,
+            timedCalls: 0,
+            rx: typeof member?.destroy === 'function',
+            totalDurationMs: 0,
+          });
+        }
+      }
+      t.lastSeen = snapshot(t);
+      attachWatcher(t);
+      return t;
+    }
     for (const key of stateKeys) wrapSignal(t, source[key]);
     if (t.kind === 'signal-store') {
       for (const key of Object.keys(value)) {
@@ -836,6 +1006,7 @@ export function createNgrxCollector<H extends object = Element>(
         timestamp: Date.now(),
         diff: [],
         restorable: false,
+        ...withTrace(currentEventTrace),
       },
       { kind: 'event' },
     );
@@ -873,12 +1044,16 @@ export function createNgrxCollector<H extends object = Element>(
       // one event handler dispatching another — restores the outer event
       // instead of leaving its own behind.
       const previous = currentDispatchedEvent;
+      const previousTrace = currentEventTrace;
       currentDispatchedEvent = info;
+      // Under the wrapped dispatch.
+      currentEventTrace = traceNow(1);
       let result: unknown;
       try {
         result = original.apply(this, args);
       } finally {
         currentDispatchedEvent = previous;
+        currentEventTrace = previousTrace;
       }
       if (info) {
         for (const t of tracked.values()) {
@@ -939,6 +1114,8 @@ export function createNgrxCollector<H extends object = Element>(
     }
     const origin =
       withAction && action && typeof action === 'object' ? c.origins.get(action) : undefined;
+    const trace =
+      withAction && action && typeof action === 'object' ? c.traces.get(action) : undefined;
     const before = c.lastRaw;
     c.last = next;
     c.lastRaw = raw;
@@ -959,6 +1136,7 @@ export function createNgrxCollector<H extends object = Element>(
         ...truncated(overflow.more),
         restorable: held,
         ...(c.devtools && !held ? { unrestorable: 'not-recorded' as const } : {}),
+        ...withTrace(trace),
       },
       { kind: 'classic', action, before, after: raw },
     );
@@ -1012,11 +1190,19 @@ export function createNgrxCollector<H extends object = Element>(
    * or a `dispatch(() => action)` reactive form). Renamed from `wrapDispatch`
    * so it no longer collides with the events-plugin wrapper of the same name.
    */
-  const wrapClassicDispatch = (store: AnyRecord, origins: WeakMap<object, NgrxActionOrigin>) => {
+  const wrapClassicDispatch = (
+    store: AnyRecord,
+    origins: WeakMap<object, NgrxActionOrigin>,
+    traces: WeakMap<object, string[]>,
+  ) => {
     let active = true;
     let reactive: unknown;
     const tag = (action: unknown, origin: NgrxActionOrigin) => {
-      if (active && action && typeof action === 'object') origins.set(action, origin);
+      if (!active || !action || typeof action !== 'object') return;
+      origins.set(action, origin);
+      // Under tag and the wrapped dispatch or next.
+      const trace = traceNow(2);
+      if (trace) traces.set(action, trace);
     };
     const undo: (() => void)[] = [];
     const replace = (name: 'dispatch' | 'next', wrapper: (original: Method) => Method) => {
@@ -1086,9 +1272,10 @@ export function createNgrxCollector<H extends object = Element>(
       last: serialize(raw),
       lastRaw: raw,
       origins: new WeakMap(),
+      traces: new WeakMap(),
       stop: () => {},
     };
-    const undo = wrapClassicDispatch(store, c.origins);
+    const undo = wrapClassicDispatch(store, c.origins, c.traces);
     const record = (action: unknown) => {
       const type = read(() => String((action as AnyRecord)['type'] ?? 'action'), 'action');
       logClassic(c, type, action, true);
@@ -1305,6 +1492,20 @@ export function createNgrxCollector<H extends object = Element>(
   };
 
   /**
+   * A `withDevtools()` store without `watchState` registered: nothing tells
+   * the collector about a write, so each collect compares the state fields
+   * by reference and logs the writes since the last one as one entry.
+   */
+  const compareWatchOnly = (t: Tracked) => {
+    if (t.watched) return;
+    const current = snapshot(t);
+    const before = t.lastSeen;
+    t.lastSeen = current;
+    if (!before || t.stateKeys.every((key) => Object.is(before[key], current[key]))) return;
+    finish(t, 'patchState', undefined, before);
+  };
+
+  /**
    * One signal store's report, rebuilt only when a raw value it is made of
    * changed (`ngrx-report-memo.ts`), so an unchanged store is not serialized.
    */
@@ -1366,6 +1567,7 @@ export function createNgrxCollector<H extends object = Element>(
         methods,
         references,
         writable: t.writable,
+        ...(t.watchOnly ? { watchOnly: true as const } : {}),
       };
     });
   };
@@ -1374,15 +1576,39 @@ export function createNgrxCollector<H extends object = Element>(
   const classicInfo = (c: Classic): NgrxClassicStoreInfo => {
     const raw = classicState(c.store);
     const paused = isPaused(c.devtools);
-    const key = [raw, c.lastRaw, c.last, !!c.devtools, c.scope, paused];
-    return classicReports.get(c, key, () => ({
-      // `last` already holds `serialize(lastRaw)`, so the state is serialized
-      // again only when the store emitted a new object since then.
-      state: Object.is(raw, c.lastRaw) ? c.last : serialize(raw),
-      devtools: !!c.devtools,
-      scope: c.scope,
-      ...(paused ? { paused: true } : {}),
-    }));
+    const lifted = c.devtools ? liftedOf(c.devtools) : undefined;
+    const recording = lifted?.['isPaused'] === true;
+    const skippedIds = lifted?.['skippedActionIds'];
+    const key = [raw, c.lastRaw, c.last, !!c.devtools, c.scope, paused, recording, skippedIds];
+    return classicReports.get(c, key, () => {
+      const skipped = skippedSeqs(lifted);
+      return {
+        // `last` already holds `serialize(lastRaw)`, so the state is serialized
+        // again only when the store emitted a new object since then.
+        state: Object.is(raw, c.lastRaw) ? c.last : serialize(raw),
+        devtools: !!c.devtools,
+        scope: c.scope,
+        ...(paused ? { paused: true } : {}),
+        ...(recording ? { recordingPaused: true as const } : {}),
+        ...(skipped.length ? { skipped } : {}),
+      };
+    });
+  };
+
+  /** The log entries whose actions Store DevTools skips. */
+  const skippedSeqs = (lifted: AnyRecord | undefined): number[] => {
+    const ids = lifted?.['skippedActionIds'];
+    if (!Array.isArray(ids) || !ids.length) return [];
+    const byId = (lifted?.['actionsById'] ?? {}) as Record<string, AnyRecord>;
+    const actions = new Set(read(() => ids.map((id) => byId[id]?.['action']), [] as unknown[]));
+    const out: number[] = [];
+    for (const entry of log) {
+      const keep = saved.get(entry.seq);
+      if (keep?.kind === 'classic' && entry.action !== undefined && actions.has(keep.action)) {
+        out.push(entry.seq);
+      }
+    }
+    return out;
   };
 
   const report = () => {
@@ -1409,6 +1635,7 @@ export function createNgrxCollector<H extends object = Element>(
       discovered = true;
     }
     markDropped();
+    for (const t of tracked.values()) if (t.watchOnly) compareWatchOnly(t);
     return report();
   };
 
@@ -1432,6 +1659,117 @@ export function createNgrxCollector<H extends object = Element>(
     const actionsById = (lifted?.['actionsById'] ?? {}) as Record<string, AnyRecord>;
     logClassic(c, 'Back to latest', actionsById[lastId]?.['action'], false);
     return { ok: true, message: 'Back on the latest state. New actions change the state again.' };
+  };
+
+  /** The Store DevTools id of the action logged as `seq`, or the reason there is none. */
+  const liftedIdOf = (seq: number): { id: number } | { error: string } => {
+    const keep = saved.get(seq);
+    const logged = log.find((e) => e.seq === seq);
+    if (!keep || !logged) return { error: 'This action is no longer in the page history.' };
+    if (keep.kind !== 'classic' || logged.action === undefined) {
+      return { error: 'Only an @ngrx/store action from the log can be skipped or included.' };
+    }
+    const lifted = liftedOf(classic!.devtools!);
+    const byId = (lifted?.['actionsById'] ?? {}) as Record<string, AnyRecord>;
+    const id = Object.keys(byId).find((key) => byId[key]?.['action'] === keep.action);
+    if (id === undefined) return { error: NOT_HELD[logged.unrestorable ?? 'dropped'] };
+    return { id: Number(id) };
+  };
+
+  const devtoolsOp = (request: NgrxDevtoolsRequest): NgrxRequestResult => {
+    const problem = devtoolsProblem(request);
+    if (problem) return { error: problem };
+    const c = classic;
+    const devtools = c?.devtools;
+    if (!c || !devtools) {
+      return { error: 'The Store DevTools history needs provideStoreDevtools() in the app.' };
+    }
+    // An entry for the operation itself, so the log shows where the state jumped.
+    const logOp = (label: string) => {
+      const entry = logClassic(c, label, undefined, false);
+      delete entry.unrestorable;
+    };
+    const call = (name: string, ...args: unknown[]) => {
+      if (typeof devtools[name] !== 'function') return false;
+      devtools[name](...args);
+      return true;
+    };
+    const missing = (name: string) => ({
+      error: `This version of Store DevTools has no ${name}().`,
+    });
+    switch (request.op) {
+      case 'toggle': {
+        const found = liftedIdOf(request.seq!);
+        if ('error' in found) return found;
+        if (!call('toggleAction', found.id)) return missing('toggleAction');
+        const skipped = ((liftedOf(devtools)?.['skippedActionIds'] ?? []) as number[]).includes(
+          found.id,
+        );
+        logOp(`Store DevTools: ${skipped ? 'skip' : 'include'} #${request.seq}`);
+        return {
+          ok: true,
+          message: skipped
+            ? `Skipped action #${request.seq}: the state is computed again without it.`
+            : `Included action #${request.seq} again.`,
+        };
+      }
+      case 'jump': {
+        if (request.seq !== undefined) {
+          // A jump moves the Store DevTools history; it never restores a signal store.
+          if (saved.get(request.seq)?.kind === 'signal') {
+            return { error: 'Only @ngrx/store entries can be used for a Store DevTools jump.' };
+          }
+          return run({ type: 'restore', seq: request.seq });
+        }
+        const staged = (liftedOf(devtools)?.['stagedActionIds'] ?? []) as number[];
+        const index = request.index!;
+        if (index >= staged.length) {
+          return {
+            error: `Store DevTools holds ${staged.length} state${staged.length === 1 ? '' : 's'} (0 to ${staged.length - 1}).`,
+          };
+        }
+        if (!call('jumpToState', index)) return missing('jumpToState');
+        logOp(`Store DevTools: jump to state ${index}`);
+        const message =
+          index === 0
+            ? 'Jumped to the committed state.'
+            : `Jumped to Store DevTools state ${index}.`;
+        const paused = isPaused(devtools);
+        return { ok: true, paused, message: paused ? `${message} ${PAUSED_NOTE}` : message };
+      }
+      case 'commit': {
+        if (!call('commit')) return missing('commit');
+        logOp('Store DevTools: commit');
+        markDropped();
+        return {
+          ok: true,
+          message:
+            'Committed: the current state is the new starting point, and the earlier actions can no longer be restored.',
+        };
+      }
+      case 'reset': {
+        if (!call('reset')) return missing('reset');
+        logOp('Store DevTools: reset');
+        markDropped();
+        return {
+          ok: true,
+          message:
+            'Reset: the store is back on its initial state and the Store DevTools history is empty.',
+        };
+      }
+      case 'pause': {
+        const now = liftedOf(devtools)?.['isPaused'] === true;
+        const paused = request.paused ?? !now;
+        if (!call('pauseRecording', paused)) return missing('pauseRecording');
+        onChange();
+        return {
+          ok: true,
+          message: paused
+            ? 'Recording paused: new actions still change the state, but Store DevTools does not record them, so they cannot be restored.'
+            : 'Recording again: Store DevTools records new actions.',
+        };
+      }
+    }
   };
 
   const NOT_HELD: Record<NgrxUnrestorable, string> = {
@@ -1505,6 +1843,7 @@ export function createNgrxCollector<H extends object = Element>(
       return dispatch({ ...(request.payload ?? {}), type: request.action }, request.action);
     }
     if (request?.type === 'dispatch-again') return dispatchAgain(request.seq);
+    if (request?.type === 'devtools') return devtoolsOp(request);
     if (!request || request.type !== 'restore' || typeof request.seq !== 'number') {
       return { error: 'Unknown request.' };
     }
@@ -1599,6 +1938,7 @@ export function createNgrxCollector<H extends object = Element>(
       last: lostSeq,
     }),
     run,
+    stats: () => ({ stats: statsReport(), version: statsVersion }),
     rawState: (storeId) => {
       if (storeId === 'store') return classic ? { value: classicState(classic.store) } : null;
       for (const t of tracked.values()) {

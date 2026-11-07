@@ -1,4 +1,4 @@
-import { deferNotes, type AngularPageInfo } from '../config.ts';
+import { deferHydrationLabel, deferNotes, type AngularPageInfo } from '../config.ts';
 import { unsupportedToolText } from './angular-pages.ts';
 import { MAX_DEFER_BLOCKS } from '../defer-blocks.ts';
 import { MAX_FOR_BLOCKS } from '../for-blocks.ts';
@@ -244,11 +244,19 @@ export function deferBlocksText(
           `- \`${block.id}\` in ${owner}: ${notes.join(', ')}. Triggers: ${block.triggers.join(', ') || 'none'}${block.hasErrorBlock ? '' : '. It has no @error block'}.`,
         );
       }
-      return `| \`${block.id}\` | ${cell(owner)} | ${block.state} | ${block.hydration} | ${cell(block.triggers.join(', ') || 'none')} | ${cell(notes.join(', '))} |`;
+      return `| \`${block.id}\` | ${cell(owner)} | ${block.state} | ${deferHydrationLabel(block)} | ${cell(block.triggers.join(', ') || 'none')} | ${cell(notes.join(', '))} |`;
     });
     const more = (hidden: number, what: string) =>
       hidden > 0 ? ['', `${hidden} more ${what} not shown.${narrow}`] : [];
     const hiddenRows = rows.length - DEFER_ROWS;
+    const early = page.deferBlocks.some(
+      (block) => deferHydrationLabel(block) === 'hydrated before inspection',
+    )
+      ? [
+          '',
+          '"hydrated before inspection" means the block hydrated before the devtools attached to the page, so when it hydrated is not known.',
+        ]
+      : [];
     const count = page.deferTruncated
       ? `more than ${MAX_DEFER_BLOCKS} defer blocks. Only the first ${MAX_DEFER_BLOCKS} are collected, so blocks past them are not listed or counted here.`
       : `${page.deferBlocks.length} defer ${page.deferBlocks.length === 1 ? 'block' : 'blocks'}.`;
@@ -259,6 +267,7 @@ export function deferBlocksText(
       '| --- | --- | --- | --- | --- | --- |',
       ...rows.slice(0, DEFER_ROWS),
       ...more(hiddenRows, hiddenRows === 1 ? 'block' : 'blocks'),
+      ...early,
       ...(attention.length
         ? [
             '',

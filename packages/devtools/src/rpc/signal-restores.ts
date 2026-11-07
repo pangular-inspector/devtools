@@ -49,10 +49,16 @@ export function createSignalRestores(deps: Deps) {
         return resolve({ error: 'Pass the component id, the signal node id and the entry epoch.' });
       }
       const node = graph.nodes.find((n) => n.id === restore.node);
-      if (!node?.locator || node.locator.id !== restore.component) {
+      const service = restore.owner === 'service';
+      if (
+        !node?.locator ||
+        node.locator.id !== restore.component ||
+        (node.locator.owner === 'service') !== service
+      ) {
         return resolve({
-          error:
-            'This signal is not a writable field of the shown component, so it cannot be restored.',
+          error: service
+            ? 'This signal is not a writable field of a service of the shown injector, so it cannot be restored.'
+            : 'This signal is not a writable field of the shown component, so it cannot be restored.',
         });
       }
       const requestId = `r${++seq}`;

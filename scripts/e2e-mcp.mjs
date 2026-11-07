@@ -690,6 +690,8 @@ const READ_PLAN = [
   ['ngrx-inspect-store', '/destinations', () => ({})],
   ['ngrx-inspect-store', '/destinations', (ctx) => ({ store: ctx.storeId('TravelStore') })],
   ['ngrx-inspect-store', '/destinations', () => ({ store: 'TravelStore' })],
+  ['ngrx-explain-change', '/destinations', () => ({ path: 'saved' })],
+  ['ngrx-explain-change', '/destinations', () => ({ path: 'saved', store: 'TravelStore' })],
   [
     'ngrx-history',
     '/destinations',
@@ -824,6 +826,7 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'record-guards',
   'ngrx-dispatch',
   'ngrx-restore',
+  'ngrx-store-devtools',
   'tanstack-run-query',
   'run-form-action',
   'fill-form',
@@ -833,6 +836,7 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'remove-ssr-override',
   'set-component-property',
   'set-signal',
+  'load-defer-block',
   'watch-signal',
   'record-pipes',
   'track-subscriptions',
@@ -1078,6 +1082,15 @@ async function runReadPlan(client, app, state, ctx) {
     if (name === 'ngrx-import-session' && !record.isError) {
       ctx.sessionId = record.markdown.match(/`(s[\w-]+|[0-9a-f-]{6,})`/)?.[1];
       if (!ctx.sessionId) recordWarning(record, 'could not find the session id in the answer');
+    }
+    if (name === 'ngrx-explain-change' && args.path) {
+      // A real answer for the path: its newest changes, or that none is in the kept log.
+      check(
+        record.markdown.includes(`\`${args.path}\``) &&
+          /last changed in #\d+|No entry in the kept log/.test(record.markdown),
+        'http ngrx-explain-change',
+        `does not answer for path ${args.path}`,
+      );
     }
     if (name === 'list-pages') {
       check(
@@ -1580,11 +1593,31 @@ async function runActions(state) {
       'the log gets a Restore entry',
       /restore/i.test(history.split('\n').slice(-5).join('\n')),
     );
+    const why = await read('ngrx-explain-change', { seq: beforeSave.seq, page: ctx.pageId });
+    write(
+      'ngrx-explain-change',
+      `explains log entry #${beforeSave.seq}, the toggleSaved call`,
+      why.includes(`#${beforeSave.seq}`) && why.includes('toggleSaved'),
+      why.slice(0, 300),
+    );
   } else {
     write('ngrx-restore', 'found a toggleSaved entry to restore', false);
   }
   await act('ngrx-restore', { latest: true, page: ctx.pageId }, 'any');
   await act('ngrx-restore', { seq: 999_999, page: ctx.pageId }, 'refusal');
+  // ngrx-store-devtools: pause and resume recording, and refuse an entry that does not exist
+  await act('ngrx-store-devtools', { op: 'pause', paused: true, page: ctx.pageId }, 'any');
+  await act('ngrx-store-devtools', { op: 'pause', paused: false, page: ctx.pageId }, 'any');
+  r = await act('ngrx-store-devtools', { op: 'toggle', seq: 999_999, page: ctx.pageId }, 'any');
+  write(
+    'ngrx-store-devtools',
+    'toggling an entry that does not exist answers isError with the reason',
+    r.isError === true &&
+      /No log entry #999999|has no @ngrx\/store Store|needs provideStoreDevtools\(\)/.test(
+        r.markdown,
+      ),
+    r.markdown.slice(0, 300),
+  );
   await act('ngrx-dispatch', { type: '[E2E] Ping', payload: { id: 1 } }, 'refusal');
 
   // plugin action
@@ -1650,7 +1683,24 @@ async function runActions(state) {
     doubledAfter,
   );
 
-  // watch-signal
+  // load-defer-block
+  await app.go('/examples/defer');
+  await sleep(800);
+  const deferRow = (await read('defer-blocks', {})).match(
+    /\| `(d\d+)` \|[^|\n]*\| placeholder \|[^|\n]*\| on interaction \|/,
+  );
+  r = await act('load-defer-block', { block: deferRow?.[1] ?? 'd0' });
+  await sleep(800);
+  write(
+    'load-defer-block',
+    'the on interaction block shows its content without a click',
+    (await page.getByText('Rendered after the button was used.').count()) > 0,
+    r.markdown.slice(0, 300),
+  );
+
+  // watch-signal, back on the signals page after the defer example
+  await app.go('/examples/signals');
+  await sleep(800);
   const graph = jsonBlock(await read('inspect-signals', { component: 'app-signals-example' }));
   const countNode = graph?.nodes?.find((node) => node.label === 'count');
   r = await act('watch-signal', { node: countNode?.id ?? 'count', stacks: true });
@@ -2147,11 +2197,13 @@ const ACTION_VALID = {
   'record-change-detection': () => ({ record: 'stop' }),
   'track-subscriptions': () => ({ action: 'stop' }),
   'record-pipes': () => ({ action: 'stop' }),
+  'load-defer-block': () => ({ block: 'd0' }),
   'clear-recordings': () => ({ target: 'router' }),
   'set-component-property': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
   'set-signal': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
   'watch-signal': () => ({ stacks: false }),
   'ngrx-restore': () => ({ seq: 999_999 }),
+  'ngrx-store-devtools': () => ({ op: 'toggle', seq: 999_999 }),
   'ngrx-dispatch': () => ({ type: '[E2E] Ping' }),
   'tanstack-run-query': () => ({ action: 'refetch', key: 'nothing' }),
   'run-form-action': (ctx) => ({ action: 'revalidate', form: ctx.formIds?.[0] ?? 'x' }),
@@ -2998,6 +3050,15 @@ function runDocs(state) {
     'params',
     'replaceurl',
     'skiplocationchange',
+    'op',
+    'toggle',
+    'jump',
+    'commit',
+    'reset',
+    'pause',
+    'block',
+    'element',
+    'locator',
   ]);
   // Library tools are documented but not listed for the demo, which uses none of the libraries.
   docs.phantomTools = [...documented].filter(
