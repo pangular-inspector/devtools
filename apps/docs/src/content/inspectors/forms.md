@@ -159,6 +159,8 @@ The actions bar works on the selected form:
 
 The overlay reads the forms after change detection and pushes them when they change. It also pushes shortly after each `input`, `change`, `focusout`, `submit` or `reset` event. Reactive and template-driven forms also report each change through `control.events`, which Angular has from 18.0. On older versions the timeline comes from comparing the forms between reads.
 
+After change detection, the overlay skips the read when nothing changed since the last one: no form event, no input, no DOM change, no WebMCP call or panel action, and no Signal Form whose value, errors or root flags moved. A form with a pending field, a debounce or a submit in flight is read every time, and every form is read again at least every 5 seconds, so a change that slips past these checks, such as code that marks one more field touched, shows within 5 seconds.
+
 ### Validators run only when needed
 
 To tell where each error comes from, the devtools run the sync validators of reactive and template-driven fields themselves. They do this only for enabled leaf fields. They reuse the result for up to 5 seconds while the value and the validators stay the same. With **Record details** on, they run on every report.

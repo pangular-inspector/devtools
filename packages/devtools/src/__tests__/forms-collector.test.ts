@@ -316,6 +316,35 @@ describe('forms collector', () => {
     expect(bob?.origin).not.toBe('user');
   });
 
+  it('skips reading the forms on a refresh when nothing changed', async () => {
+    const fixture = await mount(Profile);
+    const h = harness();
+    const ng = (globalThis as any).ng;
+    const original = ng.getDirectives;
+    let reads = 0;
+    ng.getDirectives = (el: Element) => {
+      reads++;
+      return original(el);
+    };
+    try {
+      await h.collector.sync();
+      await h.collector.sync();
+      await tick();
+      reads = 0;
+      await h.collector.sync();
+      expect(reads).toBe(0);
+      // A Signal Form reports no events, so its value tells the refresh to read again.
+      fixture.componentInstance.form.name().value.set('Bob');
+      await h.collector.sync();
+      expect(reads).toBeGreaterThan(0);
+      await h.collector.push();
+      await tick(LEASED_PUSH_MS + 100);
+      expect(h.reports().at(-1).forms[0].root.children[0].value).toBe('Bob');
+    } finally {
+      ng.getDirectives = original;
+    }
+  });
+
   it('answers form actions for its own forms only', async () => {
     const fixture = await mount(Login);
     const h = harness();

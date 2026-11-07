@@ -185,10 +185,23 @@ export function attachForms(
   let hosts: Element[] | null = null;
   const added = new Set<Element>();
   let lastFullScan = 0;
+  // Whether anything that can change a form happened since the last read: a form event,
+  // user input, a DOM change, a WebMCP call or a devtools action. `sync` skips the read
+  // while nothing did (see `unchanged`).
+  let changed = true;
+  // One more read after a read that changes caused, for what the next render shows.
+  let settleRead = false;
+  let lastRead = 0;
+  let lastReport: Record<string, unknown> | null = null;
+  // The last read had a pending field, a debounce or a submit in flight, which change on
+  // their own, so the next one reads again.
+  let volatile = false;
+  let signalPrints = new Map<object, unknown[]>();
   const observed = new WeakSet<Node>();
   const observer =
     typeof MutationObserver === 'function'
       ? new MutationObserver((records) => {
+          if (records.length) changed = true;
           for (const record of records) {
             for (const node of Array.from(record.addedNodes)) {
               if (node.nodeType === 1) added.add(node as Element);
@@ -549,11 +562,62 @@ export function attachForms(
     await channel.send(report);
   }
 
-  async function pushForms(wake = false, paced = false) {
+  /** What changes in a Signal Form show in: the value, the errors and the root flags. */
+  function signalPrint(root: AnyRecord): unknown[] {
+    return ['value', 'errorSummary', 'valid', 'pending', 'touched', 'dirty', 'submitting'].map(
+      (name) => read(() => root[name](), undefined),
+    );
+  }
+
+  function readSignalPrints(): Map<object, unknown[]> {
+    const prints = new Map<object, unknown[]>();
+    for (const form of foundById.values()) {
+      if (form.kind === 'signal') prints.set(form.root, signalPrint(form.root));
+    }
+    return prints;
+  }
+
+  /**
+   * Nothing changed since the last read: no change was signalled, the Signal Forms (which
+   * report no events) still hold the same values, errors and flags, nothing was pending,
+   * and the last read is younger than a heartbeat, the safety net for what slips past.
+   */
+  function unchanged(now: number): boolean {
+    if (changed || settleRead || volatile || !lastReport || now - lastRead >= HEARTBEAT_MS) {
+      return false;
+    }
+    const prints = readSignalPrints();
+    if (prints.size !== signalPrints.size) return false;
+    for (const [root, print] of prints) {
+      const before = signalPrints.get(root);
+      if (!before || print.some((value, i) => !Object.is(value, before[i]))) return false;
+    }
+    return true;
+  }
+
+  function isVolatile(form: CollectedForm): boolean {
+    if (form.submit?.submitting) return true;
+    const visit = (node: FormFieldNode): boolean =>
+      node.status === 'PENDING' ||
+      !!node.debouncing ||
+      !!node.submitting ||
+      (node.children ?? []).some(visit);
+    return visit(form.root);
+  }
+
+  async function pushForms(wake = false, paced = false, skipUnchanged = false) {
     try {
       const ng = getNg();
       if (!ng?.getDirectives) return;
       const now = Date.now();
+      if (skipUnchanged && !wake && unchanged(now)) {
+        const report = lastReport!;
+        await channel.keepalive(() => report);
+        return;
+      }
+      settleRead = changed;
+      changed = false;
+      lastRead = now;
       const full = !hosts || !observer || (added.size > 0 && now - lastFullScan >= HEARTBEAT_MS);
       const found = findForms(ng, full ? scanAll() : knownElements());
       if (full) lastFullScan = now;
@@ -619,6 +683,8 @@ export function attachForms(
       }
       // The read above may have learned secrets that events recorded before it hold.
       remaskEvents(formEvents);
+      signalPrints = readSignalPrints();
+      volatile = pendingSince.size > 0 || forms.some(isVolatile);
       const report = {
         pageId,
         forms,
@@ -628,6 +694,7 @@ export function attachForms(
         instrumented: !!instrumentation,
         ...(droppedEvents ? { dropped: droppedEvents } : {}),
       };
+      lastReport = report;
       if (!wake && options.active && !options.active()) await channel.keepalive(() => report);
       else await deliver(report, paced && !wake);
     } catch {
@@ -636,6 +703,7 @@ export function attachForms(
   }
 
   function schedulePush() {
+    changed = true;
     if (pushTimer) return;
     pushTimer = setTimeoutOutside(() => {
       pushTimer = undefined;
@@ -694,6 +762,7 @@ export function attachForms(
   }
 
   function setInstrumented(on: boolean): FormActionResult {
+    changed = true;
     if (on && !instrumentation) {
       probeEveryTime(true);
       instrumentation = instrumentForms(onInstrumentedCall, ownerNames);
@@ -906,6 +975,7 @@ export function attachForms(
         active?.();
         return respond({ ok: true, message: active ? 'Picking cancelled.' : 'No pick to cancel.' });
       }
+      changed = true;
       devtoolsSincePush = addForms(
         devtoolsSincePush,
         request.formId ? new Set([request.formId]) : ALL_FORMS,
@@ -922,8 +992,9 @@ export function attachForms(
 
   return {
     push: (wake = false) => pushForms(wake),
-    sync: () => pushForms(false, true),
+    sync: () => pushForms(false, true, true),
     leave() {
+      changed = true;
       clearTimeout(pushTimer);
       pushTimer = undefined;
       clearTimeout(sendTimer);
