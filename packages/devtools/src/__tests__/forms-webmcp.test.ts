@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   inferShape,
   requiredNow,
+  RUN_TIMEOUT_MS,
   schemaInputs,
   schemaRequired,
   watchWebMcp,
@@ -287,6 +288,34 @@ describe('watchWebMcp', () => {
     touched = watcher.takeActivity();
     expect(touched(other)).toBe('maybe');
     expect(touched(undefined)).toBe('maybe');
+  });
+
+  it('gives up on a tried tool that does not answer within 10 seconds', async () => {
+    fakeContext();
+    const watcher = watch();
+    await (navigator as any).modelContext.registerTool(
+      {
+        name: 'hang',
+        description: 'Never answers',
+        inputSchema: schema,
+        execute: () => new Promise<unknown>(() => {}),
+      },
+      {},
+    );
+    await tick();
+    const root = fieldNode({ name: 'Ada', age: 3, tags: [{ label: 'x' }] });
+    expect(watcher.describe([{ root, formId: 'a@pg' }]).forms.get(root)?.name).toBe('hang');
+    vi.useFakeTimers();
+    try {
+      const running = watcher.run(root, { name: 'Ada', age: 3, tags: [] });
+      await vi.advanceTimersByTimeAsync(RUN_TIMEOUT_MS);
+      expect(await running).toEqual({
+        ok: false,
+        error: 'The tool hang did not answer within 10s.',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('masks tokens in the description, error and call detail of a tool no form owns', async () => {

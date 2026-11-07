@@ -3,6 +3,9 @@ import { redactText, serialize } from './serialize.ts';
 import { childPath } from './forms-path.ts';
 import { tokenName, type DebugNg } from './injector-tree.ts';
 
+/** Longest a tried WebMCP tool may take to answer. */
+export const RUN_TIMEOUT_MS = 10_000;
+
 type AnyRecord = Record<string, any>;
 
 export type WebMcpOutcome = 'running' | 'submitted' | 'failed' | 'done' | 'threw';
@@ -558,10 +561,21 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
       } finally {
         trying = false;
       }
+      // A tool that never settles would keep the form action, and with it the
+      // devtools origin of every later form event, open for good.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`The tool ${record.name} did not answer within 10s.`)),
+          RUN_TIMEOUT_MS,
+        );
+      });
       try {
-        return { ok: true, text: resultText(await out).slice(0, 2000) };
+        return { ok: true, text: resultText(await Promise.race([out, timedOut])).slice(0, 2000) };
       } catch (error) {
         return { ok: false, error: messageOf(error) };
+      } finally {
+        clearTimeout(timer);
       }
     },
     describe(forms, ng) {
