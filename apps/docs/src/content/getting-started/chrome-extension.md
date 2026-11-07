@@ -152,8 +152,8 @@ The extension adds an **Angular component** pane to the Elements panel, next to 
 | `host`       | The host element's tag.                                                              |
 | `selected`   | The selected element's tag, when you selected an element inside the host.            |
 | `file`       | The component file and the line of its class, from Angular's development debug info. |
-| `inputs`     | Each input and its value.                                                            |
-| `signals`    | Signals and resources that are fields of the component, with their current value.    |
+| `inputs`     | Each input and its value, input signals included.                                    |
+| `signals`    | The other signals and resources that are fields, with their current value.           |
 | `properties` | The other fields, except injected services and methods.                              |
 | `outputs`    | The output names.                                                                    |
 | `directives` | The other directives on the host, when there are any.                                |

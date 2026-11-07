@@ -228,7 +228,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `pangular skills` lists or installs the bundled agent skills.
 - `pangular dev` takes `--proxy-origin`, `--allowed-origin` and `--auth-token`.
 - `pangular build` refuses an `--outDir` that would delete files that are not a previous report, unless `--force` is passed.
-- `buildReport()` from `@pangular-inspector/devtools/cli` writes the static report from a script, with the same options and output folder checks as `pangular build`.
+- `buildReport()` from `@pangular-inspector/devtools/cli` writes the static report from a script, with the output folder checks of `pangular build`. Unlike `pangular build`, it resolves `outDir` against the working directory, and `config` takes a config object, not a file path.
 - The source scan reads Nx projects.
 
 ### Performance
