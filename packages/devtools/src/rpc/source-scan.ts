@@ -6,6 +6,7 @@ import {
   realpathSync,
   statSync,
   type Dirent,
+  type Stats,
 } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
@@ -496,7 +497,7 @@ function skipsDirectory(name: string, top: boolean): boolean {
  */
 export function walkFiles(
   dir: string,
-  visit: (full: string, name: string) => boolean | void,
+  visit: (full: string, name: string, stats: Stats) => boolean | void,
   maxDepth = Infinity,
   top = true,
 ): boolean {
@@ -508,8 +509,9 @@ export function walkFiles(
   }
   for (const entry of entries) {
     const full = join(dir, entry);
+    let stats: Stats;
     try {
-      const stats = lstatSync(full);
+      stats = lstatSync(full);
       if (stats.isSymbolicLink()) continue;
       if (stats.isDirectory()) {
         if (maxDepth > 0 && !skipsDirectory(entry, top)) {
@@ -520,7 +522,7 @@ export function walkFiles(
     } catch {
       continue;
     }
-    if (visit(full, entry) === false) return false;
+    if (visit(full, entry, stats) === false) return false;
   }
   return true;
 }
