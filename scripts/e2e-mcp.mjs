@@ -1578,6 +1578,13 @@ async function runActions(state) {
       'the log gets a Restore entry',
       /restore/i.test(history.split('\n').slice(-5).join('\n')),
     );
+    const why = await read('ngrx-explain-change', { seq: beforeSave.seq, page: ctx.pageId });
+    write(
+      'ngrx-explain-change',
+      `explains log entry #${beforeSave.seq}, the toggleSaved call`,
+      why.includes(`#${beforeSave.seq}`) && why.includes('toggleSaved'),
+      why.slice(0, 300),
+    );
   } else {
     write('ngrx-restore', 'found a toggleSaved entry to restore', false);
   }
@@ -1586,7 +1593,16 @@ async function runActions(state) {
   // ngrx-store-devtools: pause and resume recording, and refuse an entry that does not exist
   await act('ngrx-store-devtools', { op: 'pause', paused: true, page: ctx.pageId }, 'any');
   await act('ngrx-store-devtools', { op: 'pause', paused: false, page: ctx.pageId }, 'any');
-  await act('ngrx-store-devtools', { op: 'toggle', seq: 999_999, page: ctx.pageId }, 'refusal');
+  r = await act('ngrx-store-devtools', { op: 'toggle', seq: 999_999, page: ctx.pageId }, 'any');
+  write(
+    'ngrx-store-devtools',
+    'toggling an entry that does not exist answers isError with the reason',
+    r.isError === true &&
+      /No log entry #999999|has no @ngrx\/store Store|needs provideStoreDevtools\(\)/.test(
+        r.markdown,
+      ),
+    r.markdown.slice(0, 300),
+  );
   await act('ngrx-dispatch', { type: '[E2E] Ping', payload: { id: 1 } }, 'refusal');
 
   // plugin action
