@@ -313,6 +313,8 @@ The [Chrome extension](./chrome-extension.md) adds a panel to Chrome DevTools. I
 
 ## FAQ
 
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
+
 <ngmd-accordion>
   <ngmd-accordion-item title="Do I need to install devframe?" open>
     No. The package depends on Devframe and re-exports <code>initDevframe</code> from <code>&#64;pangular-inspector/devtools/devframe</code>, for example to <a href="./express.md#mount-only-the-panel">mount only the panel</a>. Import it from there, so the panel and the devframe definition come from the same Devframe copy.

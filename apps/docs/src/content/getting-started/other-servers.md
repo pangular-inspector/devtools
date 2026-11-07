@@ -237,6 +237,8 @@ The hub is off when `NODE_ENV` is `production`. `handler` then answers 404, `att
 
 ## Troubleshooting
 
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
+
 <ngmd-accordion>
   <ngmd-accordion-item title="Every app route answers 404" open>
     <code>devtools.handler</code> is mounted on a route that matches more than <code>devtools.base</code>. It answers 404 outside the base and doesn't fall through. Mount it on <code>`${devtools.base}*`</code> (Hono) or <code>`${devtools.base}**`</code> (h3).
