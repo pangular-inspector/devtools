@@ -112,6 +112,8 @@ export function parseWorkspaceJson(text: string): unknown {
     } else if (ch === '/' && text[i + 1] === '*') {
       const end = text.indexOf('*/', i + 2);
       if (end < 0) return undefined;
+      // A space in its place, so `1/* c */2` stays two tokens and fails like the CLI would.
+      out += ' ';
       i = end + 1;
     } else if (ch === ',') {
       // Held back until the next token shows whether it is a trailing comma.

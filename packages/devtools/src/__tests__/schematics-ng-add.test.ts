@@ -195,6 +195,13 @@ describe('detectSetup', () => {
     expect(parseWorkspaceJson('{"q": "say \\"hi\\", ]"}')).toEqual({ q: 'say "hi", ]' });
   });
 
+  it('does not join two tokens around a block comment', () => {
+    expect(parseWorkspaceJson('{"projects": {}, "version": 1/* c */2}')).toBeUndefined();
+    const tree = workspace({ 'src/main.ts': MAIN }, null);
+    tree.create('angular.json', '{"projects": {}, "version": 1/* c */2}');
+    expect(detectSetup(tree)).toEqual({ kind: 'unreadable' });
+  });
+
   it('treats an empty angular.json as unreadable and changes nothing', () => {
     for (const text of ['', '  \n']) {
       const tree = workspace({ 'src/main.ts': MAIN }, null);
