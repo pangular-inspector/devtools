@@ -2,19 +2,6 @@
 
 All notable changes to `@pangular-inspector/devtools` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
 
-## Unreleased
-
-### Added
-
-- **Live match count in the fault rule form.** Under **URL pattern**, the SSR & HTTP tab says how many of the recorded calls the pattern matches with the chosen method and side, as you type.
-- **Fault rule presets: Offline, Slow 3G and Flaky.** Each adds plain rules for every browser request: a network error, a 2000 ms delay, or a 503 for 30% of requests. Two rule fields make them possible and work on any rule: status `0` fails a request as a network error (an `HttpErrorResponse` with status 0), and `chance` (1 to 99) applies a rule to that share of matching requests. `set-http-rule` takes both.
-- **HAR export.** **Export HAR** in the SSR & HTTP tab saves the timeline as a HAR 1.2 file: the SSR request that served the page, then its server and client calls, with headers and response previews. Values are masked as in the panel.
-- **Copy as fetch and Copy as cURL.** The response preview copies the open call as a `fetch()` statement or a `curl` command, built from the masked copy, so secrets stay `[redacted]`. Nothing is sent.
-- **TransferState payload checks.** The payload section shows the size against a 100 KB budget, the largest entries with size bars, and URLs the transfer cache stored under more than one key. `inspect-transfer-state` adds the same warnings to its key list.
-- **HTTP lint and the `lint-http` agent tool.** A new HTTP lint section flags the same GET fired again within 2000 ms, chains of 3 or more calls that ran one after another and could start together, and server calls the browser made again. `lint-http` returns the same findings with call ids.
-- **A Server-Timing entry per server HttpClient call.** Traced renders add `fetch-1;desc="GET /api/products";dur=12` and so on, for the first 20 calls, so Chrome's Timing tab shows each call. The description is the method and the masked path, without the query.
-- **Calls labeled by the API that likely started them.** The interceptor reads the call stack and tags a call **likely httpResource()**, **likely resource()** or **likely @defer** in the timeline, in `list-http-calls` and in the HAR export. It is a guess from Angular's frame names in development builds.
-
 ## 1.0.0
 
 Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0.7** first.
@@ -169,6 +156,17 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
+
+#### SSR & HTTP tools
+
+- **Live match count in the fault rule form.** Under **URL pattern**, the SSR & HTTP tab says how many of the recorded calls the pattern matches with the chosen method and side, as you type.
+- **Fault rule presets: Offline, Slow 3G and Flaky.** Each adds plain rules for every browser request: a network error, a 2000 ms delay, or a 503 for 30% of requests. Two rule fields make them possible and work on any rule: status `0` fails a request as a network error (an `HttpErrorResponse` with status 0), and `chance` (1 to 99) applies a rule to that share of matching requests. `set-http-rule` takes both.
+- **HAR export.** **Export HAR** in the SSR & HTTP tab saves the timeline as a HAR 1.2 file: the SSR request that served the page, then its server and client calls, with headers and response previews. Values are masked as in the panel.
+- **Copy as fetch and Copy as cURL.** The response preview copies the open call as a `fetch()` statement or a `curl` command, built from the masked copy, so secrets stay `[redacted]`. Nothing is sent.
+- **TransferState payload checks.** The payload section shows the size against a 100 KB budget, the largest entries with size bars, and URLs the transfer cache stored under more than one key. `inspect-transfer-state` adds the same warnings to its key list.
+- **HTTP lint and the `lint-http` agent tool.** A new HTTP lint section flags the same GET fired again within 2000 ms, chains of 3 or more calls that ran one after another and could start together, and server calls the browser made again. `lint-http` returns the same findings with call ids.
+- **A Server-Timing entry per server HttpClient call.** Traced renders add `fetch-1;desc="GET /api/products";dur=12` and so on, for the first 20 calls, so Chrome's Timing tab shows each call. The description is the method and the masked path, without the query.
+- **Calls labeled by the API that likely started them.** The interceptor reads the call stack and tags a call **likely httpResource()**, **likely resource()** or **likely @defer** in the timeline, in `list-http-calls` and in the HAR export. It is a guess from Angular's frame names in development builds.
 
 #### Agents and MCP
 
