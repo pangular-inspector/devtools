@@ -35,7 +35,14 @@ Select a store to see:
 - **Store DevTools on** or **Store DevTools off**, for the classic Store.
 - **Referenced by**: the component fields that hold it.
 - **State**, **Computed** and **Methods**, with a call count per method. **Copy** next to **State** copies the state as shown in the panel, with secrets already redacted. The copy is the panel's formatted text, not strict JSON. The tab tags `signalMethod` and `rxMethod` members. Once a method has been called, its chip also shows the average and last call duration, in milliseconds.
+- **withDevtools: watched only**, for a signal store that uses `withDevtools()`. See [Stores that use `withDevtools()`](#stores-that-use-withdevtools).
 - **Entities**, for a `signalStore` that calls `withEntities()`. One group per collection, with the entity count and the ids as chips. A group past 30 ids shows the first 30 and a count of the rest.
+
+### State tree
+
+**State** shows the state as a tree. Objects at the top level start open. Select an object or array to open or close it. Type in the search box above the tree to keep only the rows whose key or value matches, with their parents, all open, and a match count. <kbd>Escape</kbd> clears the search. Past 400 rows, the tree says how many more it holds; search to narrow it.
+
+**Copy path** on a row copies its path in the form the diff uses, such as `cart.items[0].name`. Pass that path to the [`ngrx-explain-change`](../agents/tools.md#ngrx-explain-change) agent tool to ask why it changed. The paths the newest change of the store wrote are marked **changed**, and the objects that hold them open on their own. A closed object that holds one says **holds a change**.
 
 ### Store the state as a global
 
@@ -53,7 +60,35 @@ Signal stores get a **Change log**. The classic Store gets an **Action log**. Ea
 
 Open an entry to see its time, **Origin** and **Duration**, and three tabs. **Action** shows the action, or the method's arguments and the event that caused it. **Diff** shows the **State diff** with the value before and after each change. **State** reads the whole state of the store right after the entry, or right before it, from the page; see [Read any past state](#read-any-past-state). The diff lists up to 50 changes. When there were more, a line under it says how many are not shown, for example **12 more changes not shown**, and the entry's change count includes them. The overlay counts up to 1000 more, so a larger change reads **1000+ more changes not shown**. A method-call entry also shows its **Duration**, in milliseconds. An entry caused by a dispatched event shows the event under **Caused by event**. An action entry also has **Dispatch again**. **Copy** next to **State diff** copies that entry's diff in the same format as **State**, one object per change with its `path`, `op`, `before` and `after`. An entry that changed nothing has no diff to copy.
 
+With [`ngrx.trace`](../getting-started/configuration.md#ngrx) on, an entry also lists **Called from**: the app frames of the dispatch, method call or `patchState` that made it, the closest call first. With the server connected, each frame opens its file in your editor.
+
 Entry numbers start at 1 again when the app reloads. So when the app reloads, or the selected page closes and the tab shows another one, the open entry closes and a pending **Restore** confirmation is cancelled.
+
+### Action frequency
+
+**Action frequency** under the log counts how often each action, method call or write of the selected store ran since the page loaded, including entries the log no longer keeps.
+
+| Column               | What it shows                                                                   |
+| -------------------- | ------------------------------------------------------------------------------- |
+| **Count**            | Entries of that type since load.                                                |
+| **Avg**, **Longest** | The duration of signal store method calls. `n/a` for actions, which carry none. |
+| **Peak per second**  | The most entries of that type within any one second.                            |
+
+An action an NgRx effect dispatched 20 or more times within one second is flagged **Possible effect loop**. Check that effect for a missing filter, or for a dispatch of the action that triggers it. The page counts up to 100 types, keeping the most recent.
+
+### Store DevTools history
+
+With `provideStoreDevtools()`, the classic Store gets a **Store DevTools history** section.
+
+| Control                     | What it does                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pause recording**         | Store DevTools stops recording new actions. They still change the state, but cannot be restored. **Resume recording** starts recording again.       |
+| **Jump to committed state** | Shows the state Store DevTools starts from. The store is then paused on it, like a restore; **Back to latest** resumes.                             |
+| **Commit**                  | Makes the current state the new starting point. Earlier entries can no longer be restored.                                                          |
+| **Reset…**                  | After **Reset history** to confirm, puts the store back on its initial state and empties the history. Earlier entries can no longer be restored.    |
+| **Skip this action**        | On an open action entry: Store DevTools computes the state again without it, and the entry gets a `skipped` tag. **Include this action** undoes it. |
+
+Each operation adds a `Store DevTools: …` entry to the log, so the diff shows where the state moved.
 
 ### Read any past state
 
@@ -121,6 +156,10 @@ A `patchState` outside a method and a `Restore #N` entry carry no duration. A me
 For the classic Store, the overlay listens to the dispatched actions. It also wraps `dispatch` and `next` on the Store to tag each action with its origin, and puts them back when the page disconnects.
 
 The overlay diffs a copy of the state that keeps the first 100 items of each array or object. When a change is past that limit, it compares the live state instead, so the entry still lists the change.
+
+### Stores that use `withDevtools()`
+
+A signal store that uses `withDevtools()` from `@angular-architects/ngrx-toolkit` already reports its changes through `watchState`, so the overlay leaves it as it is: it does not wrap the store's methods or state signals. With `watchState` registered, each `patchState` gets its own entry. Without it, the overlay compares the state each time it collects and logs the writes since the last time as one `patchState` entry. Either way, entries are not labeled with a method, and **Methods** lists the methods without call counts.
 
 For `@ngrx/signals/events`, the overlay finds the platform `Dispatcher` and every component-scoped one from `provideDispatcher()`, and records each event once, from the dispatcher that handles it. When a store's state changes while an event is being dispatched, that change's log entry is tagged with the event.
 
@@ -266,6 +305,8 @@ The stand-in is part of the NgRx inspector. With [`inspectors.ngrx`](../getting-
 | `pangular:ngrx-import-session`  | tool     | Reads an exported session back, for the two tools above and below.                                                                |
 | `pangular:ngrx-generate-test`   | tool     | A Vitest spec from a range of entries, live or imported.                                                                          |
 | `pangular:ngrx-restore`         | tool     | Restores the state after an entry, or sends Store DevTools back to the latest state. An action tool.                              |
+| `pangular:ngrx-store-devtools`  | tool     | Skips or includes an action, jumps, commits, resets, or pauses recording in the Store DevTools history. An action tool.           |
+| `pangular:ngrx-explain-change`  | tool     | Which log entries wrote a state path, with the action or method, its arguments, origin, causing event and call site.              |
 | `pangular:redux-inspect-stores` | tool     | The NGXS, Elf, MiniRx and other Redux DevTools stores of a page, or one of them with its state and latest actions.                |
 
 See [NgRx tools](../agents/tools.md#ngrx-inspect-entry), [Restore a state](../agents/tools.md#restore-a-state) and [Resources](../agents/resources.md).
@@ -306,7 +347,7 @@ The copy buttons use the browser clipboard. If the panel cannot write to it, for
 
 ### Write actions
 
-Restore, **Back to latest**, **Dispatch** and **Dispatch again** need [`actions.ngrx`](../getting-started/configuration.md#actions). With it off, the panel disables them, the server refuses them, and the `ngrx-dispatch` and `ngrx-restore` tools are dropped. The **State** tab, **Session** and their tools only read, so they keep working.
+Restore, **Back to latest**, **Dispatch**, **Dispatch again** and the **Store DevTools history** controls need [`actions.ngrx`](../getting-started/configuration.md#actions). With it off, the panel disables them, the server refuses them, and the `ngrx-dispatch`, `ngrx-restore` and `ngrx-store-devtools` tools are dropped. The **State** tab, **Session** and their tools only read, so they keep working.
 
 ### Log size
 

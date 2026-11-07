@@ -146,6 +146,10 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Signals:** the live signal graph drawn, watched signals, and links from components to injectors.
 - **Injectors:** a page picker, a created provider's value, startup timing and the slowest providers.
 - **NgRx Store:** full state for every entry still in the log, session export and import, generated tests, and NGXS, Elf and MiniRx through their Redux DevTools integration.
+- **NgRx Store:** the state is a tree with search, **Copy path** and the paths of the newest change marked. Store DevTools gets **Pause recording**, **Jump to committed state**, **Commit**, **Reset…** and **Skip this action** (#368).
+- **NgRx Store:** an **Action frequency** table counts each action, method and write since load, with durations and the peak per second, and flags an effect that dispatches the same action 20 times within a second (#368).
+- **NgRx Store:** the opt-in `ngrx.trace` option records the redacted app frames each change log entry came from, shown as source links in the entry (#368).
+- **NgRx Store:** a signal store that uses `withDevtools()` is watched through `watchState` only, without wrapping its methods or signals (#368).
 - **TanStack Query:** a tab for queries and mutations, with invalidate and refetch.
 - **SSR & HTTP:** a network waterfall, search and filters on the timeline, response preview format, copy and mock, TransferState keys and edits in SSR overrides, and SSR tracing for fetch handlers such as Hono, h3 and Nitro.
 - **Errors:** a tab for `ErrorHandler` errors, uncaught errors, unhandled rejections and the console, with NG0xxx codes and explainers for NG0100, hydration mismatches and missing providers.
@@ -159,7 +163,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 #### Agents and MCP
 
-- 98 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
+- 100 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, `ngrx-store-devtools`, `ngrx-explain-change` (#368), the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.

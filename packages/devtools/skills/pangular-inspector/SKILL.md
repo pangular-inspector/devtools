@@ -39,6 +39,7 @@ Pangular Inspector reads a running Angular app through Angular's debug APIs and 
 | Which HTTP calls ran, and what did SSR do?            | `list-http-calls`, `list-ssr-requests`, `explain-ssr-request`                     |
 | Why is it slow, or why does it re-render?             | `change-detection`, `diagnose-change-detection` (see `pangular-performance`)      |
 | What does the NgRx store or a Signal Store hold?      | `ngrx-store` resource, `ngrx-inspect-store`, `ngrx-history`                       |
+| Why did an NgRx state value change?                   | `ngrx-explain-change`, with the `path` from the diff                              |
 | What is declared in the source?                       | `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `scan-pipes`  |
 
 Live state is also available as MCP resources, such as `pangular:component-tree`. Read a resource when you need the whole structure, and a tool when you have a question.
