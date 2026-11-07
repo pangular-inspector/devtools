@@ -118,6 +118,22 @@ The card shows when the page has the plugin. One plugin has a card: `Foldable`, 
 | **Active display**    | `activeDisplay` of `getFoldState()` and `foldStateChange`                |
 | **Size class**        | `widthClass` and `heightClass` of `getSizeClass()` and `sizeClassChange` |
 
+### Ionic page stacks
+
+When the page uses Ionic, the tab shows an **Ionic page stacks** section with a card for each `ion-router-outlet`. An outlet keeps the pages it has shown in a stack, so the card lists them oldest first and marks the page shown now as **Active**.
+
+| Field               | What it is                                                                                                                                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pages**           | How many pages the stack holds.                                                                                                                                                                                                                          |
+| **Last navigation** | **Forward**, **Back** or **Root**: the direction of the outlet's last navigation, with **tab switch** or **no animation** when Ionic said so. **(from the stack)** marks a direction the overlay inferred. **Not seen yet** before the first navigation. |
+| **Can go back**     | Whether the stack of the active page has a page to go back to.                                                                                                                                                                                           |
+
+Each row shows the page's component and, with `@ionic/angular`, the URL Ionic stored for it. Hover or focus a row to outline the page in the app, and select it to scroll to it. A page Ionic hid in the stack can show no outline. An outlet inside `ion-tabs` shows its tab URL, and a named outlet shows its name.
+
+The overlay reads the stack through the `IonRouterOutlet` directive of `@ionic/angular`, from `ng.getDirectives()`, so it needs a development build. Without the directive, the card reads the outlet's `.ion-page` children from the DOM: the active page is the last one without `ion-page-hidden`, and there are no URLs. The direction comes from the outlet's `stackDidChange` output, which the overlay listens to without changing it. Before the first event, the overlay infers it from how the stack changed. It changes nothing in the app.
+
+The section shows when the page the tab shows has an `ion-app` or an `ion-router-outlet`. It lists up to 20 outlets with up to 50 pages each, and says how many it left out. URLs are masked like router URLs.
+
 ## Where the data comes from
 
 A plugin's native calls go through `Capacitor.nativePromise` and `Capacitor.nativeCallback`. The overlay wraps both on the page to watch the calls, and passes every argument and result through unchanged. It never adds plugin listeners of its own. This works with plugins the app registered before the overlay loaded, in Capacitor 6, 7 and 8.
@@ -183,7 +199,7 @@ See [Tools](../agents/tools.md#capacitor) for their arguments.
 
 The page and the server keep the latest [`limits.capacitorCalls`](../getting-started/configuration.md#limits) calls, 200 by default. When older calls are dropped, the tab says how many.
 
-To turn the inspector off, set `inspectors.capacitor` to `false`. The tab, the dock, the page collector and both agent tools go away. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
+To turn the inspector off, set `inspectors.capacitor` to `false`. The tab, the dock, the page collectors (Capacitor and Ionic) and both agent tools go away. See [Inspectors and agent tools](../getting-started/configuration.md#inspectors-and-agent-tools).
 
 ## FAQ
 
