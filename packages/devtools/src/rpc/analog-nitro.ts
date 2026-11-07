@@ -8,6 +8,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { entriesOf, blockAt, readConfigSource, type ConfigEntry } from './analog-config-blocks.ts';
 import type { AnalogProject } from './analog-scan.ts';
 import { redactText } from '../serialize.ts';
+import { DEVTOOLS_HEADER, redactBody } from '../analog-server-log.ts';
 
 export interface NitroStorageMount {
   name: string;
@@ -233,6 +234,98 @@ export function purgeNitroCache(
     }
   }
   return { ok: true, removed };
+}
+
+export interface TaskRunResult {
+  ok: boolean;
+  name: string;
+  status?: number;
+  ms?: number;
+  /** The task's answer, masked and clipped. */
+  output?: string;
+  error?: string;
+}
+
+const TASK_TIMEOUT_MS = 30_000;
+const MAX_TASK_OUTPUT = 4000;
+const MAX_PAYLOAD = 10_000;
+
+/**
+ * Runs one Nitro task on the dev server through Nitro's dev task route
+ * (`/_nitro/tasks/<name>`), which answers only with `nitro.experimental.tasks`
+ * on. `name` must be a task `nitroInternals` lists; the answer is masked.
+ */
+export async function runNitroTask(
+  project: Pick<AnalogProject, 'root' | 'config'>,
+  name: unknown,
+  payload: unknown,
+  origin: string | undefined,
+  timeoutMs = TASK_TIMEOUT_MS,
+): Promise<TaskRunResult> {
+  const task = typeof name === 'string' ? name : '';
+  if (!task || !nitroInternals(project).tasks.some((t) => t.name === task)) {
+    return {
+      ok: false,
+      name: task.slice(0, 100),
+      error: `${task.slice(0, 100) || 'That'} is not a task under src/server/tasks. List them with pangular:analog-scan-nitro.`,
+    };
+  }
+  if (
+    payload !== undefined &&
+    (!payload || typeof payload !== 'object' || Array.isArray(payload))
+  ) {
+    return { ok: false, name: task, error: 'Pass payload as an object.' };
+  }
+  const body = JSON.stringify({ payload: payload ?? {} });
+  if (body.length > MAX_PAYLOAD)
+    return { ok: false, name: task, error: 'The payload is too large.' };
+  if (!origin) {
+    return {
+      ok: false,
+      name: task,
+      error:
+        'The dev server address is unknown. This works only through the pangular() Vite plugin.',
+    };
+  }
+  const started = performance.now();
+  try {
+    const response = await fetch(
+      `${origin.replace(/\/+$/, '')}/_nitro/tasks/${encodeURIComponent(task)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', [DEVTOOLS_HEADER]: '1' },
+        body,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs),
+      },
+    );
+    const text = redactBody(await response.text());
+    const output = text.length > MAX_TASK_OUTPUT ? `${text.slice(0, MAX_TASK_OUTPUT)}…` : text;
+    const result: TaskRunResult = {
+      ok: response.ok,
+      name: task,
+      status: response.status,
+      ms: Math.round(performance.now() - started),
+      output,
+    };
+    if (response.status === 404) {
+      result.error =
+        'Nitro has no task route. Turn on nitro.experimental.tasks in vite.config to run tasks from the dev server.';
+    } else if (!response.ok) {
+      result.error = `The task failed with ${response.status}.`;
+    }
+    return result;
+  } catch (error) {
+    const timedOut = (error as Error)?.name === 'TimeoutError';
+    return {
+      ok: false,
+      name: task,
+      ms: Math.round(performance.now() - started),
+      error: timedOut
+        ? `The task did not finish within ${Math.round(timeoutMs / 1000)} seconds.`
+        : redactText(String((error as Error)?.message ?? error)).slice(0, 300),
+    };
+  }
 }
 
 function kb(bytes: number): string {

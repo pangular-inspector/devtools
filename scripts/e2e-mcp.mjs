@@ -635,6 +635,11 @@ const READ_PLAN = [
   ['analog-scan-prerender', null, () => ({})],
   ['analog-scan-content', null, () => ({})],
   ['analog-lint', null, () => ({})],
+  ['analog-scan-build', null, () => ({})],
+  ['analog-scan-nitro', null, () => ({})],
+  ['analog-scan-runtime-config', null, () => ({})],
+  ['analog-inspect-transform', null, () => ({ file: '/src/app/pages/index.page.ts' })],
+  ['analog-inspect-render-mode', null, () => ({ path: '/' })],
   ['capacitor-list-calls', null, () => ({})],
   ['capacitor-list-plugins', null, () => ({})],
   ['tanstack-list-queries', null, () => ({})],
@@ -832,6 +837,8 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'audit',
   'clear-recordings',
   'analog-run-api',
+  'analog-run-nitro-task',
+  'analog-purge-nitro-cache',
   'plugin_travel_clear-saved',
   'highlight',
 ]);
@@ -1874,6 +1881,10 @@ async function runActions(state) {
   await act('tanstack-run-query', { action: 'invalidate', key: 'products' }, 'refusal');
   await act('analog-run-api', { path: '/api/products' }, 'refusal');
   await act('analog-run-api', { path: '/api/products', method: 'DELETE' }, 'refusal');
+  await act('analog-run-nitro-task', { name: 'db:migrate' }, 'refusal');
+  await act('analog-run-nitro-task', { name: 'db:migrate', confirm: true }, 'refusal');
+  await act('analog-purge-nitro-cache', {}, 'refusal');
+  await act('analog-purge-nitro-cache', { confirm: true }, 'refusal');
 
   // Forms: fill-form and run-form-action on the booking form.
   await app.go('/destinations');
@@ -2157,6 +2168,8 @@ const ACTION_VALID = {
   }),
   'remove-ssr-override': () => ({ id: 'no-such-override' }),
   'analog-run-api': () => ({ path: '/api/none' }),
+  'analog-run-nitro-task': () => ({ name: 'none' }),
+  'analog-purge-nitro-cache': () => ({}),
   'plugin_travel_clear-saved': () => ({}),
   'change-detection': () => ({}),
   hydration: () => ({}),
@@ -2590,6 +2603,8 @@ async function runVariants(opts, sdk, browser, config, state) {
           'clear-recordings',
           'tanstack-run-query',
           'analog-run-api',
+          'analog-run-nitro-task',
+          'analog-purge-nitro-cache',
           'plugin_travel_clear-saved',
         ]) {
           check(!names.has(name), scope, `${name} is still listed`);
@@ -2990,6 +3005,9 @@ function runDocs(state) {
     'params',
     'replaceurl',
     'skiplocationchange',
+    'cookies',
+    'files',
+    'payload',
   ]);
   // Library tools are documented but not listed for the demo, which uses none of the libraries.
   docs.phantomTools = [...documented].filter(

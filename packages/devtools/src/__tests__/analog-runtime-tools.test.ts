@@ -348,3 +348,75 @@ describe('Analog runtime agent tools', () => {
     expect(trace.error).toMatch(/page, layout or \.server\.ts/);
   });
 });
+
+describe('runNitroTask', () => {
+  let server: Server;
+  let origin = '';
+  const got: { url?: string; method?: string; body: string; devtools?: string }[] = [];
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        got.push({
+          url: req.url,
+          method: req.method,
+          body,
+          devtools: String(req.headers['x-pangular'] ?? ''),
+        });
+        if (req.url?.includes('slow')) return; // never answers
+        if (req.url?.includes('missing')) {
+          res.statusCode = 404;
+          return res.end('not found');
+        }
+        res.setHeader('content-type', 'application/json');
+        res.end(
+          JSON.stringify({
+            result: { migrated: 3, token: 'Bearer abcdefghijklmnopqrstuvwxyz0123' },
+          }),
+        );
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    origin = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}`;
+  });
+  afterAll(() => server.close());
+  const project = () =>
+    scanAnalog(
+      makeProject(BASE_FILES, {
+        'src/server/tasks/db/migrate.ts': 'export default {};\n',
+        'src/server/tasks/slow.ts': 'export default {};\n',
+        'src/server/tasks/missing.ts': 'export default {};\n',
+      }),
+    );
+
+  it('posts the payload to the task route and masks the answer', async () => {
+    const { runNitroTask } = await import('../rpc/analog-nitro.ts');
+    const result = await runNitroTask(project(), 'db:migrate', { dry: true }, origin);
+    expect(result).toMatchObject({ ok: true, name: 'db:migrate', status: 200 });
+    expect(result.output).toContain('"migrated":3');
+    expect(result.output).not.toContain('abcdefghijklmnopqrstuvwxyz0123');
+    expect(got.at(-1)).toMatchObject({
+      url: '/_nitro/tasks/db%3Amigrate',
+      method: 'POST',
+      body: '{"payload":{"dry":true}}',
+      devtools: '1',
+    });
+  });
+
+  it('refuses unknown tasks, explains a missing task route and stops at the timeout', async () => {
+    const { runNitroTask } = await import('../rpc/analog-nitro.ts');
+    const p = project();
+    const before = got.length;
+    expect((await runNitroTask(p, '../etc', undefined, origin)).error).toMatch(/not a task/);
+    expect(got.length).toBe(before);
+    expect((await runNitroTask(p, 'db:migrate', [1], origin)).error).toMatch(/object/);
+    expect((await runNitroTask(p, 'missing', undefined, origin)).error).toMatch(
+      /experimental\.tasks/,
+    );
+    const slow = await runNitroTask(p, 'slow', undefined, origin, 200);
+    expect(slow).toMatchObject({ ok: false });
+    expect(slow.error).toMatch(/did not finish/);
+  });
+});

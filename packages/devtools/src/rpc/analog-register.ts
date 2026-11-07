@@ -28,7 +28,7 @@ import {
 } from './analog-scan.ts';
 import { analogBuildText, analyzeBuild } from './analog-build.ts';
 import { contentPreview, loadContentSchema } from './analog-content.ts';
-import { nitroInternals, nitroText, purgeNitroCache } from './analog-nitro.ts';
+import { nitroInternals, nitroText, purgeNitroCache, runNitroTask } from './analog-nitro.ts';
 import { checkRenderMode } from './analog-render-check.ts';
 import { runtimeConfigText, runtimeConfigView } from './analog-runtime-config.ts';
 import { traceTransform, type TransformTrace } from '../analog-transform.ts';
@@ -54,6 +54,7 @@ import {
 } from './analog-tools.ts';
 import { LOAD_DATA_EVENT, LOAD_DATA_RESULT, type AnalogRuntimeReport } from '../analog-runtime.ts';
 import { createScanCache } from './analog-scan-cache.ts';
+import { defaultPage } from './default-page.ts';
 import type { PageOwners } from './page-owners.ts';
 import { fixedTtl, PAGE_TTL_MS, type PageTtl } from './page-ttl.ts';
 import { refusal } from './refusal.ts';
@@ -571,6 +572,18 @@ export async function registerAnalog(
     }
     return purgeNitroCache(project(), files as string[] | undefined);
   };
+  const runTask = async (name: unknown, payload: unknown, confirm: unknown) => {
+    const task = typeof name === 'string' ? name.slice(0, 100) : '';
+    if (options.blockCalls) return { ok: false, name: task, error: options.blockCalls };
+    if (confirm !== true) {
+      return {
+        ok: false,
+        name: task,
+        error: 'A task can change data; call again with confirm: true.',
+      };
+    }
+    return runNitroTask(project(), name, payload, devOrigin());
+  };
   const pagePaths = () =>
     new Set(
       flattenRoutes(project().routes)
@@ -584,7 +597,9 @@ export async function registerAnalog(
   const loadData = (pageId: unknown): Promise<LoadDataAnswer> => {
     const pages = current().pages;
     const page =
-      typeof pageId === 'string' && pageId ? pages.find((p) => p.pageId === pageId) : pages[0];
+      typeof pageId === 'string' && pageId
+        ? pages.find((p) => p.pageId === pageId)
+        : defaultPage(pages);
     if (!page) {
       return Promise.resolve({ found: false, error: 'No page sends Analog data right now.' });
     }
@@ -684,6 +699,19 @@ export async function registerAnalog(
         confirm?: unknown;
       };
       return purge(request.files, request.confirm);
+    },
+  });
+  my.rpc.register({
+    name: 'analog-run-nitro-task',
+    type: 'action',
+    jsonSerializable: true,
+    handler: (args: unknown) => {
+      const request = (args && typeof args === 'object' ? args : {}) as {
+        name?: unknown;
+        payload?: unknown;
+        confirm?: unknown;
+      };
+      return runTask(request.name, request.payload, request.confirm);
     },
   });
   my.rpc.register({
@@ -918,6 +946,34 @@ export async function registerAnalog(
       }
       return text(
         `Deleted ${result.removed} Nitro cache entr${result.removed === 1 ? 'y' : 'ies'}. The next request to those routes renders them again.`,
+      );
+    },
+  });
+  ctx.agent.registerTool({
+    id: 'pangular:analog-run-nitro-task',
+    title: 'Run a Nitro task',
+    description:
+      'Run a Nitro task from src/server/tasks on the dev server (POST /_nitro/tasks/<name>, which needs nitro.experimental.tasks) and return its masked answer. Tasks can change data, so it needs confirm: true and actions.analog. It stops waiting after 30 seconds.',
+    inputSchema: {
+      type: 'object',
+      required: ['name', 'confirm'],
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The task name as pangular:analog-scan-nitro lists it, e.g. db:migrate.',
+        },
+        payload: { type: 'object', description: 'The payload the task receives.' },
+        confirm: { type: 'boolean', description: 'Must be true: the task runs for real.' },
+      },
+    },
+    handler: async (args: { name?: unknown; payload?: unknown; confirm?: unknown }) => {
+      const result = await runTask(args?.name, args?.payload, args?.confirm);
+      if (!result.ok) {
+        const detail = result.output ? `\n\n${UNTRUSTED}\n\n${result.output}` : '';
+        return text(refusal(`Refused or failed: ${result.error}${detail}`));
+      }
+      return text(
+        `${UNTRUSTED}\n\nTask ${result.name}: ${result.status} in ${result.ms} ms\n\n${result.output || '(no output)'}`,
       );
     },
   });

@@ -527,6 +527,387 @@ async function neverAnswers(context) {
   await context.route(REPORT_FILES, () => new Promise(() => {}));
 }
 
+// A seeded Analog app: the source scan, a page reporting, its payload, the build
+// output, Nitro and the runtime config, so axe reaches every Analog view.
+const ANALOG_PAGE = '/src/app/pages/products/[id].page.ts';
+const ANALOG_PROJECT = {
+  analog: true,
+  version: '2.7.5',
+  root: '/app',
+  files: ['/src/app/pages/index.page.ts', '/src/app/pages/products.page.ts', ANALOG_PAGE],
+  serverFiles: ['/src/app/pages/products/[id].server.ts'],
+  routes: [
+    {
+      id: 'index',
+      segment: '',
+      fullPath: '/',
+      file: '/src/app/pages/index.page.ts',
+      kind: 'page',
+      params: [],
+      routeMeta: ['title'],
+      title: 'Home',
+      children: [],
+    },
+    {
+      id: 'products',
+      segment: 'products',
+      fullPath: '/products',
+      file: '/src/app/pages/products.page.ts',
+      kind: 'layout',
+      params: [],
+      children: [
+        {
+          id: 'products/[id]',
+          segment: ':id',
+          fullPath: '/products/:id',
+          file: ANALOG_PAGE,
+          kind: 'page',
+          params: ['id'],
+          serverFile: '/src/app/pages/products/[id].server.ts',
+          serverExports: ['load'],
+          children: [],
+        },
+      ],
+    },
+  ],
+  api: [
+    {
+      path: '/api/v1/products/:id',
+      method: 'GET',
+      file: '/src/server/routes/api/v1/products/[id].get.ts',
+      params: ['id'],
+    },
+    {
+      path: '/api/v1/products',
+      method: 'POST',
+      file: '/src/server/routes/api/v1/products.post.ts',
+      params: [],
+    },
+  ],
+  middleware: [],
+  content: [
+    {
+      file: '/src/content/hello.md',
+      slug: 'hello',
+      attributes: { title: 'Hello', date: '2026-01-02' },
+    },
+    {
+      file: '/src/content/draft.md',
+      slug: 'draft',
+      attributes: { title: 'Draft' },
+      schemaErrors: ['date is required.'],
+    },
+  ],
+  contentSchema: { file: '/content.schema.json' },
+  contentUsage: [{ file: '/src/app/pages/blog/index.page.ts', api: 'injectContentFiles', line: 4 }],
+  serverFns: [
+    { name: 'getCart', file: '/src/app/cart.server.ts', id: 'a1b2c3d4e5f60718', method: 'GET' },
+  ],
+  config: { apiPrefix: 'api', noSsrRoutes: [], routeRules: [{ path: '/blog/**', isr: '60' }] },
+  prerendered: ['/'],
+};
+const ANALOG_ANSWERS = {
+  'analog-project': ANALOG_PROJECT,
+  'analog-lint': [],
+  'analog-explain-url': null,
+  'analog-render': {
+    rows: [
+      {
+        path: '/',
+        file: '/src/app/pages/index.page.ts',
+        mode: 'ssg',
+        reason: 'in the build output',
+      },
+      {
+        path: '/products/:id',
+        file: ANALOG_PAGE,
+        mode: 'ssr',
+        reason: 'rendered per request',
+        last: { render: 'ssr', status: 200, ms: 42, at: 1 },
+      },
+    ],
+    plan: {
+      dynamicConfig: false,
+      listed: null,
+      fromRules: [],
+      staticMissing: [],
+      dynamic: ['/products/:id'],
+      built: ['/'],
+      notBuilt: [],
+    },
+  },
+  'analog-render-check': {
+    path: '/products/:id',
+    configured: 'ssr',
+    observed: 'ssr',
+    status: 200,
+    ms: 31,
+    headers: { 'content-type': 'text/html' },
+    matches: true,
+  },
+  'analog-transform': {
+    file: ANALOG_PAGE,
+    ssr: false,
+    steps: [
+      {
+        plugin: '@analogjs/vite-plugin-angular',
+        changed: true,
+        ms: 12.5,
+        size: 820,
+        code: 'import { Component } from "@angular/core";\nexport default class ProductPage {}',
+      },
+      { plugin: 'vite:esbuild', changed: false, ms: 0.4, size: 820 },
+    ],
+    code: 'export default class ProductPage {}',
+  },
+  'analog-build': {
+    found: true,
+    dir: 'dist/analog/public',
+    builtAt: 1,
+    manifest: false,
+    entry: { chunk: 'assets/index-Ab12Cd34.js', size: 182_000, gzip: 61_000 },
+    totals: { js: 240_000, css: 12_000, jsGzip: 80_000, cssGzip: 3_000, chunks: 6 },
+    chunks: [
+      { file: 'assets/index-Ab12Cd34.js', kind: 'js', size: 150_000, gzip: 50_000 },
+      { file: 'assets/_id_.page-Qw12Er34.js', kind: 'js', size: 22_000, gzip: 8_000 },
+    ],
+    routes: [
+      { path: '/', file: '/src/app/pages/index.page.ts', size: 0, gzip: 0, shared: [], lazy: [] },
+      {
+        path: '/products/:id',
+        file: ANALOG_PAGE,
+        chunk: 'assets/_id_.page-Qw12Er34.js',
+        size: 30_000,
+        gzip: 10_000,
+        shared: ['assets/chart-Ty56Ui78.js'],
+        lazy: ['assets/modal-Op90As12.js'],
+        matchedBy: 'name',
+      },
+    ],
+    notes: [
+      'Some pages share a chunk name, so their chunk was not found. Set build.manifest: true in vite.config to map every page.',
+    ],
+  },
+  'analog-nitro': {
+    plugins: ['/src/server/plugins/log.ts'],
+    tasks: [{ name: 'db:migrate', file: '/src/server/tasks/db/migrate.ts' }],
+    storage: [{ name: 'cache', driver: 'fs', base: './.data/cache', from: 'storage' }],
+    cachedRules: [{ path: '/blog/**', rule: 'isr: 60' }],
+    cacheDirs: ['.data/cache'],
+    entries: [
+      {
+        file: '/.data/cache/nitro/routes/_/blog/hello.abc.json',
+        group: 'routes',
+        key: '_/blog/hello.abc',
+        size: 2048,
+        modifiedAt: 1,
+      },
+    ],
+    notes: [],
+  },
+  'analog-run-nitro-task': {
+    ok: true,
+    name: 'db:migrate',
+    status: 200,
+    ms: 120,
+    output: '{"result":{"migrated":3}}',
+  },
+  'analog-nitro-purge': { ok: true, removed: 1 },
+  'analog-runtime-config': {
+    env: [
+      { key: 'VITE_API_URL', value: 'https://api.example.com', from: 'Vite' },
+      { key: 'VITE_STRIPE_SECRET', value: '[redacted]', from: 'Vite', masked: true },
+    ],
+    runtimeConfig: [
+      { key: 'public.apiBase', value: '/api', from: 'vite.config' },
+      { key: 'token', value: 'process.env.TOKEN', from: 'vite.config', expression: true },
+    ],
+    options: [
+      { key: 'ssr', value: 'true', from: 'default' },
+      { key: 'apiPrefix', value: 'api', from: 'default' },
+    ],
+    configFile: 'vite.config.ts',
+  },
+  'analog-content-preview': {
+    file: '/src/content/draft.md',
+    values: { title: 'Draft', tags: ['news'] },
+    body: '# Draft\n\nSome **bold** text with `code`.\n\n- one\n- two\n\n```ts\nconst x = 1;\n```\n',
+    schemaErrors: ['date is required.'],
+  },
+  'analog-load-data': {
+    found: true,
+    value: { product: { id: 7, name: 'Lamp', tags: ['a', 'b'] } },
+    bytes: 64,
+  },
+  'analog-call-api': {
+    ok: true,
+    status: 200,
+    ms: 12,
+    headersMs: 8,
+    size: 2,
+    type: 'application/json',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  },
+};
+const ANALOG_STATE = {
+  pages: [
+    {
+      pageId: 'p1',
+      url: '/products/7',
+      analog: true,
+      chain: [{ path: '/products/:id', file: ANALOG_PAGE }],
+      hydrated: 12,
+      transferState: true,
+      hydrationErrors: [],
+      configPaths: [],
+      load: { preview: '{"product":{"id":7}}', bytes: 64, keys: ['product'] },
+    },
+  ],
+  calls: [],
+  duplicates: [{ route: '/products/7', ssrAt: 1, browserAt: 2 }],
+  refetches: [],
+  reportedAt: 1,
+};
+const HTTP_PAYLOADS_SEED = {
+  pages: {
+    p1: {
+      found: true,
+      size: 120,
+      entries: [
+        {
+          key: 'analog_1',
+          source: 'analog',
+          http: { url: '/_analog/pages/products/7' },
+          size: 80,
+          value: {},
+        },
+        {
+          key: '__analog_fn_a1b2c3d4e5f60718_',
+          source: 'analog',
+          fn: { id: 'a1b2c3d4e5f60718' },
+          size: 40,
+          value: {},
+        },
+      ],
+    },
+  },
+};
+
+/** Adds the Analog RPCs to the report and answers them, and seeds the Analog shared state. */
+async function seedAnalog(context) {
+  const names = Object.keys(ANALOG_ANSWERS);
+  await context.route('**/__connection.json', async (route) => {
+    const response = await route.fetch();
+    const meta = await response.json();
+    meta.jsonSerializableMethods = [
+      ...new Set([...(meta.jsonSerializableMethods ?? []), ...names.map((n) => `pangular:${n}`)]),
+    ];
+    return route.fulfill({ response, body: JSON.stringify(meta) });
+  });
+  await context.route('**/__rpc-dump/index.json', async (route) => {
+    const response = await route.fetch();
+    const index = await response.json();
+    for (const name of names) {
+      index[`pangular:${name}`] = {
+        type: 'query',
+        records: {},
+        serialization: 'json',
+        fallback: `__rpc-dump/pangular~analog-seed~${name}.fallback.json`,
+      };
+    }
+    return route.fulfill({ response, body: JSON.stringify(index) });
+  });
+  await context.route(/__rpc-dump\/pangular~analog-seed~([\w-]+)\.fallback\.json$/, (route) => {
+    const name = /analog-seed~([\w-]+)\.fallback/.exec(route.request().url())[1];
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ inputs: [], output: ANALOG_ANSWERS[name] ?? null }),
+    });
+  });
+  await context.route(
+    '**/__rpc-dump/devframe~rpc~server-state~get.record.*.json',
+    async (route) => {
+      const response = await route.fetch();
+      const body = await response.text();
+      const seeds = {
+        'pangular:analog': ANALOG_STATE,
+        'pangular:http-payloads': HTTP_PAYLOADS_SEED,
+      };
+      const key = Object.keys(seeds).find((name) => body.includes(`"${name}"`));
+      if (!key) return route.fulfill({ response });
+      return route.fulfill({
+        response,
+        body: encodeRecord({ inputs: [key], output: seeds[key] }),
+      });
+    },
+  );
+}
+
+/** Fails when the page scrolls sideways at the current width. */
+async function noSidewaysScroll(page, name) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  if (overflow > 1) failures.push(`${name}: scrolls sideways by ${overflow}px`);
+}
+
+/** Walks the Analog views of the seeded app and checks each one, opened cards included. */
+async function checkAnalog(page, name) {
+  const tab = async (id) => {
+    await page.locator(`#analog-tab-${id}`).click();
+    await page.locator(`#analog-panel-${id}`).waitFor();
+  };
+  const step = async (label) => {
+    await check(page, `${name} ${label}`);
+    await noSidewaysScroll(page, `${name} ${label}`);
+  };
+  await page.locator('#analog-tab-routes').waitFor({ timeout: 15_000 });
+  await step('Routes');
+  await page
+    .getByRole('button', { name: `Show the Vite transform stack of ${ANALOG_PAGE}` })
+    .click();
+  await page.locator('app-analog-transform details').first().waitFor();
+  await page.locator('app-analog-transform details summary').first().click();
+  await step('Routes with the transform stack');
+  await tab('server');
+  await page.getByRole('button', { name: 'Try GET /api/v1/products/:id' }).click();
+  await page.locator('#param-0').fill('7');
+  await page.locator('app-analog-playground summary', { hasText: 'Headers' }).click();
+  await page.getByRole('button', { name: 'Add header' }).click();
+  await page.locator('app-analog-playground form').evaluate((form) => form.requestSubmit());
+  await page.locator('app-analog-playground .response').waitFor();
+  await page.locator('app-analog-playground .history').waitFor();
+  await step('Server with the playground');
+  await tab('render');
+  await page
+    .getByRole('button', { name: 'Request /products/:id and check its render mode' })
+    .click();
+  await page.getByText('fits the config').first().waitFor();
+  await page.locator('app-analog-build table').waitFor();
+  await step('Render with a check and the build analysis');
+  await tab('content');
+  await page.getByRole('button', { name: 'Preview /src/content/draft.md' }).click();
+  await page.locator('app-analog-content-preview .md').waitFor();
+  await step('Content with the preview');
+  await tab('data');
+  await page.locator('app-analog-data table').waitFor();
+  await page.getByRole('button', { name: 'Load the full value' }).click();
+  await page.locator('app-analog-value-node details summary').first().click();
+  await step('Data with the full load() value');
+  await tab('runtime');
+  await page.locator('#runtime-nitro').waitFor();
+  await step('Runtime');
+  await page.getByRole('button', { name: 'Run the task db:migrate' }).click();
+  await page.locator('#task-run-confirm').waitFor();
+  await step('Runtime confirming a task');
+  await page.locator('#task-run-confirm').click();
+  await page.locator('.task-result pre').waitFor();
+  await page.getByRole('button', { name: 'Purge _/blog/hello.abc' }).click();
+  await page.locator('#nitro-confirm').waitFor();
+  await step('Runtime with a task result and a purge to confirm');
+}
+
 const VIEWS = ['ngrx', 'analog', 'angular-native', 'nativescript', 'capacitor'];
 const NO_MATCH = 'zz-no-such-thing';
 const failures = [];
@@ -732,6 +1113,24 @@ try {
         }
       }
       await seeded.close();
+
+      // A seeded Analog app, at full width and at 360px.
+      for (const width of [1280, 360]) {
+        const analog = await newPanel(colorScheme, seedAnalog);
+        const analogPage = await analog.newPage();
+        await analogPage.setViewportSize({ width, height: 800 });
+        analogPage.on('pageerror', (error) =>
+          failures.push(`${colorScheme} Analog ${width}px: page error ${error.message}`),
+        );
+        try {
+          await analogPage.goto(`${base}?view=analog`);
+          await analogPage.locator('.status.connected').waitFor();
+          await checkAnalog(analogPage, `${colorScheme} Analog ${width}px`);
+        } catch (error) {
+          failures.push(`${colorScheme} Analog ${width}px: did not show (${error.message})`);
+        }
+        await analog.close();
+      }
 
       // A project whose source declares nothing: the empty state of the source scans.
       const empty = await newPanel(colorScheme, emptySource);

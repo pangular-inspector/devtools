@@ -104,7 +104,7 @@ The stdio server reads the [devtools options](../getting-started/configuration.m
 
 Over stdio, the source scan tools work: `scan-routes`, `scan-components`, `scan-signals`, `scan-providers`, `ngrx-scan`, `scan-pipes` and `scan-build`. So do the tools that read files only, like `scan-pipe-usage`, `explain-pipe`, `scan-render-mode`, `analog-scan-routes` and `analog-lint`.
 
-The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `run-form-action`, `fill-form`, the forms and router tools, `analog-inspect-page`, `analog-list-server-calls`, `analog-inspect-transform`, `analog-inspect-render-mode` and `analog-run-api`. Use HTTP for those.
+The stdio server leaves out the tools and resources that need the running app, such as `highlight`, `navigate`, `run-form-action`, `fill-form`, the forms and router tools, `analog-inspect-page`, `analog-list-server-calls`, `analog-inspect-transform`, `analog-inspect-render-mode`, `analog-run-nitro-task` and `analog-run-api`. Use HTTP for those.
 
 ## Connect over HTTP
 
@@ -297,6 +297,7 @@ Each tool has a safety tier: `read`, `action` or `destructive`. The server marks
 | `record-pipes`             | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)                             |
 | `track-subscriptions`      | `action`      | [Track subscriptions](./tools.md#track-subscriptions)                         |
 | `record-change-detection`  | `action`      | [record-change-detection](./tools.md#record-change-detection)                 |
+| `analog-run-nitro-task`    | `action`      | [Run a Nitro task](./tools.md#run-a-nitro-task)                               |
 | `audit`                    | `action`      | [audit](./tools.md#audit)                                                     |
 | `clear-recordings`         | `destructive` | [Clear recordings](./tools.md#clear-recordings)                               |
 | `analog-run-api`           | `destructive` | [Call a server route](./tools.md#call-a-server-route)                         |

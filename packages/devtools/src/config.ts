@@ -1269,6 +1269,14 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
     actions: ['analog'],
   },
   'analog-scan-runtime-config': { kind: 'tool', inspectors: ['analog'] },
+  // Runs a project task on the dev server; it can change data.
+  'analog-run-nitro-task': {
+    kind: 'tool',
+    inspectors: ['analog'],
+    safety: 'action',
+    actions: ['analog'],
+    page: true,
+  },
   // Both ask the running Vite dev server.
   'analog-inspect-transform': { kind: 'tool', inspectors: ['analog'], page: true },
   'analog-inspect-render-mode': { kind: 'tool', inspectors: ['analog'], page: true },
@@ -1362,7 +1370,8 @@ export function actionBlockedMessage(action: PangularAction): string {
     router: 'Navigating and clearing navigations',
     ngrx: 'Restoring NgRx state and dispatching actions',
     http: 'Changing HTTP mock rules and SSR overrides, and clearing HTTP calls',
-    analog: 'Calling API routes, clearing server calls and purging the Nitro cache',
+    analog:
+      'Calling API routes, clearing server calls, running Nitro tasks and purging the Nitro cache',
     components: 'Editing component properties and signals',
     tanstackQuery: 'Invalidating and refetching TanStack queries',
     plugins: 'Running plugin actions',
@@ -1532,6 +1541,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'analog-build': 'analog',
   'analog-nitro': 'analog',
   'analog-nitro-purge': 'analog',
+  'analog-run-nitro-task': 'analog',
   'analog-runtime-config': 'analog',
   'analog-render-check': 'analog',
   'analog-load-data': 'analog',

@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  104 tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  105 tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -170,14 +170,14 @@ Without `url`, `navigation` holds as soon as no navigation is in progress, which
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                                                 | Tools                                                                                                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                           | Every other tool, and every resource                                                                                                                                                                                                                                                                                                                    |
-| `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records. A reload or the next call undoes it. | `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `run-form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection` and `audit` |
-| `destructive` | Can lose data: it erases recordings, deletes the Nitro cache, or sends writes to your own API routes.                                | `clear-recordings`, `analog-run-api` and `analog-purge-nitro-cache`                                                                                                                                                                                                                                                                                     |
+| Tier          | What the tool can do                                                                                                                                                                                     | Tools                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                                                                                               | Every other tool, and every resource                                                                                                                                                                                                                                                                                                                                             |
+| `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records. A reload or the next call undoes it. `analog-run-nitro-task` runs a project task, which can change data. | `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `run-form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection`, `analog-run-nitro-task` and `audit` |
+| `destructive` | Can lose data: it erases recordings, deletes the Nitro cache, or sends writes to your own API routes.                                                                                                    | `clear-recordings`, `analog-run-api` and `analog-purge-nitro-cache`                                                                                                                                                                                                                                                                                                              |
 
 <ngmd-alert severity="important">
-  The twenty-two <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The twenty-three <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `record-change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `audit` only when it runs axe. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
@@ -1006,6 +1006,16 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 | `confirm` | no       | Required for methods other than `GET`, `HEAD` and `OPTIONS`.                                                        |
 | `headers` | no       | Extra request headers by name. `host`, `content-length` and other headers fetch or the dev server owns are refused. |
 | `cookies` | no       | Cookies by name, sent as one `cookie` header.                                                                       |
+
+### Run a Nitro task <ngmd-badge variant="action">Action</ngmd-badge>
+
+`analog-run-nitro-task` runs a task from `src/server/tasks` on the dev server through Nitro's dev task route (`POST /_nitro/tasks/<name>`) and returns its answer, masked and clipped to 4000 characters. The route answers only with `nitro.experimental.tasks` on; without it the tool says so. Tasks can change data, so the tool needs `confirm: true` and [`actions.analog`](../getting-started/configuration.md#actions). It stops waiting after 30 seconds. Reads: Vite plugin.
+
+| Argument  | Required | Value                                                             |
+| --------- | -------- | ----------------------------------------------------------------- |
+| `name`    | yes      | The task name as `analog-scan-nitro` lists it, like `db:migrate`. |
+| `payload` | no       | An object the task receives as its payload.                       |
+| `confirm` | yes      | Must be `true`.                                                   |
 
 ### Purge the Nitro cache <ngmd-badge variant="destructive">Destructive</ngmd-badge>
 

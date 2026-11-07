@@ -100,7 +100,12 @@
       "set-http-rule",
       "set-ssr-override"
     ],
-    "analog": ["analog-purge-nitro-cache", "analog-run-api", "clear-recordings"],
+    "analog": [
+      "analog-purge-nitro-cache",
+      "analog-run-api",
+      "analog-run-nitro-task",
+      "clear-recordings"
+    ],
     "components": ["set-component-property", "set-signal"],
     "tanstackQuery": ["tanstack-run-query"],
     "plugins": []
@@ -109,6 +114,7 @@
   "AGENT_SAFETY": {
     "analog-purge-nitro-cache": "destructive",
     "analog-run-api": "destructive",
+    "analog-run-nitro-task": "action",
     "audit": "action",
     "clear-recordings": "destructive",
     "fill-form": "action",
@@ -137,6 +143,7 @@
     "analog-inspect-transform",
     "analog-list-server-calls",
     "analog-run-api",
+    "analog-run-nitro-task",
     "audit",
     "capacitor-list-calls",
     "capacitor-list-plugins",
@@ -226,6 +233,7 @@
     "analog-list-server-calls": ["analog"],
     "analog-purge-nitro-cache": ["analog"],
     "analog-run-api": ["analog"],
+    "analog-run-nitro-task": ["analog"],
     "analog-scan-api-routes": ["analog"],
     "analog-scan-build": ["analog"],
     "analog-scan-content": ["analog"],

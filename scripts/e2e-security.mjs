@@ -32,6 +32,9 @@ import { request as httpRequest } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
+/** A forms tool name: `form` or `forms` as a whole word, like `fill-form` or `inspect-forms`. */
+const FORMS_TOOL = /(^|[-_])forms?([-_]|$)/;
+
 const ROOT = resolve(import.meta.dirname, '..');
 const FIXTURE = join(ROOT, 'e2e/security');
 const DIST = join(ROOT, 'packages/devtools/dist');
@@ -1641,8 +1644,9 @@ async function gatingChecks() {
     if (label === 'inspectors.forms false') {
       g(
         'forms tools dropped',
-        ![...names].some((n) => /form/.test(n)),
-        [...names].filter((n) => /form/.test(n)).join(', '),
+        // Whole words only: `analog-inspect-transform` is not a forms tool.
+        ![...names].some((n) => FORMS_TOOL.test(n)),
+        [...names].filter((n) => FORMS_TOOL.test(n)).join(', '),
       );
       const sent = frames.join('\n');
       g(

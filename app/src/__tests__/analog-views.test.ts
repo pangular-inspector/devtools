@@ -274,3 +274,56 @@ describe('Analog data view', () => {
     );
   });
 });
+
+describe('Analog Nitro tasks', () => {
+  it('runs a task only after Run task is clicked, with its payload', async () => {
+    const { rpcClient, calls } = client({
+      'analog-runtime-config': () => ({ env: [], runtimeConfig: [], options: [] }),
+      'analog-nitro': () => ({
+        plugins: [],
+        tasks: [{ name: 'db:migrate', file: '/src/server/tasks/db/migrate.ts' }],
+        storage: [],
+        cachedRules: [],
+        cacheDirs: [],
+        entries: [],
+        notes: [],
+      }),
+      'analog-run-nitro-task': () => ({
+        ok: true,
+        name: 'db:migrate',
+        status: 200,
+        ms: 12,
+        output: '{"result":"[redacted]"}',
+      }),
+    });
+    const fixture = TestBed.createComponent(AnalogRuntime);
+    fixture.componentRef.setInput('rpc', rpcClient);
+    await settle(fixture);
+    const runtime = fixture.componentInstance;
+    runtime.askTask('db:migrate');
+    await settle(fixture);
+    expect(calls.some(([name]) => name === 'analog-run-nitro-task')).toBe(false);
+    runtime.taskPayload.set('{bad');
+    await runtime.runTask('db:migrate');
+    expect(runtime.taskResults()['db:migrate'].error).toMatch(/not valid JSON/);
+    runtime.taskPayload.set('{"dry":true}');
+    await runtime.runTask('db:migrate');
+    await settle(fixture);
+    expect(calls.find(([name]) => name === 'analog-run-nitro-task')?.[1]).toEqual({
+      name: 'db:migrate',
+      payload: { dry: true },
+      confirm: true,
+    });
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('[redacted]');
+  });
+});
+
+describe('markdown code spans', () => {
+  it('keeps HTML and links inside code spans as written', () => {
+    expect(inline('Use `<b>[a](b)</b>` here')).toEqual([
+      { text: 'Use ' },
+      { text: '<b>[a](b)</b>', code: true },
+      { text: ' here' },
+    ]);
+  });
+});
