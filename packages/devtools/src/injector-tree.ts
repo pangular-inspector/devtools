@@ -1,4 +1,4 @@
-import { routeInjectorName } from './route-injector-names.ts';
+import { routeInjectorName, routeInjectors } from './route-injector-names.ts';
 import type {
   DependencyInfo,
   InjectorInfo,
@@ -20,6 +20,7 @@ interface ProviderRecord {
 
 export interface DebugNg<H extends object = Element> {
   getInjector?(el: H): unknown;
+  ɵgetRouterInstance?(injector: unknown): unknown;
   getComponent?(el: H): unknown;
   getDirectives?(node: H): unknown[];
   ɵgetInjectorMetadata?(injector: unknown): { type: string; source: unknown } | null;
@@ -542,6 +543,68 @@ function readElement<H extends object>(
   return entry;
 }
 
+/** Environment injectors walked up from one, at most. */
+const MAX_ENVIRONMENT_CHAIN = 100;
+
+/**
+ * `injector` and its parent environment injectors, nearest first, through
+ * `R3Injector.parent` (every Ivy version), up to the null injector.
+ */
+function environmentChain<H extends object>(ng: DebugNg<H>, injector: object): object[] {
+  const chain: object[] = [];
+  let at: unknown = injector;
+  while (at && typeof at === 'object' && chain.length < MAX_ENVIRONMENT_CHAIN) {
+    if (chain.includes(at) || injectorMetadata(ng, at)?.type !== 'environment') break;
+    chain.push(at);
+    try {
+      at = (at as { parent?: unknown }).parent;
+    } catch {
+      break;
+    }
+  }
+  return chain;
+}
+
+/**
+ * The app's Router, from the root injector: through `ɵgetRouterInstance`
+ * (Angular 18.1+, from `provideRouter()`), else the root injector's own record
+ * for a token named `Router`, when the router was already created.
+ */
+function rootRouter<H extends object>(ng: DebugNg<H>, root: object): unknown {
+  try {
+    const router = ng.ɵgetRouterInstance?.(root);
+    if (router && typeof router === 'object') return router;
+  } catch {
+    // Read from the records below.
+  }
+  for (const [token, record] of ownRecords(root)) {
+    if (typeof token !== 'function' || tokenName(token) !== 'Router') continue;
+    return isCreated(record) ? record.value : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * The route environment injectors the router created that are not among
+ * `known`, the environment injectors the rendered elements' lookup paths
+ * reached. Read from the route objects of `router.config` (`_injector`,
+ * `_loadedInjector`), so a lazy route the app navigated away from still
+ * shows, as inactive.
+ */
+function offPathRouteInjectors<H extends object>(
+  ng: DebugNg<H>,
+  known: Iterable<object>,
+): object[] {
+  const seen = new Set(known);
+  const root = [...seen].find((injector) =>
+    (injector as { scopes?: Set<string> }).scopes?.has?.('root'),
+  );
+  if (!root) return [];
+  return routeInjectors(rootRouter(ng, root)).filter(
+    (injector) => !seen.has(injector) && injectorMetadata(ng, injector)?.type === 'environment',
+  );
+}
+
 export function collectInjectorTree<H extends object = Element>(
   ng: DebugNg<H> | undefined,
   tree: HostTree<H> = pageTree<H>(),
@@ -553,7 +616,7 @@ export function collectInjectorTree<H extends object = Element>(
 
   const records = recordReader(ng);
   const envs = new Map<object, Env>();
-  const noteEnvironment = (chain: object[]) => {
+  const noteEnvironment = (chain: object[], inactive = false) => {
     chain.forEach((injector, index) => {
       if (envs.has(injector)) return;
       const meta = injectorMetadata(ng, injector);
@@ -566,6 +629,7 @@ export function collectInjectorTree<H extends object = Element>(
             type: 'environment',
             name: environmentName(injector, meta?.source),
             providerCount: providers.length,
+            ...(inactive ? { inactive: true } : {}),
           },
           providers,
           children: [],
@@ -622,6 +686,14 @@ export function collectInjectorTree<H extends object = Element>(
   };
   notePairs(roots);
   injectedPairs = pairs;
+
+  // Lazy route injectors the router already created but no rendered
+  // element's lookup path goes through, such as a route the app left.
+  if (!truncated) {
+    for (const injector of offPathRouteInjectors(ng, envs.keys())) {
+      noteEnvironment(environmentChain(ng, injector), true);
+    }
+  }
 
   const environment: InjectorTreeNode[] = [];
   for (const env of envs.values()) {

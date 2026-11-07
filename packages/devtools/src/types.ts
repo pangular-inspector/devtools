@@ -340,6 +340,12 @@ export interface InjectorInfo {
   host?: string;
   /** Set by the server: one of Angular's own injectors (see `framework-tokens.ts`). */
   framework?: boolean;
+  /**
+   * On an environment injector: a lazy route's injector the router already
+   * created that no rendered element's lookup path goes through, such as
+   * the route the app navigated away from.
+   */
+  inactive?: boolean;
 }
 
 export interface ProviderInfo {

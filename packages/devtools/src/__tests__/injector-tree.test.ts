@@ -243,6 +243,54 @@ describe('collectInjectorTree', () => {
     expect(forgetInjectorEntries('inj-gone')).toBe(false);
   });
 
+  it('lists lazy route injectors off the rendered path as inactive', () => {
+    const { ng } = fakeNg();
+    const rootEnv = ng.ɵgetInjectorResolutionPath({ el: null })[1];
+    const platform = ng.ɵgetInjectorResolutionPath({ el: null })[2];
+    rootEnv.parent = platform;
+    const adminEnv = { kind: 'env', scopes: new Set(), source: 'Route: admin', parent: rootEnv };
+    const loaded = { kind: 'env', scopes: new Set(), source: 'AdminModule', parent: adminEnv };
+    const router = {
+      config: [
+        {
+          path: 'admin',
+          _injector: adminEnv,
+          _loadedInjector: loaded,
+          _loadedRoutes: [{ path: '', component: App }],
+        },
+        { path: 'broken', _injector: { kind: 'null' } },
+      ],
+    };
+    ng.ɵgetRouterInstance = (injector: unknown) => (injector === rootEnv ? router : null);
+    const { environment } = collectInjectorTree(ng);
+    const rootNode = environment[0].children[0];
+    expect(rootNode.injector.name).toBe('Root');
+    const names = rootNode.children.map((c) => [c.injector.name, c.injector.inactive]);
+    expect(names).toEqual([
+      ['Route: cards', undefined],
+      ['Route: admin', true],
+    ]);
+    const admin = rootNode.children[1];
+    expect(admin.children.map((c) => [c.injector.name, c.injector.inactive])).toEqual([
+      ['AdminModule', true],
+    ]);
+  });
+
+  it('finds the router in the root records when ɵgetRouterInstance is missing', () => {
+    const { ng } = fakeNg();
+    const rootEnv = ng.ɵgetInjectorResolutionPath({ el: null })[1];
+    class Router {}
+    const adminEnv = { kind: 'env', scopes: new Set(), source: 'Route: admin', parent: rootEnv };
+    const router = Object.assign(new Router(), {
+      config: [{ path: 'admin', _injector: adminEnv }],
+    });
+    rootEnv.records = new Map([[Router, { factory: () => router, value: router }]]);
+    const { environment } = collectInjectorTree(ng);
+    const flat = JSON.stringify(environment);
+    expect(flat).toContain('"name":"Route: admin"');
+    expect(flat).toContain('"inactive":true');
+  });
+
   it('caps the number of element nodes and says so', () => {
     document.body.innerHTML = `<ul>${'<li></li>'.repeat(MAX_INJECTOR_NODES + 5)}</ul>`;
     const env = { kind: 'env' };

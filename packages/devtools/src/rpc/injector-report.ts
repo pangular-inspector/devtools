@@ -33,6 +33,7 @@ const InjectorSchema = v.object({
   selector: v.optional(clipped(MAX_SELECTOR)),
   path: v.optional(texts(200)),
   host: v.optional(text),
+  inactive: v.optional(v.boolean()),
 });
 
 // `tokenId` is optional: reports from older overlays have none and match by name.

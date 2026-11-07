@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { registerInjectorRefresh } from '../injector-refresh.ts';
 import { collectInjectorTree } from '../injector-tree.ts';
 import { requestInjectorRefresh } from '../rpc/injector-refresh.ts';
+import { sanitizeInjectorTree } from '../rpc/injector-report.ts';
 
 class Card {}
 
@@ -87,5 +88,22 @@ describe('request-injector-refresh', () => {
       false,
     );
     expect(broadcast).not.toHaveBeenCalled();
+  });
+});
+
+describe('inactive environment injectors in a report', () => {
+  it('keeps the inactive flag through the server check', () => {
+    const node = {
+      injector: {
+        id: 'inj-1',
+        type: 'environment',
+        name: 'Route: admin',
+        providerCount: 0,
+        inactive: true,
+      },
+      providers: [],
+      children: [],
+    };
+    expect(sanitizeInjectorTree([], [node]).environment[0].injector.inactive).toBe(true);
   });
 });

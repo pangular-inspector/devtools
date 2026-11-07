@@ -3630,7 +3630,7 @@ const pangular = defineDevframe({
       id: 'pangular:inspect-providers',
       title: 'Inspect injectors and providers',
       description:
-        'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected.',
+        'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected. `inactive: true` marks a lazy route injector off the rendered path.',
       inputSchema: {
         type: 'object',
         properties: {
