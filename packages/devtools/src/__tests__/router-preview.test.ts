@@ -87,6 +87,10 @@ describe('redirectTarget', () => {
     const chain = [config[2], config[2].children![1]];
     expect(redirectTarget('/account/old/7?tab=a', chain, { id: '7' })).toBe('/account/7?tab=a');
   });
+
+  it('drops the query and fragment of the URL for an absolute redirect with none of its own', () => {
+    expect(redirectTarget('/a?tab=x#top', [config[4]], {})).toBe('/b');
+  });
 });
 
 describe('previewNavigation', () => {

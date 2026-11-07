@@ -105,7 +105,9 @@ export function redirectTarget(
     ? fill(targetPath, params)
     : `${parent.replace(/\/$/, '')}/${fill(targetPath, params)}`;
   const joined = `/${[...parts(base), ...remaining].join('/')}`;
-  return `${joined}${targetRest || rest}`;
+  // Angular keeps the query and fragment of the URL only for a relative redirect;
+  // an absolute one takes them from `redirectTo` alone.
+  return `${joined}${targetRest || (targetPath.startsWith('/') ? '' : rest)}`;
 }
 
 function findNodes(nodes: RouteNode[] | undefined, ids: Set<string>, out: RouteNode[] = []) {
