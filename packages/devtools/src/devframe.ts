@@ -3427,6 +3427,7 @@ const pangular = defineDevframe({
               clear: record === 'clear',
             }),
           acks: cdAcks,
+          angularOf: angularPages.get,
         });
         if ('refused' in answer) return answer;
         const next = answer.markdown;
