@@ -86,13 +86,13 @@ The plugin's `auth` option decides whether the devtools also ask for the one-tim
 
 Every server that asks for the code (the Vite plugin, the Express hub and the CLI) limits wrong guesses:
 
-| Limit          | What happens                                                                                                                                   |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Per connection | After 3 wrong codes, each next attempt waits twice as long: 1 s, 2 s, 4 s, up to 60 s. A code sent too early is refused without being checked. |
-| All clients    | At most 10 wrong codes a minute. Further codes are refused without being checked, and the terminal prints a warning.                           |
-| Lock           | After 50 wrong codes since the last right one, the server accepts no code until it restarts. Pages that already connected stay connected.      |
+| Limit          | What happens                                                                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per connection | After 3 wrong codes, each next attempt waits twice as long: 1 s, 2 s, 4 s, up to 60 s. A code sent too early is refused without being checked.                                |
+| All clients    | At most 10 wrong codes a minute. Further codes are refused without being checked, and the terminal prints a warning.                                                          |
+| Lock           | After 50 wrong codes since the last right one, the server accepts no code until you run `pangular token --rotate` or restart it. Pages that already connected stay connected. |
 
-A refused code is never compared with the real one. devframe gives you a new code after 5 wrong ones, so a client that keeps guessing can change the code you are typing at most twice a minute. If the terminal says the server stopped accepting codes and you didn't type them, something on your machine or network is guessing the code. Restart the dev server to get a new code.
+A refused code is never compared with the real one. devframe gives you a new code after 5 wrong ones, so a client that keeps guessing can change the code you are typing at most twice a minute. If the terminal says the server stopped accepting codes and you didn't type them, something on your machine or network is guessing the code. Run [`pangular token --rotate`](./getting-started/cli.md#trusted-tokens) in the project folder, which prints a new code and drops every trusted token, or restart the dev server to get a new code.
 
 A code lasts 5 minutes. If you type the right code after it expires, the server refuses it without counting it as a wrong code, and devframe gives you a new one. Only the code that is current when the attempt arrives is left uncounted, so a client that guesses gets no free attempts.
 

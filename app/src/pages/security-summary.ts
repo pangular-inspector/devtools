@@ -30,7 +30,7 @@ export function securityItems(status: SecurityStatus, now: number): SecurityItem
     value: !status.auth
       ? 'Off: every client is trusted'
       : status.oneTimeCode.state === 'locked'
-        ? 'Locked after too many wrong codes: restart the server for a new one'
+        ? 'Locked after too many wrong codes: run pangular token --rotate or restart the server for a new code'
         : status.oneTimeCode.expiresAt
           ? `On, current code expires ${inTime(status.oneTimeCode.expiresAt, now)}`
           : 'On',

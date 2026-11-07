@@ -82,7 +82,9 @@ describe('CodeGuard', () => {
     expect(g.locked).toBe(true);
     now.t += 24 * 60 * 60 * 1000;
     expect(g.check({})).toBe('locked');
-    expect(String(warn.mock.calls.at(-1)?.[0])).toContain('Restart the dev server');
+    expect(String(warn.mock.calls.at(-1)?.[0])).toContain(
+      'Run pangular token --rotate in the project folder, or restart the dev server',
+    );
   });
 });
 

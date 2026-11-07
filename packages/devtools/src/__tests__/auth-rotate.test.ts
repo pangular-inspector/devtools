@@ -10,6 +10,7 @@ import {
   ROTATE_REQUEST_FILE,
   answerRotateRequest,
   clearTokenFile,
+  pollTokenRotation,
   rotateText,
   rotateTokens,
   tokenFileSummary,
@@ -143,6 +144,35 @@ describe('pangular token --rotate', () => {
     writeFileSync(join(dir, ROTATE_REQUEST_FILE), JSON.stringify({ id: 'r1', at: Date.now() }));
     expect(answerRotateRequest(ctx2, dir)?.id).toBe('r1');
     expect(codeGuardLocked(ctx2)).toBe(false);
+  });
+
+  it('keeps every token and logs instead of throwing when the answer cannot be written', () => {
+    const dir = temp('pangular-fail-');
+    const meta: Record<string, unknown> = { id: 'a', isTrusted: true, clientAuthToken: 'tok' };
+    const ctx = serverContext(dir, meta);
+    const storage = getInternalContext(ctx as never).storage.auth;
+    storage.mutate((state) => {
+      state.trusted['tok'] = { authToken: 'tok', ua: '', origin: '', timestamp: Date.now() };
+    });
+    writeFileSync(join(dir, ROTATE_REQUEST_FILE), JSON.stringify({ id: 'r1', at: Date.now() }));
+    const lines: string[] = [];
+    const failingWrite = () => {
+      throw new Error('ENOSPC: no space left on device');
+    };
+    expect(() =>
+      pollTokenRotation(
+        ctx,
+        dir,
+        (line) => lines.push(line),
+        (c, d) => answerRotateRequest(c, d, Date.now(), failingWrite),
+      ),
+    ).not.toThrow();
+    expect(lines.join('')).toContain('failed, so every trusted token is kept: ENOSPC');
+    expect(verifyAuthToken('tok', { meta: {} } as never, storage)).toBe(true);
+    expect(meta['isTrusted']).toBe(true);
+    // The request is gone, so the failure is not retried every second.
+    expect(existsSync(join(dir, ROTATE_REQUEST_FILE))).toBe(false);
+    expect(existsSync(join(dir, ROTATE_ANSWER_FILE))).toBe(false);
   });
 
   it('ignores a stale or broken request', () => {

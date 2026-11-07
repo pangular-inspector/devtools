@@ -116,7 +116,8 @@ export class CodeGuard {
       this.locked = true;
       this.warn(
         `\n  [pangular] WARNING: ${this.failures} wrong one-time codes. The devtools server no longer accepts codes.\n` +
-          '  Restart the dev server to get a new code. Clients that already connected stay connected.\n' +
+          '  Run pangular token --rotate in the project folder, or restart the dev server, to get a new code.\n' +
+          '  Clients that already connected stay connected.\n' +
           "  If you didn't type these codes, something on this machine or network is guessing the code.\n",
       );
     }

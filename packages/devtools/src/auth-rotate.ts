@@ -139,14 +139,16 @@ interface AuthStorage {
 }
 
 /**
- * The server's side of one request: drops every token it trusts, ends their
- * connections, makes a new one-time code and writes the answer. Returns the
- * answer, or null when there is no fresh request.
+ * The server's side of one request: makes a new one-time code and writes the
+ * answer, then drops every token it trusts and ends their connections.
+ * Returns the answer, or null when there is no fresh request. The request is
+ * removed first, so a request that fails is not tried again every second.
  */
 export function answerRotateRequest(
   ctx: unknown,
   dir: string,
   now = Date.now(),
+  write: (file: string, value: unknown) => void = writePrivate,
 ): RotateAnswer | null {
   const requestFile = join(dir, ROTATE_REQUEST_FILE);
   if (!existsSync(requestFile)) return null;
@@ -161,14 +163,6 @@ export function answerRotateRequest(
     return null;
   }
   const tokens = Object.keys(storage.value().trusted ?? {});
-  storage.mutate((state) => {
-    state.trusted = Object.create(null) as Record<string, unknown>;
-  });
-  for (const token of tokens) {
-    void revokeActiveConnectionsForToken(ctx as never, token).catch(() => undefined);
-  }
-  // The user asked for a new code, so a lock from wrong guesses ends too.
-  resetCodeGuard(ctx);
   refreshTempAuthCode();
   const { code, expireAt } = getTempAuthCodeInfo();
   const answer: RotateAnswer = {
@@ -177,8 +171,42 @@ export function answerRotateRequest(
     expiresAt: expireAt,
     dropped: tokens.length,
   };
-  writePrivate(join(dir, ROTATE_ANSWER_FILE), answer);
+  // The answer goes first: a failed write throws with every token still trusted.
+  write(join(dir, ROTATE_ANSWER_FILE), answer);
+  storage.mutate((state) => {
+    state.trusted = Object.create(null) as Record<string, unknown>;
+  });
+  for (const token of tokens) {
+    void revokeActiveConnectionsForToken(ctx as never, token).catch(() => undefined);
+  }
+  // The user asked for a new code, so a lock from wrong guesses ends too.
+  resetCodeGuard(ctx);
   return answer;
+}
+
+/**
+ * One look for a request, as the server's timer runs it. A failure is logged
+ * instead of thrown, so it can't stop the dev server.
+ */
+export function pollTokenRotation(
+  ctx: unknown,
+  dir: string,
+  log: (message: string) => void,
+  answer: (ctx: unknown, dir: string) => RotateAnswer | null = answerRotateRequest,
+): void {
+  try {
+    const result = answer(ctx, dir);
+    if (result) {
+      log(
+        `\n  [pangular] pangular token --rotate dropped ${result.dropped} trusted token(s). Browsers that used them need the new one-time code, which the command printed.\n`,
+      );
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    log(
+      `\n  [pangular] pangular token --rotate failed, so every trusted token is kept: ${reason}\n`,
+    );
+  }
 }
 
 const watching = new WeakSet<object>();
@@ -203,12 +231,7 @@ export function watchTokenRotation(
       clearInterval(timer);
       return;
     }
-    const answer = answerRotateRequest(live, dir);
-    if (answer) {
-      log(
-        `\n  [pangular] pangular token --rotate dropped ${answer.dropped} trusted token(s). Browsers that used them need the new one-time code, which the command printed.\n`,
-      );
-    }
+    pollTokenRotation(live, dir, log);
   }, ROTATE_POLL_MS);
   timer.unref?.();
 }
