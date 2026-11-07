@@ -26,11 +26,11 @@ Each row shows a kind letter (`C`, `D` or `E`), the tag or injector name, the co
 
 The Environment view also lists the injectors of lazy routes the router already loaded but that no rendered element uses, such as a route the app navigated away from. They carry an **inactive** chip, and their details say the router loaded them but no element on the page uses them now. They keep the services they created until the app reloads.
 
+The toolbar also shows the change detection mode the page reported: **Zoneless**, **zone.js**, or **Zoneless, zone.js loaded** when zone.js is on the page but the app doesn't use it.
+
 ### Refresh
 
-The overlay reads each element injector once, because reading what it injects is costly. Selecting an element injector asks the page to read that one again, and **Refresh** in the toolbar reads every injector again. Use **Refresh** when a component injects something after it was first listed, as a lazy `inject()` call does.
-
-The toolbar also shows the change detection mode the page reported: **Zoneless**, **zone.js**, or **Zoneless, zone.js loaded** when zone.js is on the page but the app doesn't use it.
+The overlay reads each element injector once, because reading what it injects is costly. Selecting an element injector reads that one anew. **Refresh** in the toolbar reads every injector. Use it when a component injects something after it was first listed, as a lazy `inject()` call does.
 
 ### Page picker
 
@@ -81,6 +81,8 @@ Select an injector to see the **Lookup path**: the injectors Angular asks, in or
 
 For element injectors, **Injected here** lists each token requested at this level and the injector that answered. The block marks a token that nobody provides as **not provided anywhere**, and an optional token that nobody provides as **optional, not provided**. A provider with a `null` value, such as `useValue: null`, still counts as provided. When the element has more than one class, each row says which class asked.
 
+Each row has a **Resolution** button. It draws the lookup path for that token as a chain of steps: the injectors Angular asked and that did not have it (**asked, not here**), the one that **provides it**, and the ones it never reached (**not asked**). A `skipSelf` token marks the first step **skipped (skipSelf)**. A token nobody provides ends at the null injector, which **throws NullInjectorError**, or **gives null (optional)** for an optional token. Click a step to open that injector.
+
 ### Injected by its services
 
 For environment injectors, **Injected by its services** lists what the services this injector created inject, and which injector answered. Each row says which service asked. `InjectionToken` providers built by a factory, such as `useFactory`, are listed too, with the token as the one that asked. Services that Angular has not created yet are left out, because reading their dependencies would create them. A `providedIn: 'root'` service shows on the root injector once something injects it.
@@ -88,6 +90,8 @@ For environment injectors, **Injected by its services** lists what the services 
 ### Provides
 
 **Provides** lists each provider with its kind: `useClass`, `useValue`, `useFactory` or `useExisting`. A bare class shows as `useClass`. Chips mark **viewProviders** and **multi** providers. Providers that come from imported modules show the import path, as `via A › B`.
+
+When the [source scan](#source-mode) declares the token, the row says **Declared in** with links to up to three places, such as the `@Injectable` class or the `providers` entry, and how many more there are. The match is by token name.
 
 ### Peek at a provider value
 
@@ -258,7 +262,7 @@ The full tree needs Angular 17.0 or later. On older versions the tab shows a not
 
 ### Up to 2000 element injectors
 
-The page reports at most 2000 element injectors. Environment injectors are kept after them, up to 2500 injectors in all, so they never push element injectors out. Injectors nested more than 1000 levels deep are left out too. When any of these limits cuts the tree, a notice above the tree says the page reported only part of its injector tree, and a lookup path or a provider can point to an injector that isn't listed. `inspect-providers` says it too.
+The page reports at most 2000 element injectors. Environment injectors are kept after them, up to 2500 injectors in all, so they never push element injectors out. Injectors nested more than 1000 levels deep are left out too. When any of these limits cuts the tree, a notice above the tree says the page reported only part of its injector tree, with the limits the server applied, and a lookup path or a provider can point to an injector that isn't listed. The server sends those limits with the tree as `limits`. `inspect-providers` says it too.
 
 ### Some injectors can't be highlighted
 

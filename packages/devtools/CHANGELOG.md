@@ -2,15 +2,6 @@
 
 All notable changes to `@pangular-inspector/devtools` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
 
-## Unreleased
-
-### Features
-
-- **Injectors:** selecting an element injector reads it again on the page, and **Refresh** in the toolbar reads every injector again. Element injectors are still cached between updates, since reading what they inject is costly.
-- **Injectors:** the Environment view lists lazy route injectors the router already loaded but no rendered element uses, with an **inactive** chip. `inspect-providers` and the `injector-tree` resource mark them `inactive: true`.
-- **Injectors:** a collapsed **Hint** above the live tree lists providers your source declares that nothing on the page injected so far. It is a hint, not an error.
-- **Injectors:** source mode lists `provide*()` calls it can't resolve to tokens, such as your own provider functions, under a collapsed **Helpers (unresolved)** group instead of dropping them. `scan-providers` gives them `type: "helper"`.
-
 ## 1.0.0
 
 Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0.7** first.
@@ -165,6 +156,19 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
+- **Injectors:** selecting an element injector reads it again on the page, and **Refresh** in the toolbar reads every injector again. Element injectors are still cached between updates, since reading what they inject is costly.
+- **Injectors:** the Environment view lists lazy route injectors the router already loaded but no rendered element uses, with an **inactive** chip. `inspect-providers` and the `injector-tree` resource mark them `inactive: true`.
+- **Injectors:** a collapsed **Hint** above the live tree lists providers your source declares that nothing on the page injected so far. It is a hint, not an error.
+- **Injectors:** source mode lists `provide*()` calls it can't resolve to tokens, such as your own provider functions, under a collapsed **Helpers (unresolved)** group instead of dropping them. `scan-providers` gives them `type: "helper"`.
+- **Injectors:** each **Injected here** row has a **Resolution** button that draws the lookup path for that token: asked, provides it, not asked, skipped, or the null injector.
+- **Injectors:** live provider rows say where the source scan declares the token, with links.
+- **Injectors:** a truncated tree carries the server's `limits`, and the notice names them.
+- **Signals:** a node's details link it to its declaration in the source scan, or list the candidates when the name matches several.
+- **Signals:** a history entry shows what changed from the entry before, path by path.
+- **Signals:** **Restore** works on signal fields of services in root and route graphs.
+- **Signals:** hosts with directives but no component have a graph, in the **Graph of** picker and in `inspect-signals`, which also takes an element injector id such as `inj-12`.
+- **Signals:** effect run counts and times, where Angular's profiler reports effect runs. No Angular version up to 22.1 does, so the line stays hidden there.
+- **Signals:** the unnamed signal hint says that the compiler names signals from Angular 20.1.
 
 #### Agents and MCP
 

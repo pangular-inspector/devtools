@@ -446,28 +446,31 @@ An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../g
 
 The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`, `effect`), dependency edges (`{ consumer, producer }`, where `consumer` reads `producer`, both node ids), the component or injector they belong to, and recent value history per node. Reads: page.
 
-| Argument    | Required | Value                                                                                                                                                        |
-| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `component` | one of   | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`.                           |
-| `selector`  | one of   | A CSS selector for a component host, like `app-card.featured`. The first match is read. At most 500 characters.                                              |
-| `node`      | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history. |
-| `history`   | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                    |
-| `framework` | no       | `false` leaves out the nodes Angular itself created (`framework: true`). Defaults to `true`.                                                                 |
+| Argument    | Required | Value                                                                                                                                                                                                                                                                     |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `component` | one of   | Host tag, class name or instance id of the component, like `app-root`. Or `root`, a route path like `/admin` or `Route: admin`, or an element injector id like `inj-12` from `inspect-providers`. A directive class or a host with directives but no component works too. |
+| `selector`  | one of   | A CSS selector for a component host, like `app-card.featured`. The first match is read. At most 500 characters.                                                                                                                                                           |
+| `node`      | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history.                                                                                                              |
+| `history`   | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                                                                                                                                 |
+| `framework` | no       | `false` leaves out the nodes Angular itself created (`framework: true`). Defaults to `true`.                                                                                                                                                                              |
 
 Pass `component` or `selector`, not both. When the graph the page last reported belongs to another component or injector, the tool asks the page for the one you named, once, and the Signals page keeps showing what it showed. A `component` the component tree knows is read by its first instance. A `component` it doesn't know answers with the graph the page reported and says what that graph covers. A `selector` that matches no component host is refused.
 
 The answer also holds:
 
-| Field            | Value                                                                                                                                    |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `resources`      | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`.            |
-| `environments`   | The root and route injectors the page can report, with `id` and `name`.                                                                  |
-| `changes`        | On a node or resource, every change since the page first saw it. The history keeps the last 50.                                          |
-| `nodeCount`      | Set when Angular reported more than the 400 nodes the page keeps.                                                                        |
-| `unnamedSignals` | Set when signals, computeds or linkedSignals in the graph have no `debugName`. Their history holds sampled values only.                  |
-| `framework`      | `true` on a node that Angular's router, forms or HTTP code created. See [Framework signals](../inspectors/signals.md#framework-signals). |
-| `watch`          | The node ids the page watches (`ids`) and whether write stacks are on (`stacks`). Set only while one of them is on.                      |
-| `stack`          | On a `write` history entry while write stacks are on: the first 3 app frames of the code that set the signal.                            |
+| Field                        | Value                                                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `resources`                  | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`.                                                        |
+| `environments`               | The root and route injectors the page can report, with `id` and `name`.                                                                                                              |
+| `changes`                    | On a node or resource, every change since the page first saw it. The history keeps the last 50.                                                                                      |
+| `nodeCount`                  | Set when Angular reported more than the 400 nodes the page keeps.                                                                                                                    |
+| `unnamedSignals`             | Set when signals, computeds or linkedSignals in the graph have no `debugName`. Their history holds sampled values only.                                                              |
+| `framework`                  | `true` on a node that Angular's router, forms or HTTP code created. See [Framework signals](../inspectors/signals.md#framework-signals).                                             |
+| `watch`                      | The node ids the page watches (`ids`) and whether write stacks are on (`stacks`). Set only while one of them is on.                                                                  |
+| `stack`                      | On a `write` history entry while write stacks are on: the first 3 app frames of the code that set the signal.                                                                        |
+| `element`                    | The element injector the graph was read from: `id`, `tag`, `directives`, and `injectorId` when you passed an element injector id. Without `component`, the host has directives only. |
+| `locator`                    | On a writable node the page can restore: `id` and `key` of the component field, or `owner: "service"` with the injector id and the service class in `service`.                       |
+| `runs`, `runMs`, `lastRunMs` | On an effect, where Angular's profiler reports effect runs: how many times it ran, and its total and last run time in ms. See [Effect runs](../inspectors/signals.md#effect-runs).   |
 
 The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
