@@ -15,6 +15,12 @@ export interface NavItem {
    * (`new`, `updated`, `alpha`, `beta`, `stable`, `deprecated`), so the
    * sidebar chip and inline `<ngmd-badge>` always stay in sync. */
   status?: BadgeVariant;
+  /** The `@pangular-inspector/devtools` version the badge expires at, such as
+   * `'1.2.0'`. The chip shows while the package version in
+   * `packages/devtools/package.json` is older. `new` and `updated` need it:
+   * set it to the minor after the release that ships the page, so the badge
+   * disappears with the next minor release. See `nav-badges.ts`. */
+  until?: string;
 }
 
 export interface NavSection {
@@ -177,22 +183,54 @@ const config: NgmdConfig = {
       items: [
         {label: 'Quick start', href: '/getting-started/quick-start'},
         {label: 'Introduction', href: '/getting-started/introduction'},
-        {label: 'Installation', href: '/getting-started/installation'},
+        {label: 'Features', href: '/getting-started/features', status: 'new', until: '1.2.0'},
+        {
+          label: 'Installation',
+          href: '/getting-started/installation',
+          status: 'updated',
+          until: '1.2.0',
+        },
         {label: 'Angular CLI and Express', href: '/getting-started/express'},
         {label: 'Hono, h3 and Fastify', href: '/getting-started/other-servers'},
-        {label: 'Vite and Analog', href: '/getting-started/vite'},
+        {
+          label: 'Vite and Analog',
+          href: '/getting-started/vite',
+          status: 'updated',
+          until: '1.2.0',
+        },
         {label: 'Standalone CLI', href: '/getting-started/cli'},
         {label: 'Configuration', href: '/getting-started/configuration'},
         {label: 'Popup and hub', href: '/getting-started/popup-and-hub'},
         {label: 'Command palette', href: '/getting-started/command-palette'},
+        {
+          label: 'Keyboard shortcuts',
+          href: '/getting-started/keyboard-shortcuts',
+          status: 'new',
+          until: '1.2.0',
+        },
         {label: 'Terminals', href: '/getting-started/terminals'},
         {label: 'Settings', href: '/getting-started/settings'},
         {label: 'Browser overlay', href: '/getting-started/overlay'},
         {label: 'Chrome extension', href: '/getting-started/chrome-extension'},
-        {label: 'Angular Native', href: '/getting-started/angular-native'},
-        {label: 'NativeScript', href: '/getting-started/nativescript'},
-        {label: 'Platforms', href: '/getting-started/platforms'},
-        {label: 'Troubleshooting', href: '/getting-started/troubleshooting'},
+        {
+          label: 'Angular Native',
+          href: '/getting-started/angular-native',
+          status: 'updated',
+          until: '1.2.0',
+        },
+        {
+          label: 'NativeScript',
+          href: '/getting-started/nativescript',
+          status: 'updated',
+          until: '1.2.0',
+        },
+        {label: 'Platforms', href: '/getting-started/platforms', status: 'new', until: '1.2.0'},
+        {
+          label: 'Troubleshooting',
+          href: '/getting-started/troubleshooting',
+          status: 'new',
+          until: '1.2.0',
+        },
       ],
     },
     {
@@ -220,9 +258,11 @@ const config: NgmdConfig = {
       items: [
         {label: 'MCP server', href: '/agents/mcp-server'},
         {label: 'Tools', href: '/agents/tools'},
+        {label: 'Tool index', href: '/agents/tool-index', status: 'new', until: '1.2.0'},
         {label: 'Resources', href: '/agents/resources'},
         {label: 'Browser agents', href: '/agents/browser-agents'},
         {label: 'Agent skills', href: '/agents/skills'},
+        {label: 'Recipes for agents', href: '/agents/recipes', status: 'new', until: '1.2.0'},
       ],
     },
     {

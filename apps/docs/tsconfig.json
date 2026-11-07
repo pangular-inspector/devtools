@@ -12,6 +12,7 @@
     "declaration": false,
     "experimentalDecorators": true,
     "moduleResolution": "bundler",
+    "resolveJsonModule": true,
     "rewriteRelativeImportExtensions": true,
     "isolatedModules": true,
     "importHelpers": true,
