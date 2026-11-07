@@ -50,6 +50,19 @@ describe('NgRx state size cap', () => {
     expect(capNgrxState('é'.repeat(140 * 1024))).toMatch(/^\[too large: 28\d KB\]$/);
   });
 
+  it('never replaces a slice that is no larger than its marker', () => {
+    const fn = () => undefined;
+    const capped = capNgrxState(
+      { a: 'x'.repeat(30), b: 1, c: fn, d: 'y'.repeat(30) },
+      10,
+    ) as Record<string, unknown>;
+    // The 30-character strings shrink to the marker; the number and the function stay.
+    expect(capped['a']).toBe('[too large: 1 KB]');
+    expect(capped['d']).toBe('[too large: 1 KB]');
+    expect(capped['b']).toBe(1);
+    expect(capped['c']).toBe(fn);
+  });
+
   it('caps the fields of a signal store as one state', () => {
     expect(capNgrxFields({ a: big(200), b: big(100) })).toEqual({
       a: '[too large: 201 KB]',

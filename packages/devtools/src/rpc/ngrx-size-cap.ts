@@ -38,8 +38,11 @@ export function capNgrxState(value: unknown, max = NGRX_STATE_MAX_BYTES): unknow
   for (const { key, bytes } of sizes) {
     if (total <= max) break;
     const marker = tooLargeText(bytes);
+    const saved = bytes - jsonBytes(marker);
+    // A slice no larger than its marker (or one JSON can't write) would not shrink the state.
+    if (saved <= 0) continue;
     out[key] = marker;
-    total -= bytes - jsonBytes(marker);
+    total -= saved;
   }
   return out;
 }

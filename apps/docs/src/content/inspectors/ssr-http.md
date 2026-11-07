@@ -146,7 +146,7 @@ The tab checks the TransferState after each server response, so **cached** is wh
 
 Every `HttpClient` request, tagged **SSR** or **Client**. Each row shows the method, the URL, the page that made it, the status, the time, and notes:
 
-- **transfer cache**: the TransferState cache answered it. Only client requests get it, because the server never reads the cache; a server call shows its [transfer cache outcome](#transfer-cache-outcome) instead. A client request counts as a hit only when its method, response type, URL, body and params match the entry Angular stored, and Angular would cache it: no `transferCache: false`, auth headers, credentials or no-cache request.
+- **transfer cache**: the TransferState cache answered it. Only client requests get it, because the server never reads the cache; a server call shows its [transfer cache outcome](#transfer-cache-outcome) instead. A client request counts as a hit only when its method, response type, URL, body and params match the entry Angular stored, and Angular would cache it with the options passed to `withPangular({transferCache})`, or with its defaults without them. With the defaults, that means no `transferCache: false`, POST, auth headers, credentials or no-cache request. Options such as `includePostRequests` let more requests count, and a `filter` that returns `false` leaves one out. See [Transfer cache options](#transfer-cache-options).
 - **delayed N ms**: a fault rule held it back.
 - **mocked**: a fault rule answered it with a status below 400.
 - **faulted**: a fault rule failed it with a status of 400 or more.
