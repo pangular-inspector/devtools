@@ -22,7 +22,8 @@
   "include": [
     "./**/*.ts",
     "../packages/devtools/src/config.ts",
-    "../packages/devtools/src/cd-data.ts"
+    "../packages/devtools/src/cd-data.ts",
+    "../packages/devtools/src/http-data.ts"
   ],
   "exclude": ["node_modules", "vite.config.ts", "vitest.config.ts"]
 }

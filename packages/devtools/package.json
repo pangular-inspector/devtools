@@ -51,7 +51,8 @@
     "./package.json": "./package.json",
     "./vite": "./src/entries/vite.ts",
     "./internal/config": "./src/config.ts",
-    "./internal/types": "./src/panel-types.ts"
+    "./internal/types": "./src/panel-types.ts",
+    "./internal/http-data": "./src/http-data.ts"
   },
   "publishConfig": {
     "main": "./dist/devframe.mjs",

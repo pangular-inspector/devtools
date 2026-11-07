@@ -106,6 +106,11 @@ import {
 import { attachChangeDetection } from './cd-overlay.ts';
 import { attachAngularInfo } from './ng-capabilities.ts';
 import { createScanBackoff } from './router-attach.ts';
+import {
+  capturePlatformNavigations,
+  navigationApi,
+  type PlatformNavigation,
+} from './router-platform-nav.ts';
 import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
 import { overlayStarts } from './overlay-start.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
@@ -618,6 +623,7 @@ async function startOverlay(
 
   const navigations: NavigationRecord[] = [];
   const preloads: PreloadRecord[] = [];
+  const platformNavigations: PlatformNavigation[] = [];
   const configTracker = new ConfigTracker();
   let router: Record<string, unknown> | null = null;
   let routerCount = 0;
@@ -696,6 +702,9 @@ async function startOverlay(
     routerCleanup.push(captureCallers(router, navigations, ng));
     routerCleanup.push(captureDiagnostics(router, navigations));
     routerCleanup.push(capturePreloads(preloaderOf(ng, routerRoot), preloads, scheduleRouterPush));
+    routerCleanup.push(
+      capturePlatformNavigations(navigationApi(), navigations, platformNavigations, onRouterChange),
+    );
   }
 
   /** True when the watched router was destroyed or its root left the page (HMR, re-bootstrap). */
@@ -716,6 +725,7 @@ async function startOverlay(
     // A new router counts navigation ids from 1 again, so old records would take its events.
     resetNavigations(navigations);
     preloads.length = 0;
+    platformNavigations.length = 0;
     config = undefined;
     configTruncated = 0;
     setup = undefined;
@@ -767,6 +777,7 @@ async function startOverlay(
         if (linksTruncated) report['linksTruncated'] = linksTruncated;
         if (linksUnchecked) report['linksUnchecked'] = linksUnchecked;
         report['preloads'] = preloads;
+        if (platformNavigations.length) report['platformNavigations'] = platformNavigations;
         report['instrumented'] = instrumented;
       }
       const payload = JSON.stringify(report);
@@ -936,6 +947,7 @@ async function startOverlay(
     handler: (message: { pageId?: unknown } | undefined) => {
       if (!on.router || message?.pageId !== pageId) return;
       clearNavigations(navigations);
+      platformNavigations.length = 0;
       lastRouterPayload = '';
       scheduleRouterPush();
     },

@@ -290,6 +290,25 @@ describe('hub messages', () => {
     expect(list()[0]!.message).toMatch(/\(2 times\)$/);
   });
 
+  it('posts a navigation whose target came from a query param once', () => {
+    const { feed, list } = setup();
+    const flagged = {
+      id: 5,
+      startedAt: 30,
+      outcome: 'redirected',
+      url: '/login?returnUrl=%2Fadmin',
+      redirectTo: '/admin',
+      queryRedirect: { param: 'returnUrl', by: 'loginGuard (canActivate)' },
+    };
+    feed.navigations('p1', [flagged]);
+    feed.navigations('p1', [flagged]);
+    expect(list()).toHaveLength(1);
+    expect(list()[0]!.message).toBe(
+      'Possible open redirect: target taken from query param returnUrl',
+    );
+    expect(list()[0]!.description).toContain('loginGuard (canActivate)');
+  });
+
   it('posts hydration mismatches and NG05xx messages once per page', () => {
     const { feed, list } = setup();
     const report = stats({

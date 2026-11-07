@@ -741,6 +741,8 @@ const READ_PLAN = [
 
   ['explain-pipe', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
   ['explain-pipe', '/examples/pipes', () => ({ name: 'date' })],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({})],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
 
   ['list-ssr-requests', '/examples/http', () => ({ limit: 5 })],
   [
@@ -753,6 +755,7 @@ const READ_PLAN = [
   ['list-http-calls', '/examples/http', () => ({ failed: true })],
   ['list-http-calls', '/examples/http', () => ({ view: 'waterfall', headers: true })],
   ['list-http-rules', '/examples/http', () => ({})],
+  ['lint-http', '/examples/http', () => ({})],
   ['inspect-transfer-state', '/examples/http', () => ({})],
   ['list-ssr-overrides', '/examples/http', () => ({})],
 
@@ -771,6 +774,11 @@ const READ_PLAN = [
   ['lint-routes', '/examples/routes/details', () => ({})],
   ['router-config', '/examples/routes/details', () => ({})],
   ['explain-navigation', '/examples/routes/details', () => ({ format: 'repro' })],
+  ['diff-navigations', '/examples/routes/details', () => ({})],
+  ['follow-navigations', '/examples/routes/details', () => ({})],
+  ['follow-navigations', '/examples/routes/details', () => ({ since: 0, waitMs: 0 })],
+  ['preview-navigation', '/examples/routes/details', () => ({ url: '/destinations/kyoto' })],
+  ['preview-navigation', '/examples/routes/details', () => ({ url: '/trips' })],
 
   ['inspect-forms', '/examples/forms', () => ({})],
   ['inspect-forms', '/examples/forms', (ctx) => ({ form: ctx.formIds[0] })],
@@ -3060,7 +3068,7 @@ function runDocs(state) {
   docs.argumentDrift = argDrift;
   // The counts the docs state.
   const builtIns = live.length + 1; // devframe_state_read is listed too, under Shared state
-  docs.statedToolCount = toolsMd.match(/^\s*([A-Z][a-z-]+) tools, grouped/m)?.[1];
+  docs.statedToolCount = toolsMd.match(/^\s*([A-Z][a-z]+(?:[- ][a-z]+)*) tools, grouped/m)?.[1];
   docs.liveBuiltInTools = live.length;
   docs.liveTotalTools = state.tools.size;
   const actionLive = [...state.tools.values()]
