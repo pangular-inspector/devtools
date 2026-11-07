@@ -27,6 +27,7 @@ import { Select, type SelectOption } from '../ui/select';
 import { SourceLink } from '../ui/source-link';
 import type { GraphLink } from './signal-graph-layout';
 import { SignalGraphView } from './signal-graph-view';
+import { SearchField } from '../ui/search-field';
 
 interface SignalNode {
   id: string;
@@ -179,6 +180,7 @@ const KIND_TOKENS: Record<string, string> = {
 @Component({
   selector: 'app-signal-inspector',
   imports: [
+    SearchField,
     AngularUnavailable,
     DatePipe,
     JsonPipe,
@@ -190,14 +192,11 @@ const KIND_TOKENS: Record<string, string> = {
   ],
   template: `
     <div class="toolbar">
-      <input
+      <app-search-field
         #filterInput
-        type="search"
-        placeholder="Filter by name or kind…"
-        aria-label="Filter signals by name or kind"
-        [value]="filter()"
-        (input)="filter.set($any($event.target).value)"
-        (keydown.escape)="filter.set('')"
+        placeholder="Filter by name or kind"
+        saveKey="signals"
+        [(value)]="filter"
       />
       @if (pageOptions().length > 1) {
         <div class="picker page-picker">
@@ -1702,7 +1701,7 @@ export class SignalInspector {
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
+  private readonly filterInput = viewChild<SearchField>('filterInput');
   private readonly injector = inject(Injector);
   private readonly pageId = hostPageId();
   private readonly angularPages = injectAngularPages(() => this.rpc());
@@ -2191,7 +2190,7 @@ export class SignalInspector {
     afterNextRender(
       () => {
         const lost = !trigger?.isConnected || document.activeElement === document.body;
-        if (lost) this.filterInput()?.nativeElement.focus();
+        if (lost) this.filterInput()?.focus();
       },
       { injector: this.injector },
     );
@@ -2200,7 +2199,7 @@ export class SignalInspector {
   /** Clears the filters from a no-match state and keeps focus on the filter box. */
   clearFilters() {
     this.resetFilters();
-    this.filterInput()?.nativeElement.focus();
+    this.filterInput()?.focus();
   }
 
   private resetFilters() {

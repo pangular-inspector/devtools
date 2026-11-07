@@ -96,7 +96,7 @@ describe('RouteTree row actions', () => {
     first.value = '42';
     first.dispatchEvent(new Event('input'));
 
-    const filter = el(fixture).querySelector<HTMLInputElement>('input.filter')!;
+    const filter = el(fixture).querySelector<HTMLInputElement>('.filter input[type="search"]')!;
     filter.value = 'lazy';
     filter.dispatchEvent(new Event('input'));
     await settle(fixture);
@@ -202,8 +202,9 @@ describe('RouteTree page switch', () => {
     await settle(fixture);
     expect(liveRegion(fixture).textContent?.trim()).toBe('');
     const regions = el(fixture).querySelectorAll('[role="status"]');
-    expect(regions).toHaveLength(2);
-    expect(Array.from(regions).map((r) => r.textContent?.trim())).toEqual(['', '']);
+    // The row status, the filter count and the saved filter status of the search field.
+    expect(regions).toHaveLength(3);
+    expect(Array.from(regions).map((r) => r.textContent?.trim())).toEqual(['', '', '']);
   });
 
   it("drops page A's results and typed params after switching to page B", async () => {
@@ -268,7 +269,7 @@ describe('RouteTree filter count', () => {
   ];
 
   function filterInput(fixture: ComponentFixture<unknown>): HTMLInputElement {
-    return el(fixture).querySelector<HTMLInputElement>('input.filter')!;
+    return el(fixture).querySelector<HTMLInputElement>('.filter input[type="search"]')!;
   }
 
   function type(fixture: ComponentFixture<unknown>, value: string) {
@@ -897,7 +898,10 @@ describe('Router filter boxes clear on Escape', () => {
       offline,
     );
     await settle(fixture);
-    await typeThenEscape(fixture, el(fixture).querySelector<HTMLInputElement>('input.filter')!);
+    await typeThenEscape(
+      fixture,
+      el(fixture).querySelector<HTMLInputElement>('.filter input[type="search"]')!,
+    );
   });
 
   it('clears the navigation URL filter', async () => {
@@ -905,7 +909,7 @@ describe('Router filter boxes clear on Escape', () => {
     await settle(fixture);
     await typeThenEscape(
       fixture,
-      el(fixture).querySelector<HTMLInputElement>('input[aria-label="Filter navigations by URL"]')!,
+      el(fixture).querySelector<HTMLInputElement>('.toolbar input[type="search"]')!,
     );
   });
 
@@ -924,7 +928,7 @@ describe('Router filter boxes clear on Escape', () => {
     await settle(fixture);
     await typeThenEscape(
       fixture,
-      el(fixture).querySelector<HTMLInputElement>('input[aria-label="Filter source routes"]')!,
+      el(fixture).querySelector<HTMLInputElement>('.toolbar input[type="search"]')!,
     );
   });
 });

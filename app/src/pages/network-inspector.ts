@@ -31,6 +31,7 @@ import { Select, type SelectOption } from '../ui/select';
 import { VirtualWindow } from '../ui/virtual-window';
 import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
+import { SearchField } from '../ui/search-field';
 
 type HttpSide = 'client' | 'server';
 
@@ -296,7 +297,15 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 
 @Component({
   selector: 'app-network-inspector',
-  imports: [JsonPipe, HttpHeadersView, LimitNote, NetworkWaterfall, RovingList, Select],
+  imports: [
+    SearchField,
+    JsonPipe,
+    HttpHeadersView,
+    LimitNote,
+    NetworkWaterfall,
+    RovingList,
+    Select,
+  ],
   template: `
     <p class="page-intro">
       HttpClient calls made while rendering on the server and in the browser, from the live page and
@@ -567,23 +576,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           aria-label="Filter the HTTP timeline"
           [class.no-calls]="!timeline().length"
         >
-          <div class="search">
-            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <input
-              id="timeline-search"
-              type="search"
-              placeholder="Find a URL or method…"
-              aria-label="Find a URL or method"
-              autocomplete="off"
-              spellcheck="false"
-              [value]="callQuery()"
-              (input)="callQuery.set($any($event.target).value)"
-              (keydown.escape)="callQuery.set('')"
-            />
-          </div>
+          <app-search-field
+            class="search"
+            inputId="timeline-search"
+            placeholder="Filter by URL or method"
+            saveKey="network"
+            [(value)]="callQuery"
+          />
           <app-select
             class="side-filter"
             ariaLabel="Side"

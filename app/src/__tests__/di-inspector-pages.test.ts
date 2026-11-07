@@ -328,9 +328,7 @@ describe('injector search box focus', () => {
     clickNamed(host, 'Clear filters');
     await fixture.whenStable();
     expect(fixture.componentInstance.query()).toBe('');
-    expect(document.activeElement).toBe(
-      host.querySelector('input[aria-label="Find a token, component or injector"]'),
-    );
+    expect(document.activeElement).toBe(host.querySelector('.toolbar input[type="search"]'));
   });
 
   it('keeps focus on the search box after Clear filter in the source scan', async () => {
@@ -351,9 +349,7 @@ describe('injector search box focus', () => {
     clickNamed(host, 'Clear filters');
     await fixture.whenStable();
     expect(host.textContent).toContain('CartService');
-    expect(document.activeElement).toBe(
-      host.querySelector('input[aria-label="Filter by token or file"]'),
-    );
+    expect(document.activeElement).toBe(host.querySelector('.toolbar input[type="search"]'));
   });
 });
 

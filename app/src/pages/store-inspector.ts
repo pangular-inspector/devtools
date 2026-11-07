@@ -42,6 +42,7 @@ import {
 import { SourceLink } from '../ui/source-link';
 import { StoreGlobal } from '../ui/store-global';
 import { reduxLiveStores, reduxLog, reduxPagesOf, type ReduxStoresPage } from './redux-stores';
+import { SearchField } from '../ui/search-field';
 
 const KIND_COLORS: Record<string, string> = {
   action: '#f59e0b',
@@ -105,6 +106,7 @@ const CLASSIC_KINDS = new Set([
 @Component({
   selector: 'app-store-inspector',
   imports: [
+    SearchField,
     AngularUnavailable,
     LimitNote,
     RovingList,
@@ -121,21 +123,13 @@ const CLASSIC_KINDS = new Set([
       Elf and MiniRx stores. Source declarations lists the stores your files declare.
     </p>
     <div class="toolbar">
-      <div class="search">
-        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
-        <input
-          #filterInput
-          type="search"
-          placeholder="Filter stores, changes and declarations…"
-          aria-label="Filter stores, changes and source declarations"
-          [value]="filter()"
-          (input)="filter.set($any($event.target).value)"
-          (keydown.escape)="filter.set('')"
-        />
-      </div>
+      <app-search-field
+        #filterInput
+        class="search"
+        placeholder="Filter stores, changes and declarations"
+        saveKey="store"
+        [(value)]="filter"
+      />
       @if (allPages().length > 1) {
         <span class="visually-hidden" id="ngrx-page-label">Page</span>
         <app-select
@@ -1907,7 +1901,7 @@ export class StoreInspector {
   private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
   private readonly restoreButton = viewChild<ElementRef<HTMLButtonElement>>('restoreButton');
   private readonly stateTree = viewChild<ElementRef<HTMLElement>>('stateTree');
-  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
+  private readonly filterInput = viewChild<SearchField>('filterInput');
   private readonly latestButton = viewChild<ElementRef<HTMLButtonElement>>('latestButton');
   readonly message = signal('');
 
@@ -2370,7 +2364,7 @@ export class StoreInspector {
   clearFilters() {
     this.filter.set('');
     this.kind.set(null);
-    this.filterInput()?.nativeElement.focus();
+    this.filterInput()?.focus();
   }
 
   /**

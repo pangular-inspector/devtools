@@ -15,23 +15,20 @@ import {
   type NavigationRecord,
   type RouterPage,
 } from './router-types';
+import { SearchField } from '../ui/search-field';
 
 const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
 
 @Component({
   selector: 'app-route-timeline',
-  imports: [LimitNote],
+  imports: [SearchField, LimitNote],
   template: `
     <div class="toolbar">
-      <input
+      <app-search-field
         #filterInput
-        class="field"
-        type="search"
-        aria-label="Filter navigations by URL"
         placeholder="Filter by URL"
-        [value]="filter()"
-        (input)="filter.set($any($event.target).value)"
-        (keydown.escape)="filter.set('')"
+        saveKey="router-timeline"
+        [(value)]="filter"
       />
       <label class="check">
         <input

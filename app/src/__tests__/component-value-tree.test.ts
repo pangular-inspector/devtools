@@ -384,7 +384,7 @@ describe('ComponentTree value expansion', () => {
     const call = vi.fn<Call>(async () => []);
     const fixture = await open(call);
     const filter = el(fixture).querySelector<HTMLInputElement>(
-      'input[aria-label^="Filter inputs, outputs and properties"]',
+      'input[aria-label="Filter values"]',
     )!;
     type(filter, 'coun');
     await settle(fixture);

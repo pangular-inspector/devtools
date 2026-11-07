@@ -130,11 +130,11 @@ A request that was unsubscribed before its response, for example by `switchMap`,
 
 Above the table, these filters narrow the timeline. They combine, and the count next to them shows how many calls are visible, for example **12 of 200**. The count shows once the timeline has a call.
 
-| Filter                   | What it keeps                                                                                             |
-| ------------------------ | --------------------------------------------------------------------------------------------------------- |
-| **Find a URL or method** | Calls whose method or URL contains the text, ignoring case. `post /api` matches both. `Escape` clears it. |
-| **Side**                 | **All sides**, **SSR** or **Client** calls.                                                               |
-| **Failed only**          | Calls with a status of 400 or more, **ERR** or **cancelled**.                                             |
+| Filter          | What it keeps                                                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| **Filter**      | Calls whose method or URL contains the text, ignoring case. `post /api` matches both. `Escape` clears it. |
+| **Side**        | **All sides**, **SSR** or **Client** calls.                                                               |
+| **Failed only** | Calls with a status of 400 or more, **ERR** or **cancelled**.                                             |
 
 If nothing matches, **Clear filters** resets all three. While the filters hide the call that is open in the preview, the preview hides too, and it comes back when the call is visible again.
 

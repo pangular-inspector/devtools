@@ -37,6 +37,7 @@ import {
   type FormSetupError,
   type WebMcpPage,
 } from './forms-types';
+import { SearchField } from '../ui/search-field';
 
 type Tab = 'fields' | 'timeline' | 'submit' | 'lint';
 type Chip = 'invalid' | 'dirty' | 'touched' | 'disabled' | 'hidden-error';
@@ -97,6 +98,7 @@ function countFields(node: FormFieldNode): number {
 @Component({
   selector: 'app-forms-inspector',
   imports: [
+    SearchField,
     JsonPipe,
     FormsFieldDetail,
     FormsTimeline,
@@ -383,24 +385,13 @@ function countFields(node: FormFieldNode): number {
               @switch (tab_()) {
                 @case ('fields') {
                   <div class="filters">
-                    <div class="search">
-                      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="m20 20-3.5-3.5" />
-                      </svg>
-                      <input
-                        #fieldFilter
-                        class="filter"
-                        type="search"
-                        placeholder="Filter fields by path"
-                        aria-label="Filter fields by path"
-                        autocomplete="off"
-                        spellcheck="false"
-                        [value]="filter()"
-                        (input)="onFilter($event)"
-                        (keydown.escape)="filter.set('')"
-                      />
-                    </div>
+                    <app-search-field
+                      #fieldFilter
+                      class="search"
+                      placeholder="Filter fields by path"
+                      saveKey="forms"
+                      [(value)]="filter"
+                    />
                     <fieldset class="chips">
                       <legend class="sr-only">Show only fields that are</legend>
                       @for (chip of chips; track chip.id) {
@@ -1753,17 +1744,13 @@ export class FormsInspector {
   }
 
   /** Resets the path search and the chips, then hands focus back to the search field. */
-  clearFilters(search: HTMLInputElement) {
+  clearFilters(search: { focus(): void }) {
     this.filter.set('');
     this.active.set(new Set());
     const count = this.rows().length;
     const message = `Filters cleared. Showing ${count} ${count === 1 ? 'field' : 'fields'}.`;
     this.filterStatus.update((current) => (current === message ? `${message}\u00a0` : message));
     search.focus();
-  }
-
-  onFilter(event: Event) {
-    this.filter.set((event.target as HTMLInputElement).value);
   }
 
   highlight(formId: string | null, path: string) {

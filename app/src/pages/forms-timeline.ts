@@ -11,6 +11,7 @@ import {
 import { time } from '../format';
 import { Select, type SelectOption } from '../ui/select';
 import { FORMS_STYLES, type FormEvent } from './forms-types';
+import { SearchField } from '../ui/search-field';
 
 const ORIGINS = ['all', 'user', 'code', 'agent', 'devtools'] as const;
 
@@ -33,7 +34,7 @@ const EVENT_TYPES = [
 
 @Component({
   selector: 'app-forms-timeline',
-  imports: [Select],
+  imports: [SearchField, Select],
   template: `
     <div class="toolbar">
       <label class="record" [class.on]="recording()">
@@ -67,23 +68,13 @@ const EVENT_TYPES = [
       </fieldset>
     </div>
     <div class="filters">
-      <div class="search">
-        <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
-        <input
-          #pathInput
-          type="search"
-          placeholder="Filter by field path…"
-          aria-label="Filter by field path"
-          autocomplete="off"
-          spellcheck="false"
-          [value]="pathFilter()"
-          (input)="pathFilter.set($any($event.target).value)"
-          (keydown.escape)="pathFilter.set('')"
-        />
-      </div>
+      <app-search-field
+        #pathInput
+        class="search"
+        placeholder="Filter by field path"
+        saveKey="forms-timeline"
+        [(value)]="pathFilter"
+      />
       <app-select ariaLabel="Event type" [options]="typeOptions()" [(value)]="typeFilter" />
       <span class="total">{{ summary() }}</span>
       <span class="sr-only" role="status">{{ filterStatus() }}</span>
@@ -475,7 +466,7 @@ export class FormsTimeline {
 
   readonly pathFilter = signal('');
   readonly typeFilter = signal<string | null>('all');
-  private readonly pathInput = viewChild<ElementRef<HTMLInputElement>>('pathInput');
+  private readonly pathInput = viewChild<SearchField>('pathInput');
 
   /** All types, then the types present in the events in the agent tool's order. */
   readonly typeOptions = computed<SelectOption[]>(() => {
@@ -538,7 +529,7 @@ export class FormsTimeline {
     this.pathFilter.set('');
     this.typeFilter.set('all');
     this.filter.set('all');
-    this.pathInput()?.nativeElement.focus();
+    this.pathInput()?.focus();
   }
 
   iso(timestamp: number) {

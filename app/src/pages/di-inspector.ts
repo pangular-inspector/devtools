@@ -29,6 +29,7 @@ import type { ComponentFocus } from '../types/component-focus.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
 import { storeFlag, storedFlag } from '../view-prefs';
 import { StartupSection } from './startup-section';
+import { SearchField } from '../ui/search-field';
 
 interface ProviderInfo {
   token: string;
@@ -128,6 +129,7 @@ function isTree(value: unknown): value is InjectorNode[] {
 @Component({
   selector: 'app-di-inspector',
   imports: [
+    SearchField,
     AngularUnavailable,
     NgTemplateOutlet,
     ProviderValue,
@@ -193,23 +195,13 @@ function isTree(value: unknown): value is InjectorNode[] {
             Environment <span class="pill">{{ environmentCount() }}</span>
           </button>
         </div>
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #queryInput
-            type="search"
-            placeholder="Find a token, component or injector…"
-            aria-label="Find a token, component or injector"
-            autocomplete="off"
-            spellcheck="false"
-            [value]="query()"
-            (input)="query.set($any($event.target).value)"
-            (keydown.escape)="query.set('')"
-          />
-        </div>
+        <app-search-field
+          #queryInput
+          class="search"
+          placeholder="Filter by token, component or injector"
+          saveKey="injectors"
+          [(value)]="query"
+        />
         <ng-container [ngTemplateOutlet]="pagePicker" />
         @if (view() === 'element') {
           <label class="checkbox">
@@ -606,23 +598,13 @@ function isTree(value: unknown): value is InjectorNode[] {
       </div>
     } @else {
       <div class="toolbar">
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #queryInput
-            type="search"
-            placeholder="Filter by token or file…"
-            aria-label="Filter by token or file"
-            autocomplete="off"
-            spellcheck="false"
-            [value]="query()"
-            (input)="query.set($any($event.target).value)"
-            (keydown.escape)="query.set('')"
-          />
-        </div>
+        <app-search-field
+          #queryInput
+          class="search"
+          placeholder="Filter by token or file"
+          saveKey="injectors-source"
+          [(value)]="query"
+        />
         <ng-container [ngTemplateOutlet]="pagePicker" />
         <span class="total" aria-live="polite">
           {{ sourceMatchCount() }} of {{ sourceProviders().length }}
@@ -1602,7 +1584,7 @@ export class DiInspector {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly view = signal<TreeView>('element');
   readonly query = signal('');
-  private readonly queryInput = viewChild<ElementRef<HTMLInputElement>>('queryInput');
+  private readonly queryInput = viewChild<SearchField>('queryInput');
   readonly onlyProviding = signal(false);
   readonly componentsOnly = signal(true);
   /** Hides Angular's own injectors and providers (marked `framework` by the server). */
@@ -1962,7 +1944,7 @@ export class DiInspector {
   /** Clears the search from a no-match message and keeps focus on the search box. */
   clearQuery() {
     this.query.set('');
-    this.queryInput()?.nativeElement.focus();
+    this.queryInput()?.focus();
   }
 
   label(node: InjectorNode) {
