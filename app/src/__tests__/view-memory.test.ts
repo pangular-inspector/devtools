@@ -112,6 +112,26 @@ describe('restoreScroll', () => {
     expect(el.scrollTop).toBe(100);
   });
 
+  it('says when it ends, whether it got there or the user took over', () => {
+    const tick = frames();
+    let height = 100;
+    const el = scroller(() => height);
+    let ended = 0;
+    restoreScroll(el, 300, 120, () => ended++);
+    expect(ended).toBe(0);
+    height = 1000;
+    tick();
+    expect(ended).toBe(1);
+
+    restoreScroll(el, 900, 120, () => ended++);
+    expect(ended).toBe(2);
+
+    height = 100;
+    restoreScroll(el, 900, 120, () => ended++);
+    el.dispatchEvent(new Event('keydown'));
+    expect(ended).toBe(3);
+  });
+
   it('goes to the top for a tab with no saved position', () => {
     const el = scroller(() => 1000);
     el.scrollTop = 500;

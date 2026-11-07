@@ -64,9 +64,15 @@ export function rememberSelection<T>(tab: string, value: WritableSignal<T>, name
 /**
  * Scrolls `el` back to `top` as the content grows to reach it, for up to
  * `frames` animation frames. Stops early when the user scrolls, clicks or
- * types. Returns a function that stops it.
+ * types. Calls `onEnd` once it stops, for whatever reason. Returns a
+ * function that stops it.
  */
-export function restoreScroll(el: HTMLElement, top: number, frames = 120): () => void {
+export function restoreScroll(
+  el: HTMLElement,
+  top: number,
+  frames = 120,
+  onEnd?: () => void,
+): () => void {
   let left = frames;
   let frame = 0;
   let done = false;
@@ -76,6 +82,7 @@ export function restoreScroll(el: HTMLElement, top: number, frames = 120): () =>
     done = true;
     cancelAnimationFrame(frame);
     for (const type of inputs) el.removeEventListener(type, stop);
+    onEnd?.();
   };
   for (const type of inputs) el.addEventListener(type, stop, { passive: true });
   const step = () => {

@@ -2575,7 +2575,8 @@ export class NetworkInspector {
     // Newest first, so following the newest call keeps the table scrolled to the top.
     followNewest(this.callFeed, () => {
       if (this.callSort()) return;
-      const wrap = this.host.nativeElement.querySelector<HTMLElement>('.table-wrap');
+      // The SSR requests table comes first and has a .table-wrap too.
+      const wrap = this.callsBody()?.nativeElement.closest<HTMLElement>('.table-wrap');
       if (wrap) wrap.scrollTop = 0;
     });
     effect(() => {

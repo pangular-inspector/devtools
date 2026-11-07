@@ -9,6 +9,7 @@ const { NetworkInspector } = await import('../pages/network-inspector');
 
 type Inspector = InstanceType<typeof NetworkInspector>;
 type Call = ReturnType<Inspector['serverCalls']>[number];
+type SsrRequest = ReturnType<Inspector['requests']>[number];
 
 let fixture: ComponentFixture<Inspector>;
 const host = () => fixture.nativeElement as HTMLElement;
@@ -132,7 +133,7 @@ describe('the network live controls', () => {
     expect(order()).toEqual(['d', 'a', 'b', 'c']);
     expect(host().querySelector('.pending')).toBeNull();
     expect(host().querySelector('app-live-controls [role="status"]')!.textContent).toBe(
-      'Resumed with 1 new calls.',
+      'Resumed. New calls: 1.',
     );
   });
 
@@ -161,5 +162,40 @@ describe('the network live controls', () => {
     await settle();
     expect(top).toBe(0);
     expect(localStorage.getItem('pangular-pref:follow:network')).toBe('true');
+  });
+});
+
+describe('Follow newest with SSR requests on the page', () => {
+  it('scrolls the call table, not the SSR requests table above it', async () => {
+    const inspector = await mount();
+    const request: SsrRequest = {
+      id: 'r1',
+      method: 'GET',
+      url: '/trips',
+      status: 200,
+      at: 500,
+      durationMs: 40,
+      renderMs: 30,
+      bytes: 1024,
+      renderMode: 'server',
+      fetches: 1,
+      fetchMs: 10,
+      headers: {},
+    };
+    inspector.requests.set([request]);
+    await settle();
+    const wraps = [...host().querySelectorAll<HTMLElement>('.table-wrap')];
+    expect(wraps.length).toBe(2);
+    const tops = wraps.map(() => 120);
+    wraps.forEach((wrap, i) =>
+      Object.defineProperty(wrap, 'scrollTop', {
+        configurable: true,
+        get: () => tops[i],
+        set: (value: number) => (tops[i] = value),
+      }),
+    );
+    host().querySelector<HTMLInputElement>('app-live-controls input')!.click();
+    await settle();
+    expect(tops).toEqual([120, 0]);
   });
 });

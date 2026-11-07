@@ -360,6 +360,46 @@ describe('App scroll memory', () => {
   });
 });
 
+describe('App scroll memory while content loads', () => {
+  it('keeps the saved position when the restore is clamped by short content', async () => {
+    connection.answers = [true];
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+
+    const main = host(fixture).querySelector<HTMLElement>('main')!;
+    let top = 0;
+    let max = 1000;
+    Object.defineProperty(main, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => (top = Math.max(0, Math.min(value, max))),
+    });
+    const buttons = () => [...host(fixture).querySelectorAll<HTMLButtonElement>('nav button')];
+    buttons()[0].click();
+    await settle(fixture);
+    main.scrollTop = 240;
+    main.dispatchEvent(new Event('scroll'));
+    buttons()[1].click();
+    await settle(fixture);
+
+    // The first tab comes back before its content has grown: the restore stops at 50.
+    max = 50;
+    buttons()[0].click();
+    await settle(fixture);
+    expect(main.scrollTop).toBe(50);
+    main.dispatchEvent(new Event('scroll'));
+
+    buttons()[1].click();
+    await settle(fixture);
+    max = 1000;
+    buttons()[0].click();
+    await settle(fixture);
+    expect(main.scrollTop).toBe(240);
+    fixture.destroy();
+  });
+});
+
 describe('App counts launcher setting', () => {
   it('sends the stored counts launcher to the popup once the panel connects', async () => {
     localStorage.setItem('pangular-pref:pill', 'true');

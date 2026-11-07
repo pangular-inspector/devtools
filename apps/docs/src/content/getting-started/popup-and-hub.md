@@ -251,7 +251,7 @@ On other tabs, `id` is ignored and the link opens the tab. `page` is the page id
 
 Without a hash, the panel opens the tab you used last in this browser tab. The Chrome extension and the popup reload the panel on every navigation, and the panel keeps its tab across those reloads. It saves the tab in `sessionStorage`, so another browser tab starts on the Dashboard. A hash wins over the saved tab, and a tab that is turned off falls back to the Dashboard.
 
-Each tab also keeps its scroll position, and the Timeline, SSR & HTTP, NgRx Store, TanStack Query, Forms and Capacitor tabs keep their selected item. Switching tabs or reloading the panel brings them back. They are saved in `sessionStorage` per view and inspected page, and kept in memory when storage is blocked.
+Each tab keeps its scroll position. The Timeline, SSR & HTTP, NgRx Store, TanStack Query, Forms and Capacitor tabs also keep their selected item. Switching tabs or reloading the panel restores both. The panel saves them in `sessionStorage` per view and inspected page. If storage is blocked, the panel keeps them in memory until it reloads.
 
 ### Limits
 

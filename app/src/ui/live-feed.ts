@@ -271,7 +271,7 @@ export class LiveControls {
       feed.paused()
         ? `Paused. New ${this.what()} wait until you resume.`
         : count
-          ? `Resumed with ${count} new ${this.what()}.`
+          ? `Resumed. New ${this.what()}: ${count}.`
           : 'Resumed.',
     );
   }

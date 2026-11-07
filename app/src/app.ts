@@ -1221,6 +1221,8 @@ export class App implements OnInit, OnDestroy {
   readonly navFade = signal({ start: false, end: false });
   private readonly memory = inject(ViewMemory);
   private stopScrollRestore: (() => void) | null = null;
+  /** True while a tab scrolls back, so the clamped positions on the way don't replace the saved one. */
+  private restoringScroll = false;
 
   constructor() {
     inject(EditorOpener).use(this.rpc);
@@ -1232,9 +1234,12 @@ export class App implements OnInit, OnDestroy {
       if (!main || !this.rpc()) return;
       untracked(() => {
         this.stopScrollRestore?.();
+        this.restoringScroll = true;
         this.stopScrollRestore = restoreScroll(
           main,
           this.memory.read<number>(`${tab}:scroll`) ?? 0,
+          undefined,
+          () => (this.restoringScroll = false),
         );
       });
     });
@@ -1845,6 +1850,7 @@ export class App implements OnInit, OnDestroy {
 
   /** Saves the scroll position of the tab shown. */
   rememberScroll() {
+    if (this.restoringScroll) return;
     const main = this.main()?.nativeElement;
     if (main) this.memory.write(`${this.tab()}:scroll`, Math.round(main.scrollTop));
   }
