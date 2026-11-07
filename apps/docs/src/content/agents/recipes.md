@@ -24,16 +24,17 @@ The checkout form won't submit. Use the Pangular tools to find which fields make
 invalid and why, fix the cause in the code, then show me the form is valid.
 ```
 
-| Step                         | Tool                                                                                                  |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Keep a marker before the fix | `list-form-changes`, which returns the current marker                                                 |
-| Find the invalid fields      | `explain-invalid-forms`                                                                               |
-| Look at one field            | `explain-field` with `form` and `path`                                                                |
-| See why submit does nothing  | `explain-submit`                                                                                      |
-| See what the fix changed     | `explain-form-changes` with the marker as `after`                                                     |
-| Prove the form is valid      | Enter the original input again, `wait-for` with `condition: "form"`, then `inspect-forms` with `form` |
+| Step                        | Tool                                                                                |
+| --------------------------- | ----------------------------------------------------------------------------------- |
+| Record the starting point   | `inspect-forms` with `form` for its status, `list-form-changes` for a marker        |
+| Find the invalid fields     | `explain-invalid-forms`                                                             |
+| Look at one field           | `explain-field` with `form` and `path`                                              |
+| See why submit does nothing | `explain-submit`                                                                    |
+| Reproduce after the fix     | Enter the original input again, then `wait-for` with `condition: "form"` and `form` |
+| See what changed            | `explain-form-changes` with `form` and the marker as `after`                        |
+| Prove the form is valid     | `inspect-forms` with `form`, compared with the status recorded first                |
 
-A code change can reload the page and reset the form, so enter the same input as before the fix, wait until the form is settled, and only then read its status. Check that the answer names the failing validator and its message for each field, not only that the form is invalid. Values that look secret stay redacted. See [Forms](./tools.md#forms).
+A code change can reload the page and reset the form, so enter the same input as before the fix and wait until the form is settled before you compare. `explain-form-changes` reads the change events recorded since the marker, not a saved copy of the form, so the status from `inspect-forms` is the proof. Check that the answer names the failing validator and its message for each field, not only that the form is invalid. Values that look secret stay redacted. See [Forms](./tools.md#forms).
 
 ## Explain a failed navigation
 
@@ -58,13 +59,13 @@ The trip details page throws NG0201 for TripService. Use the Pangular tools to s
 Angular looked for it and why no injector provided it, then fix the providers.
 ```
 
-| Step                          | Tool                                                           |
-| ----------------------------- | -------------------------------------------------------------- |
-| Find the error and its owner  | `list-errors`, then `explain-error` with its `id`              |
-| Walk the lookup path          | `explain-injection` with the owner as `injector` and the token |
-| Read the providers at a level | `inspect-providers`                                            |
+| Step                          | Tool                                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| Find the error and its owner  | `list-errors`, then `explain-error` with its `id`                                             |
+| Walk the lookup path          | `explain-injection` with the owner as `injector`, the token and the failing injection's flags |
+| Read the providers at a level | `inspect-providers`                                                                           |
 
-`explain-error` adds the missing provider explainer, and its owner id works as the `injector` of `explain-injection`. If it says **Component: not found**, for example when a routed component fails before it is in the tree, `explain-injection` has no injector to start from and answers **No injector on page**. Read the stack of the error for the class that injects the token, then call `scan-providers` to see where the source provides the token. A lookup from an injector that is on the page, such as the parent route's component or `Root`, is a separate lookup, not part of the failing one: it can resolve differently, for example when the failing injection used `self`. When an owner is found, check that the answer marks each injector on the path as **provides it**, **not provided** or **hidden**. See [explain-injection](./tools.md#explain-injection).
+`explain-error` adds the missing provider explainer, and its owner id works as the `injector` of `explain-injection`. Pass the flags the failing injection used, such as `self: true`, `skipSelf`, `host` or `optional`, so the lookup follows the same path. If it says **Component: not found**, for example when a routed component fails before it is in the tree, `explain-injection` has no injector to start from and answers **No injector on page**. Read the stack of the error for the class that injects the token, then call `scan-providers` to see where the source provides the token. A lookup from an injector that is on the page, such as the parent route's component or `Root`, is a separate lookup, not part of the failing one: it can resolve differently, for example when the failing injection used `self`. When an owner is found, check that the answer marks each injector on the path as **provides it**, **not provided**, **hidden**, **skipped**, **not asked** or **unknown**. See [explain-injection](./tools.md#explain-injection).
 
 ## Find wasted change detection
 
