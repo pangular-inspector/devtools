@@ -39,6 +39,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # The verify step installs packages whose scripts run here, so no token is left in
+          # .git/config. The push step authenticates on its own.
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
         with:
@@ -113,26 +116,48 @@ jobs:
             npm publish .release/*.tgz --provenance --access public
           fi
 
-      - name: Push the version commit and tag
+      - name: Tag the release and push the version commit
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           tag="devtools@$VERSION"
           if ! git diff --quiet -- packages/devtools/package.json; then
             git commit -m "chore(release): $VERSION" -- packages/devtools/package.json
           fi
-          # Pull requests can merge while a release runs. Replay the version commit on top of them
-          # and tag where it lands. A rebase conflict fails the step rather than guessing.
-          for attempt in 1 2 3; do
-            git fetch origin main
-            git rebase origin/main
-            git tag -f -a "$tag" -m "$tag"
-            if git push origin HEAD:main; then break; fi
-            if [ "$attempt" = 3 ]; then exit 1; fi
-          done
-          git push -f origin "refs/tags/$tag"
+          # The tag marks the exact source that was packed and published: this commit, before any
+          # rebase onto pull requests that merged while the release ran.
+          released=$(git rev-parse HEAD)
+          existing=$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)
+          if [ -z "$existing" ]; then
+            existing=$(git ls-remote origin "refs/tags/$tag" | cut -f1)
+          fi
+          if [ -z "$existing" ]; then
+            git tag -a "$tag" -m "$tag" "$released"
+            git push origin "refs/tags/$tag"
+          elif [ "$existing" = "$released" ]; then
+            echo "$tag already points at $released"
+          else
+            # A tag is never moved: a rerun after a partial release leaves the first one alone.
+            echo "::warning::$tag already exists at $existing, not at $released. It is left as it is."
+          fi
+          # Main gets the version commit, replayed on top of anything that merged meanwhile. When
+          # the version was already set on main, there is nothing to push. A rebase conflict fails
+          # the step rather than guessing.
+          if [ "$released" != "$GITHUB_SHA" ]; then
+            for attempt in 1 2 3; do
+              git fetch origin main
+              if ! git rebase origin/main; then
+                git rebase --abort
+                exit 1
+              fi
+              if git push origin HEAD:main; then break; fi
+              if [ "$attempt" = 3 ]; then exit 1; fi
+            done
+          fi
 
       - name: GitHub release
         env:

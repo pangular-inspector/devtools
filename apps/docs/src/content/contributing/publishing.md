@@ -76,16 +76,16 @@ The **Release** workflow (`.github/workflows/release.yml`) publishes the package
 2. If `app/` changed since the last release, check that `extension/ui` is current. CI fails when it is stale.
 3. Once the pull request is merged and CI is green on `main`, run **Release** from the Actions tab on `main`. Its input is an exact version (`1.0.1`), or `patch`, or `minor`.
 
-| Step                | What happens                                                                                                                                          |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CI                  | Runs `ci.yml` on the commit being released, every job included.                                                                                       |
-| Version             | Sets `version` in `packages/devtools/package.json`.                                                                                                   |
-| Check the changelog | Fails unless `CHANGELOG.md` has a `## <version>` section. That section becomes the release notes.                                                     |
-| Build               | `pnpm pack` builds the library and the UI into one tarball, with `publishConfig.exports` applied.                                                     |
-| Verify the tarball  | `pnpm verify:publish` installs that tarball into a fresh Angular CLI app from a throwaway local registry, builds it, and checks that the hub answers. |
-| Publish             | `npm publish --provenance` publishes the tarball on the `latest` tag.                                                                                 |
-| Push and tag        | Commits `chore(release): <version>` to `main` when the version changed, and tags it `devtools@<version>`.                                             |
-| GitHub release      | Creates a release for the tag, with the changelog section as its notes.                                                                               |
+| Step                | What happens                                                                                                                                                                     |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CI                  | Runs `ci.yml` on the commit being released, every job included.                                                                                                                  |
+| Version             | Sets `version` in `packages/devtools/package.json`.                                                                                                                              |
+| Check the changelog | Fails unless `CHANGELOG.md` has a `## <version>` section. That section becomes the release notes.                                                                                |
+| Build               | `pnpm pack` builds the library and the UI into one tarball, with `publishConfig.exports` applied.                                                                                |
+| Verify the tarball  | `pnpm verify:publish` installs that tarball into a fresh Angular CLI app from a throwaway local registry, builds it, and checks that the hub answers.                            |
+| Publish             | `npm publish --provenance` publishes the tarball on the `latest` tag.                                                                                                            |
+| Tag and push        | Tags the commit that was published `devtools@<version>`, and never moves an existing tag. When the version changed, commits `chore(release): <version>` and pushes it to `main`. |
+| GitHub release      | Creates a release for the tag, with the changelog section as its notes.                                                                                                          |
 
 If the workflow fails before it publishes, nothing has left the runner. Fix the cause and run it again. If it fails after it publishes, run it again with the same exact version, not a bump: it skips the publish when that version is already on npm and finishes the rest.
 
