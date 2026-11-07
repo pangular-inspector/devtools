@@ -185,6 +185,17 @@ function replacePairs(text: string, pair: PairReplacer): string {
       // Punctuation that ends the sentence or the list stays: `(api_key=x, user=7)`.
       end += (tail?.[0] ?? '').replace(TRAILING_PUNCTUATION, '').length;
     }
+    // A value that is itself the next key (`Error: password: "x"` reads `password:` as the
+    // value of `Error`) is read again from its start, so that pair is found too. A `key=`
+    // value counts only after `: ` with a space, so `xmlns:auth="urn:a"` stays one name.
+    const nextKey = /:$/.test(value) || (/=$/.test(value) && /\s/.test(eq));
+    if (replaced === match && value && !/^["']/.test(value) && nextKey) {
+      const valueAt = at + match.length - value.length;
+      out += text.slice(last, valueAt);
+      last = valueAt;
+      re.lastIndex = valueAt;
+      continue;
+    }
     out += text.slice(last, at) + replaced;
     last = end;
     re.lastIndex = Math.max(end, at + 1);
