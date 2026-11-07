@@ -95,6 +95,37 @@ jobs:
       - name: Test devtools package
         run: pnpm test:devtools
 
+  coverage:
+    name: Test coverage
+    # A report to read, not a gate: there is no threshold, and the build job is what fails a pull
+    # request on a broken test. v8 coverage slows the run, so a timeout here does not block.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Package tests with coverage
+        run: pnpm test:devtools --coverage
+
+      - name: Panel tests with coverage
+        if: ${{ !cancelled() }}
+        run: pnpm test:panel --coverage
+
+      # HTML under devtools/ and panel/, plus coverage-summary.json and lcov.info for each.
+      - name: Keep the coverage report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: dist/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
   windows:
     name: Package tests on Windows
     # The CLI, the hub and the source scans run on developers' Windows machines too, where paths

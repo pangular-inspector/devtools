@@ -151,6 +151,7 @@ pnpm exec nx affected -t test build # Test and build affected projects
 pnpm test:devtools                  # Devtools package tests (Vitest)
 pnpm test:panel                     # Devtools UI tests (Vitest)
 pnpm test:axe                       # axe check of every panel page (needs Chromium)
+pnpm test:coverage                  # Package and panel tests with v8 coverage, into dist/coverage
 pnpm extension:build                # Chrome extension
 pnpm skills:check                   # Agent skills and roles in .claude/
 pnpm commit:check                   # Commit messages on your branch
@@ -159,6 +160,8 @@ pnpm commit:check                   # Commit messages on your branch
 `pnpm typecheck` runs `ngc` on `app/tsconfig.json` and `examples/analog/tsconfig.app.json`, so template errors fail it. `app/tsconfig.json` turns on `strictTemplates`.
 
 `pnpm test:panel` runs the tests in `app/src/__tests__` in jsdom, with the Analog Angular plugin compiling the components. `pnpm test:axe` builds the package, writes a static report of Angular Travel to `dist/panel-axe`, serves it, and runs axe on every tab and on each hub view (`?view=ngrx`, `analog`, `nativescript`, `capacitor`) in both dark and light color schemes. It also checks each tab's states: a filter that matches nothing in every search box, a project whose source scans come back empty, a server that answers every call with an error, and a server that has not answered yet. Seeded pages stand in for a live app on the Capacitor, Errors, Plugins, Queries and Forms tabs, and for long lists on Components and **SSR & HTTP**. It fails on any violation, page error or state that does not show. Run `pnpm exec playwright install chromium` once before the first run.
+
+`pnpm test:coverage` runs `pnpm test:devtools --coverage`, then `pnpm test:panel --coverage`. The v8 provider writes an HTML report, `coverage-summary.json` and `lcov.info` to `dist/coverage/devtools` and `dist/coverage/panel`, also when a test fails. There is no threshold: the report shows what the tests reach and nothing fails on a low number. Open `dist/coverage/devtools/index.html` to read it.
 
 `pnpm skills:check` validates the frontmatter of every skill and role and checks that the files and links they mention exist. `pnpm commit:check` checks every commit on your branch that is not on `main` (it compares with `upstream/main`, then `origin/main`, then `main`).
 
@@ -190,7 +193,7 @@ pnpm commit:check                   # Commit messages on your branch
   </ngmd-step>
 </ngmd-workflow>
 
-A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows. A `windows` job (**Package tests on Windows**) runs `pnpm test:devtools` on `windows-latest`, so a path built with `/` or a file name reported with `\` fails there. It runs package scripts with Git Bash, because pnpm uses `cmd.exe` on Windows and the root `prepare` script needs a POSIX shell. In a test, build expected paths with `join()` or `resolve()` from `node:path`, and in a source scan, report file names with `relativeFile()` from `packages/devtools/src/rpc/source-scan.ts`.
+A separate `axe` job in the same workflow installs Chromium and runs `pnpm test:axe`. A `coverage` job (**Test coverage**) runs both test suites with `--coverage` and keeps `dist/coverage` as the `coverage` artifact for 14 days. It is marked `continue-on-error`, so it never blocks a pull request: the build job is the test gate. A `node-22` job runs `pnpm test:devtools` on the newest Node.js 22, the oldest major `engines.node` (`>=22.12.0`) allows. A `windows` job (**Package tests on Windows**) runs `pnpm test:devtools` on `windows-latest`, so a path built with `/` or a file name reported with `\` fails there. It runs package scripts with Git Bash, because pnpm uses `cmd.exe` on Windows and the root `prepare` script needs a POSIX shell. In a test, build expected paths with `join()` or `resolve()` from `node:path`, and in a source scan, report file names with `relativeFile()` from `packages/devtools/src/rpc/source-scan.ts`.
 
 The source tests can't run on Node.js 22.12 itself: Node.js runs `.ts` files only from 22.18, and the build tools need newer versions too. So when a pull request or push changes `packages/devtools`, `app`, the root manifests, the lockfile, `.nvmrc` or the CI setup, the `engines-floor` job (**Packed package on Node.js 22.12**) packs the package on the `.nvmrc` version, switches to Node.js 22.12.0 and installs the tarball into an empty project with npm. It then runs `npx pangular --version`, imports the `cli`, `hub`, `ssr` and `vite` entry points, and loads the `hub` entry with `require()`. When `engines.node` changes, change the version in that job too.
 
