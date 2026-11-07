@@ -107,8 +107,11 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Keep the Express hub and the overlay off in production unless `enabled: true` is passed to the hub.
 - Back off and lock the server after wrong one-time codes, and never compare a refused code with the real one.
 - Keep trusted session tokens in a `0600` file per project, and expire them after 7 days.
+- Expire a session token at the moment it turns 7 days old, not at the next hourly check, and stop trusting the connections that still use it. devframe trusts any token left in the store and kept already trusted connections after their token was dropped.
+- Don't count the right one-time code sent after it expired as a wrong guess. A slow developer no longer drifts toward the backoff and the lock. Wrong codes still count, also after the code expired.
 - Stop `server.allowedHosts: true` from turning off the origin checks, and warn about it.
 - Mask URL passwords and `Authorization` credentials (`Basic`, `Digest`, `Token`) in everything sent to the panel and to agents.
+- Mask email addresses in URLs as `[email]`, also with the `@` encoded as `%40`, in every redacted URL (router, HTTP, SSR, TransferState and the rest) and in the Analog server call log. An `@` that isn't an address, such as `/@angular/core`, and the user in a URL's authority stay (#372).
 - Mask more secrets: OpenAI, Anthropic, GitLab, npm, Hugging Face and SendGrid keys, Slack webhook URLs, the `Ocp-Apim-Subscription-Key` header, secret values that run past separators, secret XML elements and attributes, and token-like positional parts of TanStack Query keys and mutation variables.
 - Mark page text as untrusted in every agent tool answer.
 - Refuse writes when the target tab is unclear, instead of acting on whichever tab changed last.

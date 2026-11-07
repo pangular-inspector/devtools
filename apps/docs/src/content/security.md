@@ -94,9 +94,11 @@ Every server that asks for the code (the Vite plugin, the Express hub and the CL
 
 A refused code is never compared with the real one. devframe gives you a new code after 5 wrong ones, so a client that keeps guessing can change the code you are typing at most twice a minute. If the terminal says the server stopped accepting codes and you didn't type them, something on your machine or network is guessing the code. Restart the dev server to get a new code.
 
+A code lasts 5 minutes. If you type the right code after it expires, the server refuses it without counting it as a wrong code, and devframe gives you a new one. Only the code that is current when the attempt arrives is left uncounted, so a client that guesses gets no free attempts.
+
 #### Trusted browsers
 
-A browser that exchanges the code gets a session token, so it doesn't need the code again after a reload. The server keeps those tokens in `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project (named after a hash of its path), so a token from one project doesn't open another project's server. The folder is readable by you only (mode `0700`), and the file too (`0600`). A token expires 7 days after the code was exchanged. At startup the server drops entries in the file that aren't token records, and it only trusts a token that has its own entry, so a name such as `constructor` or `toString` is never a token. To sign out every browser, delete the project's folder, or all of `~/.pangular-inspector/auth`, and restart the server.
+A browser that exchanges the code gets a session token, so it doesn't need the code again after a reload. The server keeps those tokens in `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project (named after a hash of its path), so a token from one project doesn't open another project's server. The folder is readable by you only (mode `0700`), and the file too (`0600`). A token expires 7 days after the code was exchanged. At that moment the server drops it, and a page or panel still connected with it is no longer trusted. At startup the server drops entries in the file that aren't token records, and it only trusts a token that has its own entry, so a name such as `constructor` or `toString` is never a token. To sign out every browser, delete the project's folder, or all of `~/.pangular-inspector/auth`, and restart the server.
 
 Version 0.0.7 and earlier kept the tokens in `~/.devframes/devframe/auth.json` (the Express hub and the Vite plugin) or `~/.pangular/devframe/auth.json` (the CLI), readable by other users and without expiry. Newer versions don't read those files. Delete them if no other devframe tool uses them.
 
@@ -291,12 +293,19 @@ Some credentials are hidden wherever they appear in a string, whatever the key i
 
 The URL user stays visible, so you can tell which account a call uses. Ordinary words are left alone: `Basic plan`, `Token expired` and `Digest of the week` don't match.
 
+### Email addresses in URLs
+
+An email address in a URL is replaced with `[email]`, in a path segment, a query value, a matrix param or the fragment, also when its `@` is encoded as `%40`. So `/invite/ada@example.com?to=bob%40example.org` shows as `/invite/[email]?to=[email]`. This holds for every URL that is redacted like router URLs: router navigations and link targets, SSR & HTTP request and page URLs, TransferState request URLs, the NgRx page URL, `httpResource` request URLs, Capacitor and Analog URLs, and the URLs agent tools answer with.
+
+An `@` that isn't part of an address stays, as in `/@angular/core`, `lodash@4.17.21` or `/users/@alice`. The user in a URL's authority, such as `git` in `ssh://git@github.com`, stays visible like the user before a URL password. Inside an encoded URL in a query value (`?next=https%3A%2F%2Fbob%40example.com`) there is no authority to tell apart, so the address is masked, host included. The router lint (`lint-routes` and the [Lint](./inspectors/router.md#lint) view) still reports the `email-in-url` rule for a navigation whose address was masked.
+
 ### Router
 
 These are replaced with `[redacted]` in URLs, params, data and messages:
 
 - query, matrix and fragment keys that look secret (token, password, api key, code, code verifier, sig, session, jwt and similar), including inside encoded return URLs,
 - URL passwords, `Authorization` credentials, JWTs, bearer tokens and long opaque tokens,
+- email addresses, which show as `[email]` (see [Email addresses in URLs](#email-addresses-in-urls)),
 - route params with secret-looking names.
 
 A secret route param is known from the route config before a navigation is recognized, so link targets and a navigation that was already running when the overlay attached are masked too. This covers routes in every outlet, so the token in `/(side:reset/:token)` is masked like the one in `/reset/:token`. A navigation that fails before that (for example inside a lazy route that failed to load) can still show it in its URL. JWTs are masked before long values are cut, so a long token never leaves a readable start behind.

@@ -72,7 +72,7 @@ The list renders the newest 150 matching calls. If more match, a note says **Sho
 
 The tab flags a `load()` that runs during server rendering and again in the browser right after. It means TransferState did not serve the server result. It also flags a server function read seeded during server rendering and called again in the browser right after hydration.
 
-The **API routes** table lists your server routes. Click **Try** to open one in the **Request playground**, which sends real requests to your dev server. While a request runs, **Send** is off and the old response is cleared. For POST, PUT, PATCH and DELETE, **Send** stays off until you tick **This request can change data on the dev server**.
+The **API routes** table lists your server routes. Click **Try** to open one in the **Request playground**, which sends real requests to your dev server. While a request runs, **Send** is off and the old response is cleared. For POST, PUT, PATCH and DELETE, **Send** stays off until you tick **This request can change data on the dev server**. The tick covers one request. It clears after you send, when you change the method or path, and when you click **Try** on another route.
 
 The **Server functions** table lists every `serverFn` export in a `.server.ts` file under `src`, with its method, file and call count.
 

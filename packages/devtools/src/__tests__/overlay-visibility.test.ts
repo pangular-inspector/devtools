@@ -140,4 +140,19 @@ describe.sequential('overlay keepalive and background tabs', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(sent('report-page-visibility').at(-1)?.args[0]).toMatchObject({ hidden: true });
   });
+
+  it('keeps a hidden tab marked when it comes back from the back/forward cache still hidden', async () => {
+    await start();
+    setHidden(true);
+    await vi.advanceTimersByTimeAsync(0);
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.advanceTimersByTimeAsync(0);
+    calls.length = 0;
+    window.dispatchEvent(new Event('pageshow'));
+    await vi.advanceTimersByTimeAsync(130_000);
+    const reports = sent('report-page-visibility').map((call) => call.args[0]);
+    expect(reports.length).toBeGreaterThanOrEqual(2);
+    expect(reports).not.toContainEqual(expect.objectContaining({ hidden: false }));
+    expect(sent('push-component-tree')).toEqual([]);
+  });
 });
