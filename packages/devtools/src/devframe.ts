@@ -201,7 +201,7 @@ import {
   type HttpRule,
 } from './http-rules.ts';
 import { sanitizeHydration, sanitizePayload, type PayloadSummary } from './http-payload.ts';
-import { redactCall } from './http-redact.ts';
+import { redactCall } from './redaction.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
 import { sanitizeSsrOverrides, type SsrOverride } from './ssr-overrides.ts';

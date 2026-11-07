@@ -4,7 +4,7 @@ import { redactMessage, setRedaction, SecretSet } from '../forms-privacy.ts';
 import { serialize } from '../serialize.ts';
 import { serialize as ngrxSerialize } from '../ngrx-shared.ts';
 import { redactRecord } from '../router.ts';
-import { redactPreview } from '../http-redact.ts';
+import { redactPreview } from '../redaction.ts';
 
 afterEach(() => setRedaction());
 

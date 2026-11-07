@@ -17,8 +17,7 @@ import {
 import { REDACTED, redactMessage, SecretSet, setRedaction } from '../forms-privacy.ts';
 import { serialize } from '../serialize.ts';
 import { redactRecord, redactText, redactUrl } from '../router.ts';
-import { redactCall, redactHeaders, redactPreview } from '../http-redact.ts';
-import { redactAnalogReport } from '../analog-redact.ts';
+import { redactAnalogReport, redactCall, redactHeaders, redactPreview } from '../redaction.ts';
 import { redactBody, redactMessage as redactServerMessage } from '../analog-server-log.ts';
 import { maskedArgs } from '../capacitor-redact.ts';
 import { serialize as ngrxSerialize } from '../ngrx-shared.ts';

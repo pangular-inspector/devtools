@@ -5,7 +5,7 @@ import { decodePayload, sanitizePayload, type PayloadSummary } from './http-payl
 import { refetchPayload, type RefetchEnv } from './http-payload-refetch.ts';
 import { outsideAngular } from './outside-angular.ts';
 import { withCapturedHeaders } from './http-headers.ts';
-import { redactCall } from './http-redact.ts';
+import { redactCall } from './redaction.ts';
 import { httpRegistry, sanitizeRules, storeRules, type HttpCall } from './http-rules.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { readSsrRequestId } from './ssr-registry.ts';

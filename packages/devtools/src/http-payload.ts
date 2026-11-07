@@ -1,7 +1,6 @@
 import { isRedactedKey } from './forms-privacy.ts';
 import type { HydrationMismatch } from './http-hydration.ts';
-import { redactStrings } from './http-redact.ts';
-import { redactJsonText } from './json-text-redact.ts';
+import { redactJsonText, redactStrings } from './redaction.ts';
 import { redactText, redactUrl } from './router.ts';
 import { isSecretName, REDACTED, serialize } from './serialize.ts';
 import type { HydrationStats } from './types.ts';

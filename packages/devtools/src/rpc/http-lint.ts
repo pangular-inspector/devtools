@@ -4,7 +4,7 @@ import {
   type HttpLintFinding,
   type HttpLintKind,
 } from '../http-data.ts';
-import { redactCall } from '../http-redact.ts';
+import { redactCall } from '../redaction.ts';
 import type { HttpPage, HttpState } from '../types.ts';
 import { code } from './forms-tools.ts';
 import { defaultPage } from './default-page.ts';

@@ -1,6 +1,6 @@
 import { actionBlockedMessage, type ResolvedPangularConfig } from '../config.ts';
 import { byteText, payloadInsights } from '../http-data.ts';
-import { redactPreview } from '../http-redact.ts';
+import { redactPreview } from '../redaction.ts';
 import type { PayloadEntry, PayloadSummary } from '../http-payload.ts';
 import { redactText, redactUrl } from '../router.ts';
 import {

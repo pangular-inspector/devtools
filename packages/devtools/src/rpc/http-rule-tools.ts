@@ -1,6 +1,6 @@
 import { HTTP_RULE_CHANCE, isFailingRuleStatus, isHttpRuleStatus } from '../config.ts';
 import { HTTP_RULE_PRESETS, presetRules } from '../http-data.ts';
-import { redactPreview } from '../http-redact.ts';
+import { redactPreview } from '../redaction.ts';
 import {
   MAX_DELAY_MS,
   MAX_RULES,

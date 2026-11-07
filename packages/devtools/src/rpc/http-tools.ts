@@ -1,5 +1,5 @@
 import { originText } from '../http-origin.ts';
-import { redactCall } from '../http-redact.ts';
+import { redactCall } from '../redaction.ts';
 import type { HttpCall } from '../http-rules.ts';
 import { clip } from '../text.ts';
 import type { HttpPage, HttpState } from '../types.ts';
