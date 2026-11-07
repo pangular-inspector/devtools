@@ -176,6 +176,8 @@ MCP agent support (`@devframes/agentic`) and Devframe itself are included. You d
 
 ### Entry points
 
+The [API reference](../api/index.md) lists every symbol each entry point exports, with its declaration.
+
 | Import                                                | Use it for                                                                                                            |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `@pangular-inspector/devtools/hub`                    | `initPangularHub()`, the server middleware for an Express app.                                                        |

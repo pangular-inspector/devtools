@@ -293,9 +293,12 @@ pnpm docs:dev          # Dev server
 pnpm docs:build        # Production build
 pnpm docs:test         # Docs site tests, including the stale page checks
 pnpm docs:agent-tools  # Regenerate the agent tool index
+pnpm docs:api          # Regenerate the API reference
 ```
 
 Pages are markdown files under `apps/docs/src/content`. The sidebar comes from `apps/docs/src/ngmd.config.ts`.
+
+The pages under `api/` are generated from the entry points in `packages/devtools/package.json` by `apps/docs/api-reference.ts`. Run `pnpm docs:api` after you change an exported symbol or its JSDoc; `pnpm docs:test` fails while a page is stale.
 
 The build also writes `/llms.txt`, one link per page to its markdown source in sidebar order, and `/llms-full.txt`, every page's markdown in one file. Both follow the [llms.txt](https://llmstxt.org) format and come from `apps/docs/llms-txt.plugin.ts`.
 

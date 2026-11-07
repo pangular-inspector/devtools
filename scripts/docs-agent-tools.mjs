@@ -20,5 +20,8 @@ if (problems.length > 0) {
 }
 const file = path.join(docsRoot, TOOL_INDEX_PATH);
 writeFileSync(file, markdown);
-execFileSync('pnpm', ['exec', 'prettier', '--write', file], { stdio: 'inherit' });
+execFileSync('pnpm', ['exec', 'prettier', '--write', file], {
+  cwd: path.resolve(import.meta.dirname, '..'),
+  stdio: 'inherit',
+});
 console.log(`Wrote ${path.relative(process.cwd(), file)}`);
