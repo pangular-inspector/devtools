@@ -219,6 +219,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - At narrow widths the **Components** toolbar fits on two rows, with its tree actions as icons, and a cut off component name shows its full text on hover and focus (#421).
 - The **Forms** tab lists WebMCP tools that are not linked to a form under **Other WebMCP tools**, with the same parts as a form's **WebMCP tool** block (#368).
 - The **Forms** tab shows the forms setup errors Angular logs on the page, such as `NG01203`, in a notice above the list (#368).
+- The **Forms** timeline tags a change as **agent** only when a WebMCP call wrote it, or when it is in the call's own form while the call runs (#368). Typing in any form while a long WebMCP submit is pending is tagged **user**, not **agent**.
 
 ### Docs
 

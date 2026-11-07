@@ -61,6 +61,29 @@ Component({
   template: `<form [formRoot]="form"><input id="sname" [formField]="form.name" /><button>Go</button></form>`,
 })(SignUp);
 
+let releaseSlowSubmit: () => void = () => {};
+class SlowSignUp {
+  form = form(signal({ name: '' }), (p) => required(p.name), {
+    submission: {
+      action: () =>
+        new Promise<undefined>((resolve) => (releaseSlowSubmit = () => resolve(undefined))),
+    },
+    experimentalWebMcpTool: { name: 'slow_sign_up', description: 'Create an account slowly' },
+  });
+}
+Component({
+  selector: 'slow-sign-up-form',
+  imports: [FormField, FormRoot],
+  template: `<form [formRoot]="form"><input id="slowname" [formField]="form.name" /><button>Go</button></form>`,
+})(SlowSignUp);
+
+class SlowPage {}
+Component({
+  selector: 'slow-page',
+  imports: [Login, Profile, SlowSignUp],
+  template: `<login-form /><profile-form /><slow-sign-up-form />`,
+})(SlowPage);
+
 class Tasks {
   model = signal({ name: '', items: [{ n: -1 }] });
   form = form(this.model, (p) => required(p.name), {
@@ -465,6 +488,58 @@ describe('forms collector', () => {
       ]);
       const agentEvents = h.lastEvents().filter((e) => e.origin === 'agent');
       expect(agentEvents.map((e) => e.type)).toEqual(expect.arrayContaining(['submit', 'value']));
+    } finally {
+      delete (navigator as any).modelContext;
+    }
+  });
+});
+
+describe('forms collector WebMCP attribution', () => {
+  it('tags user typing as user while a WebMCP call is still pending, in any form', async () => {
+    const tools = new Map<string, { execute: (args: unknown) => Promise<unknown> }>();
+    (navigator as any).modelContext = {
+      registerTool: async (tool: {
+        name: string;
+        execute: (args: unknown) => Promise<unknown>;
+      }) => {
+        tools.set(tool.name, tool);
+      },
+    };
+    try {
+      TestBed.configureTestingModule({ providers: [provideExperimentalWebMcpForms()] });
+      const h = harness();
+      const fixture = await mount(SlowPage);
+      await tick();
+      h.collector.push();
+      await tick();
+      const pending = tools.get('slow_sign_up')!.execute({ name: 'Ada' });
+      fixture.detectChanges();
+      await tick(LEASED_PUSH_MS + 100);
+      const type = (id: string, text: string) => {
+        const input = document.getElementById(id) as HTMLInputElement;
+        input.value = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      // The call is still pending: typing in other forms, then in its own form.
+      type('email', 'me@x.io');
+      type('pname', 'Lin');
+      fixture.detectChanges();
+      await tick(LEASED_PUSH_MS + 100);
+      type('slowname', 'Grace');
+      fixture.detectChanges();
+      await tick(LEASED_PUSH_MS + 100);
+      const events = h.lastEvents();
+      const login = events.filter((e) => e.type === 'value' && e.path === 'email');
+      expect(login.length).toBeGreaterThan(0);
+      expect(login.every((e) => e.origin === 'user')).toBe(true);
+      expect(
+        events.find((e) => e.formId.startsWith('Profile') && e.type === 'value'),
+      ).toMatchObject({ origin: 'user', detail: '"Lin"' });
+      const own = events.filter((e) => e.type === 'value' && e.path === 'name');
+      expect(own.find((e) => e.detail === '"Ada"')).toMatchObject({ origin: 'agent' });
+      expect(own.find((e) => e.detail === '"Grace"')).toMatchObject({ origin: 'user' });
+      releaseSlowSubmit();
+      await pending;
     } finally {
       delete (navigator as any).modelContext;
     }
