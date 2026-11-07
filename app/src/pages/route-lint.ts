@@ -8,9 +8,11 @@ import {
   type RouterPage,
 } from './router-types';
 import { plural } from '../format';
+import { AppState } from '../ui/app-state';
 
 @Component({
   selector: 'app-route-lint',
+  imports: [AppState],
   template: `
     <div class="toolbar">
       <button type="button" class="small" [attr.aria-busy]="checking()" (click)="run()">
@@ -35,13 +37,12 @@ import { plural } from '../format';
       }
     </div>
     @if (failed()) {
-      <div class="empty" role="alert">
-        <p class="empty-title">The route checks could not run.</p>
-        <p class="muted">The devtools server did not answer. Check that it is still running.</p>
-        <button type="button" class="small" (click)="run()">Retry</button>
-      </div>
+      <app-state kind="error" (retry)="run()">
+        The route checks could not run.
+        <p detail>The devtools server did not answer. Check that it is still running.</p>
+      </app-state>
     } @else if (!result()) {
-      <p class="muted empty" role="status">Checking…</p>
+      <app-state kind="loading">Checking…</app-state>
     } @else if (notChecked(); as reason) {
       <div class="empty">
         <p class="empty-title">No checks ran.</p>

@@ -62,6 +62,8 @@ Open an entry to see its time, **Origin** and **Duration**, and three tabs. **Ac
 
 With [`ngrx.trace`](../getting-started/configuration.md#ngrx) on, an entry also lists **Called from**: the app frames of the dispatch, method call or `patchState` that made it, the closest call first. With the server connected, each frame opens its file in your editor.
 
+**Pause** above the log holds it as it is while the app keeps changing the store, and a pill counts the entries that arrived since, such as **4 new**. Press **Pause** again to show them. A pause lasts across a switch to another store. With **Follow newest** checked, the log scrolls back to the newest entry each time one arrives. The panel remembers **Follow newest** in `localStorage`.
+
 Entry numbers start at 1 again when the app reloads. So when the app reloads, or the selected page closes and the tab shows another one, the open entry closes and a pending **Restore** confirmation is cancelled.
 
 ### Action frequency

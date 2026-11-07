@@ -29,6 +29,7 @@ import {
   type ErrorsPage,
 } from './errors-types';
 import { SearchField } from '../ui/search-field';
+import { AppState } from '../ui/app-state';
 
 type View = 'errors' | 'console';
 
@@ -42,23 +43,22 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
 
 @Component({
   selector: 'app-errors-inspector',
-  imports: [SearchField, Select, ErrorExplainView],
+  imports: [AppState, SearchField, Select, ErrorExplainView],
   template: `
     @if (!loaded()) {
-      <p class="state" role="status">Loading errors…</p>
+      <app-state kind="loading">Loading errors…</app-state>
     } @else if (failed()) {
-      <div class="state" role="alert">
-        <p>Can't read the errors from the devtools server.</p>
-        <button type="button" class="small" (click)="retry()">Retry</button>
-      </div>
+      <app-state kind="error" (retry)="retry()">
+        Can't read the errors from the devtools server.
+      </app-state>
     } @else if (!pages().length) {
-      <div class="state" role="status">
-        <p>No page reports errors yet.</p>
-        <p class="muted">
+      <app-state kind="empty">
+        No page reports errors yet.
+        <p detail>
           Open the app with the overlay loaded. Errors and console calls show up here as they
           happen.
         </p>
-      </div>
+      </app-state>
     } @else {
       <p class="intro">
         Errors from Angular's ErrorHandler, uncaught errors and unhandled promise rejections on the

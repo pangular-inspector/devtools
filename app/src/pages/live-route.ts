@@ -21,6 +21,7 @@ import { RouteTree } from './route-tree';
 import type { RouterPage, SourceRoute } from './router-types';
 import { Select } from '../ui/select';
 import type { ComponentFocus } from '../types/component-focus.types';
+import { AppState } from '../ui/app-state';
 
 const TABS = [
   { id: 'current', label: 'Current' },
@@ -35,7 +36,16 @@ type TabId = (typeof TABS)[number]['id'];
 
 @Component({
   selector: 'app-live-route',
-  imports: [RouteCurrent, RouteDiff, RouteLint, RouteSetup, RouteTimeline, RouteTree, Select],
+  imports: [
+    AppState,
+    RouteCurrent,
+    RouteDiff,
+    RouteLint,
+    RouteSetup,
+    RouteTimeline,
+    RouteTree,
+    Select,
+  ],
   template: `
     <div class="section-head">
       <h2>Live router</h2>
@@ -54,15 +64,14 @@ type TabId = (typeof TABS)[number]['id'];
       }
     </div>
     @if (failed()) {
-      <div class="empty" role="alert">
-        <p class="empty-title">Could not load the live router state.</p>
-        <p class="muted">
+      <app-state kind="error" (retry)="retry()">
+        Could not load the live router state.
+        <p detail>
           Check that the dev server with Pangular Inspector is still running, then retry.
         </p>
-        <button type="button" class="retry" (click)="retry()">Retry</button>
-      </div>
+      </app-state>
     } @else if (loading()) {
-      <p class="muted empty" role="status">Loading the live router state…</p>
+      <app-state kind="loading">Loading the live router state…</app-state>
     } @else if (page(); as current) {
       <div class="tabs" role="tablist" aria-label="Router views" (keydown)="onKey($event)">
         @for (tab of tabs; track tab.id) {

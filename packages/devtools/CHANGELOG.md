@@ -133,6 +133,11 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - An opt-in counts launcher: the popup's floating button becomes a pill with the render and error counts of the page while the panel is closed. Off by default, turned on in **Settings**.
 - One search field, named **Filter**, on every page, with saved filter chips per view (kept in the browser's `localStorage`).
 - A splitter between the **Injectors** tree and its detail, and between the **NgRx Store** change list and its entry, with the width saved per view.
+- Each tab keeps its scroll position, and the Timeline, SSR & HTTP, NgRx Store, TanStack Query, Forms and Capacitor tabs keep their selected item, across tab switches and panel reloads (kept in `sessionStorage` per view and page).
+- **Pause** and **Follow newest** on the live lists: the SSR & HTTP timeline, the NgRx Store change log and the router **Navigations** view. A paused list counts the entries that arrive meanwhile.
+- Sortable column headers with `aria-sort` on the SSR & HTTP call table (method, URL, status, time) and the **Source route config** table.
+- The router **Config** view is a tree grid: each route has its level and expanded state, and the arrow keys move, expand and collapse.
+- One shared loading, error (with **Retry**), empty and no-match (with **Clear filters**) state across the pages.
 - Chrome extension: an **Angular component** pane in the Elements panel that shows the selected element's component, inputs and signals, masked like the panel.
 - Chrome extension: a toolbar button whose popup shows the Angular version, the build, the devtools server and the overlay of the current tab. It asks for `activeTab` and `scripting`, which add no install warning.
 - Chrome extension: a site access page that lists the hosts allowed from the panel, with **Remove**.

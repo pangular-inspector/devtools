@@ -33,6 +33,8 @@ import {
 } from './query-types';
 import { pretty } from './store-types';
 import { SearchField } from '../ui/search-field';
+import { rememberSelection } from '../view-memory';
+import { AppState } from '../ui/app-state';
 
 type View = 'queries' | 'mutations';
 
@@ -57,31 +59,32 @@ const FILTERS: SelectOption[] = [
 
 @Component({
   selector: 'app-query-inspector',
-  imports: [SearchField, NgTemplateOutlet, RovingList, Select],
+  imports: [SearchField, NgTemplateOutlet, RovingList, Select, AppState],
   template: `
     @if (!loaded()) {
-      <p class="state" role="status">Loading queries…</p>
+      <app-state kind="loading">Loading queries…</app-state>
     } @else if (failed()) {
-      <div class="state" role="alert">
-        <p>Can't read TanStack Query from the devtools server.</p>
-        <button type="button" class="btn" (click)="retry()">Retry</button>
-      </div>
+      <app-state kind="error" (retry)="retry()">
+        Can't read TanStack Query from the devtools server.
+      </app-state>
     } @else if (!pages().length) {
-      <div class="state empty-card" role="status">
-        @if (connected()) {
-          <p class="state-title">The connected page has no QueryClient yet.</p>
-          <p>
+      @if (connected()) {
+        <app-state kind="empty">
+          The connected page has no QueryClient yet.
+          <p detail>
             Add <code>provideTanStackQuery(new QueryClient())</code> to the app's providers. The tab
             reads it once something in the app injects it, such as <code>injectQuery()</code>.
           </p>
-        } @else {
-          <p class="state-title">No page reports a QueryClient yet.</p>
-          <p>
+        </app-state>
+      } @else {
+        <app-state kind="empty">
+          No page reports a QueryClient yet.
+          <p detail>
             Open the app with the overlay loaded. The tab reads the <code>QueryClient</code> that
             <code>provideTanStackQuery()</code> registers, once something in the app injects it.
           </p>
-        }
-      </div>
+        </app-state>
+      }
     } @else {
       <p class="intro">
         The queries and mutations of the TanStack Query client the app provides, read from the live
@@ -809,6 +812,7 @@ export class QueryInspector {
   );
 
   constructor() {
+    rememberSelection('queries', this.selectedId);
     effect(() => {
       const client = this.rpc();
       if (client) void this.load(client);

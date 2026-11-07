@@ -29,6 +29,7 @@ import {
   type AuditResponse,
 } from './audit-types';
 import { SearchField } from '../ui/search-field';
+import { AppState } from '../ui/app-state';
 
 type SeverityFilter = 'all' | 'error' | 'warning';
 
@@ -45,28 +46,27 @@ export const AUDIT_REFRESH_DELAY_MS = 150;
 
 @Component({
   selector: 'app-audit-inspector',
-  imports: [SearchField, Select, AuditDiffView],
+  imports: [AppState, SearchField, Select, AuditDiffView],
   template: `
     @if (staticReport()) {
-      <div class="state" role="status">
-        <p>The audit reads a live page, and a static report has none.</p>
-        <p class="muted">Open the panel from the server that runs the app to audit it.</p>
-      </div>
+      <app-state kind="empty">
+        The audit reads a live page, and a static report has none.
+        <p detail>Open the panel from the server that runs the app to audit it.</p>
+      </app-state>
     } @else if (!loaded()) {
-      <p class="state" role="status">Loading the audit…</p>
+      <app-state kind="loading">Loading the audit…</app-state>
     } @else if (failed()) {
-      <div class="state" role="alert">
-        <p>Can't read the audit from the devtools server.</p>
-        <button type="button" class="small" (click)="refresh()">Retry</button>
-      </div>
+      <app-state kind="error" (retry)="refresh()">
+        Can't read the audit from the devtools server.
+      </app-state>
     } @else if (!report()) {
-      <div class="state" role="status">
-        <p>No page reports live data yet.</p>
-        <p class="muted">
+      <app-state kind="empty">
+        No page reports live data yet.
+        <p detail>
           Open the app with the overlay loaded. The audit reads what the other inspectors collect
           from it.
         </p>
-      </div>
+      </app-state>
     } @else {
       <p class="intro">
         One ranked list of what the inspectors found on the live page, with an axe pass over the app

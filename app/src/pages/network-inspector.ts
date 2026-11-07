@@ -26,6 +26,9 @@ import {
 } from '@pangular-inspector/devtools/internal/config';
 import { prettyJson } from '../format';
 import { LimitNote } from '../ui/limit-note';
+import { AppState } from '../ui/app-state';
+import { LiveControls, LiveFeed, followNewest } from '../ui/live-feed';
+import { SortHeader, sortRows, type SortState } from '../ui/sort-header';
 import { RovingList } from '../ui/roving-list';
 import { Select, type SelectOption } from '../ui/select';
 import { VirtualWindow } from '../ui/virtual-window';
@@ -40,6 +43,7 @@ import { PayloadInsights } from './network/payload-insights';
 import { RuleMatchCount } from './network/rule-match-count';
 import { RulePresets } from './network/rule-presets';
 import { presetRules } from '@pangular-inspector/devtools/internal/http-data';
+import { rememberSelection } from '../view-memory';
 
 type HttpSide = 'client' | 'server';
 
@@ -323,6 +327,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 @Component({
   selector: 'app-network-inspector',
   imports: [
+    AppState,
+    LiveControls,
+    SortHeader,
     SearchField,
     CallCopy,
     CallOriginTag,
@@ -344,16 +351,12 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       the devtools server, with hydration stats, the TransferState payload and fault injection.
     </p>
     @if (loading()) {
-      <div class="state" role="status">
-        <span class="spinner" aria-hidden="true"></span>
-        <span>Loading…</span>
-      </div>
+      <app-state kind="loading">Loading HTTP calls…</app-state>
     } @else if (failed()) {
-      <div class="state error" role="alert">
-        <strong>Could not reach the devtools server.</strong>
-        <span>Check that the app's dev server is running with the devtools plugin.</span>
-        <button type="button" (click)="retry()">Try again</button>
-      </div>
+      <app-state kind="error" (retry)="retry()">
+        Could not reach the devtools server.
+        <p detail>Check that the app's dev server is running with the devtools plugin.</p>
+      </app-state>
     }
 
     <div class="toolbar" [hidden]="loading()">
@@ -655,6 +658,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           <span class="total">{{ countText() }}</span>
           <span class="sr-only" role="status">{{ filterStatus() }}</span>
         </div>
+        <div class="live-row">
+          <app-live-controls [feed]="callFeed" what="calls" />
+        </div>
         @if (visibleCalls().length && timelineView() === 'waterfall') {
           <app-network-waterfall
             [calls]="waterfallCalls()"
@@ -673,11 +679,11 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               <thead>
                 <tr aria-rowindex="1">
                   <th scope="col">Side</th>
-                  <th scope="col">Method</th>
-                  <th scope="col">URL</th>
+                  <th scope="col" appSortHeader="method" [(sort)]="callSort">Method</th>
+                  <th scope="col" appSortHeader="url" [(sort)]="callSort">URL</th>
                   <th scope="col">Page</th>
-                  <th scope="col">Status</th>
-                  <th scope="col" class="num">Time</th>
+                  <th scope="col" appSortHeader="status" [(sort)]="callSort">Status</th>
+                  <th scope="col" class="num" appSortHeader="time" [(sort)]="callSort">Time</th>
                   <th scope="col">Notes</th>
                 </tr>
               </thead>
@@ -1689,6 +1695,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       gap: 8px 12px;
       margin: 0 0 12px;
     }
+    .live-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin: -4px 0 12px;
+    }
     .search {
       position: relative;
       flex: 1 1 220px;
@@ -2371,9 +2384,20 @@ export class NetworkInspector {
     return id ? this.serverCalls().filter((c) => c.requestId === id) : [];
   });
 
-  readonly timeline = computed(() =>
+  /** Every call of the selected page as it arrives, newest first. */
+  private readonly liveTimeline = computed(() =>
     [...this.pageServerCalls(), ...(this.selected()?.calls ?? [])].sort((a, b) => b.at - a.at),
   );
+  /** Pause holds the timeline as it is while the app keeps calling. */
+  readonly callFeed = new LiveFeed<HttpCall>({
+    name: 'network',
+    source: this.liveTimeline,
+    key: (c) => `${c.side}:${c.id}`,
+    scope: this.selectedPageId,
+  });
+  readonly timeline = computed(() => [...this.callFeed.items()]);
+  /** The column the call table is sorted by; `null` keeps newest first. */
+  readonly callSort = signal<SortState | null>(null);
 
   readonly callQuery = signal('');
   /** The timeline as a table of every call, or a waterfall of the client calls by navigation. */
@@ -2404,7 +2428,7 @@ export class NetworkInspector {
     const query = this.callQuery().trim().toLowerCase();
     const side = this.sideFilter() ?? 'all';
     const failedOnly = this.failedOnly();
-    return this.timeline().filter(
+    const matching = this.timeline().filter(
       (c) =>
         (side === 'all' || c.side === side) &&
         (!failedOnly || this.isFailed(c)) &&
@@ -2412,6 +2436,12 @@ export class NetworkInspector {
           `${c.method} ${c.url}`.toLowerCase().includes(query) ||
           `${c.method} ${pathOf(c.url)}`.toLowerCase().includes(query)),
     );
+    return sortRows(matching, this.callSort(), {
+      method: (c) => c.method,
+      url: (c) => c.url,
+      status: (c) => (c.cancelled || !c.status ? undefined : c.status),
+      time: (c) => c.durationMs,
+    }) as HttpCall[];
   });
 
   /**
@@ -2541,6 +2571,13 @@ export class NetworkInspector {
   });
 
   constructor() {
+    rememberSelection('network', this.selectedCallId);
+    // Newest first, so following the newest call keeps the table scrolled to the top.
+    followNewest(this.callFeed, () => {
+      if (this.callSort()) return;
+      const wrap = this.host.nativeElement.querySelector<HTMLElement>('.table-wrap');
+      if (wrap) wrap.scrollTop = 0;
+    });
     effect(() => {
       const body = this.callsBody()?.nativeElement;
       if (body) this.callWindow.attach(body);

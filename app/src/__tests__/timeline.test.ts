@@ -411,6 +411,18 @@ describe('the Timeline tab', () => {
     expect(labels.some((label) => label.startsWith('NgRx'))).toBe(false);
   });
 
+  it('keeps the selected event when the tab is opened again', async () => {
+    const fixture = await mount(wire(sources()));
+    rows(fixture)[1].click();
+    await settle(fixture);
+    const key = rows(fixture)[1].dataset['key'];
+    fixture.destroy();
+
+    const again = await mount(wire(sources()));
+    const selected = rows(again).find((row) => row.getAttribute('aria-current') === 'true');
+    expect(selected?.dataset['key']).toBe(key);
+  });
+
   it('moves through the list with the arrow keys and opens an event in its tab', async () => {
     const fixture = await mount(wire(sources()));
     const opened: unknown[] = [];
