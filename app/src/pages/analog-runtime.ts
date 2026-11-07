@@ -188,6 +188,7 @@ interface PurgeResult {
                             type="button"
                             class="btn primary"
                             id="task-run-confirm"
+                            [disabled]="runningTask() !== null"
                             (click)="runTask(t.name)"
                           >
                             Run task
@@ -422,6 +423,8 @@ export class AnalogRuntime {
   }
 
   async runTask(name: string) {
+    // A Nitro task can change data, so a second click never starts it twice.
+    if (this.runningTask() !== null) return;
     let payload: unknown;
     if (this.taskPayload().trim()) {
       try {

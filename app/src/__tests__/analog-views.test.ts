@@ -316,6 +316,35 @@ describe('Analog Nitro tasks', () => {
     });
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('[redacted]');
   });
+
+  it('starts a task once, even when Run task is used again while it runs', async () => {
+    let answer!: (value: unknown) => void;
+    const { rpcClient, calls } = client({
+      'analog-runtime-config': () => ({ env: [], runtimeConfig: [], options: [] }),
+      'analog-nitro': () => ({
+        plugins: [],
+        tasks: [{ name: 'db:migrate', file: '/src/server/tasks/db/migrate.ts' }],
+        storage: [],
+        cachedRules: [],
+        cacheDirs: [],
+        entries: [],
+        notes: [],
+      }),
+      'analog-run-nitro-task': () => new Promise((resolve) => (answer = resolve)),
+    });
+    const fixture = TestBed.createComponent(AnalogRuntime);
+    fixture.componentRef.setInput('rpc', rpcClient);
+    await settle(fixture);
+    const runtime = fixture.componentInstance;
+    runtime.askTask('db:migrate');
+    const first = runtime.runTask('db:migrate');
+    runtime.askTask('db:migrate');
+    await runtime.runTask('db:migrate');
+    expect(calls.filter(([name]) => name === 'analog-run-nitro-task')).toHaveLength(1);
+    answer({ ok: true, name: 'db:migrate', status: 200, ms: 1, output: '' });
+    await first;
+    expect(runtime.runningTask()).toBeNull();
+  });
 });
 
 describe('markdown code spans', () => {
