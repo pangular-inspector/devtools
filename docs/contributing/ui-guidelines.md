@@ -46,6 +46,8 @@ Brand colors belong only to the brand they represent: NgRx keeps its purple on t
 
 - **SCSS mixins** in `app/src/styles/_mixins.scss`, used with `@use 'mixins' as m;` in component styles: `m.focus-ring($offset)`, `m.field-focus`, `m.panel($level)`, `m.label`, `m.tint($tone)`, `m.soft($color)`, `m.truncate`, `m.enter($duration)`, and `m.light` for a light-theme override of a page-only color (it covers both `data-theme='light'` and the system preference).
 - **Tinted pills**: a status or accent pill, badge or chip uses `@include m.tint(ok)` (or `warn`, `danger`, `accent`). It tints the background with the tone and sets the text to `--<tone>-text`, which keeps 4.5:1 when the pill sits on a hovered or selected row. A hand-written tint uses the `-text` token for its text, never the base tone. Keep `m.soft($color)` for page-only colors, and check them yourself.
+- **Search field**: `app/src/ui/search-field.ts` (`<app-search-field placeholder="Filter by …" saveKey="<view>" [(value)]>`). Every page uses it instead of its own `<input type="search">`, and `search-field.test.ts` fails on a hand-written one. It has the icon, the accessible name **Filter**, `Escape` to clear, and no autocomplete or spellcheck. Placeholders start with "Filter by". Pass `label` only for a second field on the same page. `saveKey` turns on the saved filter chips for that view. Call its `focus()` to give it focus back after **Clear filters**.
+- **Splitter**: `app/src/ui/splitter.ts` (`<app-splitter view="<view>" pane="before|after" [(size)]>`) between a list and its detail on wide screens. Bind the size to the pane's grid column. It is a focusable `role="separator"` with arrow keys, `Home`, `End` and a double click to reset, and saves the width per view.
 - **Dropdown**: `app/src/ui/select.ts` (`<app-select [options] [(value)] ariaLabel|labelledBy>`). Never use a native `<select>`; the system popup ignores the theme.
 - **Tab icons**: `app/src/pages/tab-icon.ts`, Lucide-style 24px strokes. Add a case when you add a tab.
 - **Global baselines** in `_base.scss`: tabular numbers, textarea sizing, focus fallback, reduced motion.
@@ -53,7 +55,7 @@ Brand colors belong only to the brand they represent: NgRx keeps its purple on t
 ## Anatomy of an inspector page
 
 1. **Intro**: one or two sentences saying what the page shows and where the data comes from (live page or source scan).
-2. **Toolbar**: sticky, with a search field (icon, `Escape` clears), filters as chips or `app-select`, a count ("12 of 40"), and actions. Controls are `var(--control-h)` tall.
+2. **Toolbar**: sticky, with the shared search field (`app-search-field`), filters as chips or `app-select`, a count ("12 of 40"), and actions. Controls are `var(--control-h)` tall.
 3. **Content**: a list or tree on the left, a detail panel on the right on wide screens (sticky), stacked below 880px.
 4. **States**: every page has loading, error (with Retry), empty (explains how to get data) and no-match (with Clear filters) states. Never leave a blank area.
 

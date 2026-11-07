@@ -129,7 +129,14 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - New hub options: `enabled`, `allowLan`, `terminals`, `serverPlugins` and `browserDistFolder`.
 - Open in editor: <kbd>Alt</kbd>+click a component on the page, or a file and line in the panel.
 - A command palette (<kbd>⌘K</kbd> or <kbd>Ctrl+K</kbd>) with a command for every tab and action.
-- A **Settings** page: theme, hidden, pinned and reordered tabs, passive mode, and a **Browser agents** switch.
+- A **Settings** page: theme, hidden, pinned and reordered tabs, passive mode, a counts launcher, and a **Browser agents** switch.
+- An opt-in counts launcher: the popup's floating button becomes a pill with the render and error counts of the page while the panel is closed. Off by default, turned on in **Settings**.
+- One search field, named **Filter**, on every page, with saved filter chips per view (kept in the browser's `localStorage`).
+- A splitter between the **Injectors** tree and its detail, and between the **NgRx Store** change list and its entry, with the width saved per view.
+- Chrome extension: an **Angular component** pane in the Elements panel that shows the selected element's component, inputs and signals, masked like the panel.
+- Chrome extension: a toolbar button whose popup shows the Angular version, the build, the devtools server and the overlay of the current tab. It asks for `activeTab` and `scripting`, which add no install warning.
+- Chrome extension: a site access page that lists the hosts allowed from the panel, with **Remove**.
+- Chrome extension: apps inside a frame (Storybook, micro-frontend shells) are found. The panel reads that frame and looks for its server on the frame's origin.
 - A splitter for the docked popup, pop-out into its own window, and the `popup.hotkey` option.
 - Item links (`#tab=&id=&page=`) and the `open-in-panel` agent tool.
 - A **Terminals** dock that runs the project's build and test commands (opt in with `terminals: true`).
