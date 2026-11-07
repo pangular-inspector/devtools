@@ -90,3 +90,33 @@ describe('traceTransform', () => {
     expect(trace.steps).toHaveLength(3);
   });
 });
+
+describe('dev server restarts', () => {
+  it('leaves the new server tracer alone when the old server closes', async () => {
+    const old = fakeServer().server;
+    const next = fakeServer().server;
+    installTransformTracer(old);
+    installTransformTracer(next);
+    resetTransformTracer(old);
+    expect(canTraceTransforms()).toBe(true);
+    resetTransformTracer(next);
+    expect(canTraceTransforms()).toBe(false);
+  });
+
+  it('leaves the new server env alone when the old server closes', async () => {
+    const { clearViteEnv, runtimeConfigView, setViteEnv } =
+      await import('../rpc/analog-runtime-config.ts');
+    const project = {
+      root: '/nowhere',
+      config: { apiPrefix: 'api', noSsrRoutes: [], routeRules: [] },
+    };
+    const old = {};
+    const next = {};
+    setViteEnv({ VITE_OLD: '1' }, old);
+    setViteEnv({ VITE_NEW: '1' }, next);
+    clearViteEnv(old);
+    expect(runtimeConfigView(project, {}).env.map((v) => v.key)).toEqual(['VITE_NEW']);
+    clearViteEnv(next);
+    expect(runtimeConfigView(project, {}).env).toEqual([]);
+  });
+});

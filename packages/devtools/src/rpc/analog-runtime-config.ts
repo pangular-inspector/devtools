@@ -34,10 +34,22 @@ const PUBLIC_PREFIX = /^(VITE_|ANALOG_)/;
 const MAX_VALUE = 300;
 
 let viteEnv: Record<string, unknown> | undefined;
+let viteEnvOwner: unknown;
 
-/** Set by the Vite plugin: `server.config.env`, what `import.meta.env` holds. */
-export function setViteEnv(env: Record<string, unknown> | undefined): void {
+/**
+ * Set by the Vite plugin: `server.config.env`, what `import.meta.env` holds.
+ * `owner` is the dev server, so `clearViteEnv` leaves a newer server's env alone.
+ */
+export function setViteEnv(env: Record<string, unknown> | undefined, owner?: unknown): void {
   viteEnv = env;
+  viteEnvOwner = owner;
+}
+
+/** Forgets the env when `owner` still set it; a restart sets the new server's first. */
+export function clearViteEnv(owner?: unknown): void {
+  if (owner !== undefined && owner !== viteEnvOwner) return;
+  viteEnv = undefined;
+  viteEnvOwner = undefined;
 }
 
 function mask(key: string, raw: unknown, from: string, expression?: true): RuntimeValue {

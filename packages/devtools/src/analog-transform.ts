@@ -67,6 +67,8 @@ const TRACE_TIMEOUT_MS = 15_000;
 const active = new Map<string, TransformStep[]>();
 const wrapped = new WeakSet<object>();
 let tracer: ((file: string, ssr: boolean) => Promise<TransformTrace>) | undefined;
+/** The dev server the tracer belongs to: a restart opens the new one before the old one closes. */
+let tracerOwner: unknown;
 
 function posix(path: string): string {
   return path.split('\\').join('/');
@@ -152,6 +154,7 @@ export function installTransformTracer(server: ViteServerLike): void {
   for (const plugin of all) wrapTransform(plugin);
   const inspect = own.some((p) => /vite-plugin-inspect/.test(p.name ?? ''));
   const base = (server.config.base ?? '/').replace(/\/?$/, '/');
+  tracerOwner = server;
   tracer = async (file, ssr) => {
     const full = posix(`${server.config.root.replace(/[\\/]+$/, '')}${file}`);
     const env = server.environments?.[ssr ? 'ssr' : 'client'];
@@ -186,9 +189,14 @@ export function installTransformTracer(server: ViteServerLike): void {
   };
 }
 
-/** Forgets the dev server, for a restart. */
-export function resetTransformTracer(): void {
+/**
+ * Forgets the dev server when it closes. With `owner`, only while that server
+ * still owns the tracer, so a closing server never clears its successor's.
+ */
+export function resetTransformTracer(owner?: unknown): void {
+  if (owner !== undefined && owner !== tracerOwner) return;
   tracer = undefined;
+  tracerOwner = undefined;
   active.clear();
 }
 

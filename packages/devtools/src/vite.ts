@@ -7,7 +7,7 @@ import { PANGULAR_HUB_BASE, startPangularHub } from './hub.ts';
 import { analogMiddleware, setDevOrigin } from './analog-server-log.ts';
 import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
 import { viteScanWatcher } from './rpc/analog-scan-cache.ts';
-import { setViteEnv } from './rpc/analog-runtime-config.ts';
+import { clearViteEnv, setViteEnv } from './rpc/analog-runtime-config.ts';
 import {
   installTransformTracer,
   resetTransformTracer,
@@ -170,7 +170,7 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         // Lets the Analog Routes view show a page file's transform stack.
         installTransformTracer(server as unknown as ViteServerLike);
         // What import.meta.env holds, for the Runtime view.
-        setViteEnv(server.config.env);
+        setViteEnv(server.config.env, server);
       }
       const httpServer = server.httpServer;
       // The plugin runs the gate itself, in front of the whole dev server.
@@ -201,9 +201,10 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         };
       }
       httpServer?.once('close', () => {
+        // A restart opens the new server before this one closes: clear only what is still ours.
         if (analog) {
-          resetTransformTracer();
-          setViteEnv(undefined);
+          resetTransformTracer(server);
+          clearViteEnv(server);
         }
         void devtools.context
           .then(releaseServerState, () => undefined)
