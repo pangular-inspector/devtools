@@ -40,7 +40,7 @@ A Signal Form that sets `experimentalWebMcpTool` (with `provideExperimentalWebMc
 | Input schema     | The JSON schema agents see, under **Input schema**. Properties with secret-looking names show as `[redacted]`.                   |
 | Try this tool    | A JSON input, prefilled with a sample of the schema, and **Try this tool**. Only in the block of a form.                         |
 
-Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin. While a call's submit is still running, only changes to that form count as the agent's, and typing in any form, that one included, shows as **user**.
+Agent calls set the value and submit the form. Those changes show in the timeline with the **agent** origin. While a call's submit is still running, only its outcome in that form (status and submit changes) counts as the agent's. A value that app code writes meanwhile is not tagged **agent**, and typing in any form, that one included, shows as **user**.
 
 If the app provides `provideExperimentalWebMcpForms()` but the browser has no `modelContext`, Angular registers no tool. The block says so instead.
 

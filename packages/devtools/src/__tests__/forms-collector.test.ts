@@ -602,6 +602,41 @@ describe('forms collector WebMCP attribution', () => {
   });
 });
 
+describe('forms collector and a running WebMCP call', () => {
+  it('tags only the outcome of a running call as agent, not values app code writes meanwhile', async () => {
+    const tools = new Map<string, { execute: (args: unknown) => Promise<unknown> }>();
+    (navigator as any).modelContext = {
+      registerTool: async (tool: {
+        name: string;
+        execute: (args: unknown) => Promise<unknown>;
+      }) => {
+        tools.set(tool.name, tool);
+      },
+    };
+    try {
+      TestBed.configureTestingModule({ providers: [provideExperimentalWebMcpForms()] });
+      const h = harness();
+      const fixture = await mount(SlowSignUp);
+      await tick();
+      h.collector.push();
+      await tick();
+      const pending = tools.get('slow_sign_up')!.execute({ name: 'Ada' });
+      fixture.detectChanges();
+      await tick(LEASED_PUSH_MS + 100);
+      fixture.componentInstance.form.name().value.set('Code');
+      h.collector.push();
+      await tick(LEASED_PUSH_MS + 100);
+      const values = h.lastEvents().filter((e) => e.type === 'value' && e.path === 'name');
+      expect(values.find((e) => e.detail === '"Ada"')).toMatchObject({ origin: 'agent' });
+      expect(values.find((e) => e.detail === '"Code"')?.origin).not.toBe('agent');
+      releaseSlowSubmit();
+      await pending;
+    } finally {
+      delete (navigator as any).modelContext;
+    }
+  });
+});
+
 describe('forms collector without a server', () => {
   it('keeps a paced push that fails out of the unhandled rejections', async () => {
     const fixture = await mount(Login);

@@ -82,6 +82,8 @@ const DIFFED_FOR_ALL: FormEvent['type'][] = [
   'added',
   'removed',
 ];
+/** What a WebMCP call that is still running (an async submit) causes: its outcome. */
+const RUNNING_CALL_TYPES: FormEvent['type'][] = ['status', 'submit'];
 const USER_EVENTS = ['input', 'change', 'focusout', 'submit', 'reset', 'click', 'keydown'];
 
 function read<T>(fn: () => T, fallback: T): T {
@@ -641,14 +643,18 @@ export function attachForms(
         if (!streamed.has(event.formId) || DIFFED_FOR_ALL.includes(event.type)) {
           const caller = signalCallers.get(event.formId);
           // The agent's own write wins; user input wins over a call that is merely running.
+          // While its submit runs, only the outcome (status and submit) is the agent's: a value
+          // that app code writes meanwhile is not.
           const touch = agentTouch(foundById.get(event.formId)?.root);
+          const agentOutcome =
+            touch === 'maybe' || (touch === 'running' && RUNNING_CALL_TYPES.includes(event.type));
           const origin: EventOrigin | undefined = touches(devtoolsSincePush, event.formId)
             ? 'devtools'
             : touch === 'wrote'
               ? 'agent'
               : touches(userSincePush, event.formId)
                 ? 'user'
-                : touch
+                : agentOutcome
                   ? 'agent'
                   : caller !== undefined
                     ? 'code'
