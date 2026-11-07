@@ -58,7 +58,7 @@ Page renders (server rendered or client only), `load()` fetches, form actions, s
 
 | Control                                 | What it does                                                                                                         |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Kind filter                             | Show one kind of call. Each choice counts the listed calls of that kind.                                             |
+| Kind filter                             | Show one kind of call. Each choice counts the tab's calls of that kind, before the search and **Failed only**.       |
 | **Find a URL, path or function** search | Keeps calls whose URL, route path, server function name or file contains the text. `Escape` clears it.               |
 | **Failed only**                         | Keeps calls with a status of 400 or more, no status, or a form action that failed.                                   |
 | **All tabs (including untagged)**       | Shows the calls of every tab, and calls the dev server could not tie to a tab. Off by default.                       |
