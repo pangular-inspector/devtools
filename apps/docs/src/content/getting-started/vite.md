@@ -234,8 +234,20 @@ export const appConfig: ApplicationConfig = {
 
 To fill the **SSR requests** table in the **SSR & HTTP** tab, add a Nitro server middleware that traces each page render. Analog runs files in `src/server/middleware` before it renders the page, on the dev server too. The middleware imports `h3`, so add `h3` 1 to your app first, the version Analog's server uses:
 
-```bash
+```bash group="install-h3" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
 pnpm add h3@^1.15.0
+```
+
+```bash group="install-h3" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
+npm install h3@^1.15.0
+```
+
+```bash group="install-h3" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
+yarn add h3@^1.15.0
+```
+
+```bash group="install-h3" name="bun" image="https://bun.sh/logo.svg"
+bun add h3@^1.15.0
 ```
 
 Then add the middleware:

@@ -30,7 +30,8 @@ invalid and why, fix the cause in the code, then show me the form is valid.
 | Find the invalid fields      | `explain-invalid-forms`                               |
 | Look at one field            | `explain-field` with `form` and `path`                |
 | See why submit does nothing  | `explain-submit`                                      |
-| Prove the fix                | `explain-form-changes` with the marker as `after`     |
+| See what the fix changed     | `explain-form-changes` with the marker as `after`     |
+| Prove the form is valid      | `inspect-forms` with `form`, for its current status   |
 
 Check that the answer names the failing validator and its message for each field, not only that the form is invalid. Values that look secret stay redacted. See [Forms](./tools.md#forms).
 
@@ -63,7 +64,7 @@ Angular looked for it and why no injector provided it, then fix the providers.
 | Walk the lookup path          | `explain-injection` with the owner as `injector` and the token |
 | Read the providers at a level | `inspect-providers`                                            |
 
-`explain-error` adds the missing provider explainer, and its owner id works as the `injector` of `explain-injection`. If it says **Component: not found**, for example when a routed component fails before it is in the tree, read the stack of the error for the class that injects the token, pass that class name as `injector`, and call `scan-providers` to see where the source provides the token. Check that the answer marks each injector on the path as **provides it**, **not provided** or **hidden**. See [explain-injection](./tools.md#explain-injection).
+`explain-error` adds the missing provider explainer, and its owner id works as the `injector` of `explain-injection`. If it says **Component: not found**, for example when a routed component fails before it is in the tree, `explain-injection` has no injector to start from and answers **No injector on page**. Read the stack of the error for the class that injects the token, then call `scan-providers` to see where the source provides the token. A live lookup from an injector that is on the page, such as the parent route's component or `Root`, shows only part of the path. When an owner is found, check that the answer marks each injector on the path as **provides it**, **not provided** or **hidden**. See [explain-injection](./tools.md#explain-injection).
 
 ## Find wasted change detection
 
