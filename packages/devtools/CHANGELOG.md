@@ -137,7 +137,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The Vite plugin's `lanAddress` option (off by default) injects the dev server's LAN address as `__PANGULAR_LAN_URL__` into the app and into development builds, so a Capacitor or NativeScript app on a phone finds the devtools. It needs `allowLan` in effect and `server.host` on the network. `lanDevtoolsURL()` reads it, and the NativeScript overlay connects there when no `baseURL` is given (#373).
 - Hub messages and toasts, a dock group with badges, and an **All tools** dock.
 - New entry points: `/overlay-manual` (starts nothing on import), `/plugin`, `/capacitor-hook`, `/store-hook`, `/startup-hook`, `/ssr` and `/cd-data`.
-- New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup` and `plugins`.
+- New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup`, `plugins` and `redaction.entropy`.
+- `redaction.entropy`, off by default, masks long high-entropy strings that no name or shape rule catches, such as an opaque token in a harmless field. `true` masks runs of 24 characters or more; `{minLength, threshold}` sets other limits. Hex values, UUIDs, ULIDs and camelCase identifiers stay readable, and known shapes keep their prefix. It applies on every redaction path, on the page and on the devtools server, and shows as **Entropy masking** on the Dashboard.
 - After pairing, focus moves to the active tab with a **Connected** note.
 
 #### Inspectors

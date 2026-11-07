@@ -301,6 +301,26 @@ An email address in a URL is replaced with `[email]`, in a path segment, a query
 
 An `@` that isn't part of an address stays, as in `/@angular/core`, `lodash@4.17.21` or `/users/@alice`. The user in a URL's authority, such as `git` in `ssh://git@github.com`, stays visible like the user before a URL password. Inside an encoded URL in a query value (`?next=https%3A%2F%2Fbob%40example.com`) there is no authority to tell apart, so the address is masked, host included. The router lint (`lint-routes` and the [Lint](./inspectors/router.md#lint) view) still reports the `email-in-url` rule for a navigation whose address was masked.
 
+### High-entropy strings
+
+Set `redaction.entropy` to `true` to also mask strings that look random, such as an opaque session token in a field with a harmless name or a cloud secret with no known prefix. It is off by default. An object such as `{minLength: 32, threshold: 4}` turns it on with other limits. See [Redaction options](./getting-started/configuration.md#redaction).
+
+A run of letters, digits, `_`, `-`, `+` and `/` (and any trailing `=`) is replaced with `[redacted]` when all of these hold:
+
+| Check                                      | Why                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| It has `minLength` characters or more (24) | Short ids, words and numbers stay readable.                                                                        |
+| It mixes lowercase, uppercase and digits   | Plain words, numbers and lowercase slugs such as `css-1a2b3c` stay readable.                                       |
+| It is not hex and not a ULID               | Hashes, commit SHAs, UUIDs, Mongo ids and ULIDs stay readable.                                                     |
+| It doesn't read as words                   | camelCase and snake_case identifiers, such as `getUserProfileById2024`, stay readable.                             |
+| Its Shannon entropy is high enough         | `log2(length) - 1` bits per character, at most `threshold` (4.5): 3.6 bits at 24 characters, 4 at 32, 4.5 from 45. |
+
+About 99 in 100 random 24-character tokens pass these checks, and more of longer ones. A run with `/` is judged whole, as base64 is, unless one of its segments is a plain word or number, as in a path. Then each segment is judged on its own, so `/api/v2/Users/<token>/edit` keeps its path readable. Long base64 data, such as an inline image, is masked too.
+
+The check runs last, after the name and shape rules, so a Stripe key still shows its `sk_live_` prefix. It covers every text the other rules cover: values, keys, messages, URLs, previews and headers in serialized values, NgRx state, forms, the router, SSR & HTTP calls, Analog reports and server logs, Capacitor calls and errors, on the page and again on the devtools server.
+
+The check reads each text once, so its cost grows in step with the text, and a long text of 200 KB takes milliseconds to check.
+
 ### Router
 
 These are replaced with `[redacted]` in URLs, params, data and messages:
