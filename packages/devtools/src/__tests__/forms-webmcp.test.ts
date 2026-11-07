@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   inferShape,
   requiredNow,
+  RUN_TIMEOUT_MS,
   schemaInputs,
   schemaRequired,
   watchWebMcp,
@@ -289,6 +290,34 @@ describe('watchWebMcp', () => {
     expect(touched(undefined)).toBe('maybe');
   });
 
+  it('gives up on a tried tool that does not answer within 10 seconds', async () => {
+    fakeContext();
+    const watcher = watch();
+    await (navigator as any).modelContext.registerTool(
+      {
+        name: 'hang',
+        description: 'Never answers',
+        inputSchema: schema,
+        execute: () => new Promise<unknown>(() => {}),
+      },
+      {},
+    );
+    await tick();
+    const root = fieldNode({ name: 'Ada', age: 3, tags: [{ label: 'x' }] });
+    expect(watcher.describe([{ root, formId: 'a@pg' }]).forms.get(root)?.name).toBe('hang');
+    vi.useFakeTimers();
+    try {
+      const running = watcher.run(root, { name: 'Ada', age: 3, tags: [] });
+      await vi.advanceTimersByTimeAsync(RUN_TIMEOUT_MS);
+      expect(await running).toEqual({
+        ok: false,
+        error: 'The tool hang did not answer within 10s.',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('masks tokens in the description, error and call detail of a tool no form owns', async () => {
     const jwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiIxMjM0NSJ9', 'c2lnbmF0dXJlc2ln'].join('.');
     const { tools } = fakeContext((tool) =>
@@ -373,5 +402,70 @@ describe('WebMCP audit fixes', () => {
     expect(watcher.active()).toBe(false);
     release();
     await pending;
+  });
+});
+
+describe('WebMCP Try this tool', () => {
+  it('runs the linked tool with the given input, marks the call as tried and not as the agent', async () => {
+    fakeContext();
+    const watcher = watch();
+    const execute = vi.fn(async () => ({
+      content: [{ type: 'text', text: 'Form submitted successfully' }],
+    }));
+    await (navigator as any).modelContext.registerTool({
+      name: 'sign_up',
+      description: 'Create an account',
+      inputSchema: schema,
+      execute,
+    });
+    await tick();
+    const root = fieldNode({ name: 'Ada', age: 3, tags: [{ label: 'x' }] });
+    const tool = watcher.describe([{ root, formId: 'a@pg' }]).forms.get(root);
+    expect(tool?.schema).toMatchObject({ type: 'object', required: ['name', 'age'] });
+
+    const result = await watcher.run(root, { name: 'Grace', age: 4, tags: [] });
+    await tick();
+    expect(result).toEqual({ ok: true, text: 'Form submitted successfully' });
+    expect(execute).toHaveBeenCalledWith({ name: 'Grace', age: 4, tags: [] });
+    expect(watcher.takeActivity()(root)).toBeUndefined();
+    expect(watcher.describe([{ root, formId: 'a@pg' }]).forms.get(root)?.calls).toEqual([
+      expect.objectContaining({ outcome: 'submitted', tried: true }),
+    ]);
+  });
+
+  it('refuses a form without a linked tool and a tool that threw', async () => {
+    fakeContext();
+    const watcher = watch();
+    expect(await watcher.run(fieldNode({ a: '' }), {})).toMatchObject({ ok: false });
+    await (navigator as any).modelContext.registerTool({
+      name: 'broken',
+      description: '',
+      inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
+      execute: () => {
+        throw new Error('nope');
+      },
+    });
+    await tick();
+    const root = fieldNode({ city: '' });
+    watcher.describe([{ root, formId: 'a@pg' }]);
+    expect(await watcher.run(root, { city: 'x' })).toEqual({ ok: false, error: 'nope' });
+  });
+
+  it('calls a tool registered before it attached through modelContextTesting.executeTool', async () => {
+    fakeContext();
+    const executeTool = vi.fn(async () => 'Form submitted successfully');
+    (navigator as any).modelContextTesting = {
+      listTools: () => [{ name: 'early', description: '', inputSchema: JSON.stringify(schema) }],
+      executeTool,
+    };
+    const watcher = watch();
+    await tick();
+    const root = fieldNode({ name: 'a', age: 1, tags: [{ label: '' }] });
+    watcher.describe([{ root, formId: 'a@pg' }]);
+    expect(await watcher.run(root, { name: 'b' })).toEqual({
+      ok: true,
+      text: 'Form submitted successfully',
+    });
+    expect(executeTool).toHaveBeenCalledWith('early', '{"name":"b"}');
   });
 });

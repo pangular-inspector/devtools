@@ -963,6 +963,7 @@ export const FORM_WRITE_ACTIONS: readonly string[] = [
   'disable',
   'submit',
   'restore',
+  'try-webmcp',
 ];
 
 /** Router actions that start, stop, repeat or probe a navigation. */
