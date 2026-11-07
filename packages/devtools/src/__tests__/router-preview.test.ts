@@ -9,7 +9,7 @@ import {
   type RoutePreview,
 } from '../rpc/router-preview.ts';
 import type { RouterPage } from '../rpc/router-tools.ts';
-import { answerText } from './tool-answer.ts';
+import { answerText, toolAnswer } from './tool-answer.ts';
 
 const config: RouteNode[] = [
   { id: '0', path: '', fullPath: '/', kind: 'redirect', redirectTo: 'home', pathMatch: 'full' },
@@ -186,5 +186,25 @@ describe('pangular:preview-navigation', () => {
       url: '/home',
     })) as RoutePreview;
     expect(rpc.chain.map((r) => r.component)).toEqual(['Home']);
+  });
+
+  it('says a page it does not know is unknown, with no preview from another page', async () => {
+    const host = {
+      mountStatic: () => {},
+      resolveOrigin: () => 'http://localhost',
+      getStorageDir: () => '',
+    };
+    const ctx = await createHostContext({ cwd: process.cwd(), mode: 'dev', host: host as never });
+    await pangular.setup(ctx as never);
+    await ctx.rpc.invokeLocal(
+      'pangular:push-router' as never,
+      ...([{ pageId: 'page-w', snapshot: null, navigations: [], generation: 1, config }] as never),
+    );
+    const answer = await toolAnswer(
+      ctx.agent.invoke('pangular:preview-navigation', { page: 'zz-no-such-page', url: '/home' }),
+    );
+    expect(answer.isError).toBe(true);
+    expect(answer.markdown).toContain('No page `zz-no-such-page` is reporting router state');
+    expect(answer.markdown).not.toContain('Going to');
   });
 });
