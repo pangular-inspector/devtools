@@ -2,7 +2,8 @@
 // axe check of the Chrome extension panel (extension/panel.html), loaded over http with a stand-in
 // for the `chrome` APIs. It covers every status the panel bridge shows before it connects, then
 // the connected panel: the committed extension/ui build in the panel's frame, reading a static
-// report served from the same origin. Both color schemes, at 1280 and 360 px.
+// report served from the same origin. Both color schemes, at 1280 and 360 px. The toolbar popup
+// (at its 320 px width) and the site access page are checked too, with the same kind of stand-in.
 //
 //   node scripts/extension-axe.mjs [report dir]
 //
@@ -114,6 +115,54 @@ function fakeChrome({ theme, origin, granted, eval: mode }) {
   };
 }
 
+/**
+ * Runs in the toolbar popup and the site access page before their scripts: the `chrome` APIs
+ * popup.js and options.js call. `page` is what the active tab answers, `origins` the hosts
+ * granted besides the loopback ones.
+ */
+function fakeExtensionChrome({ page, origins }) {
+  const manifest = { host_permissions: ['http://*.localhost/*', 'http://127.0.0.1/*'] };
+  window.chrome = {
+    tabs: { query: async () => [{ id: 1, url: `${page.origin}/` }] },
+    scripting: { executeScript: async () => [{ frameId: 0, result: page }] },
+    runtime: { openOptionsPage() {}, getManifest: () => manifest },
+    permissions: {
+      getAll: async () => ({ origins: [...manifest.host_permissions, ...origins] }),
+      remove: async () => true,
+    },
+  };
+}
+
+// The toolbar popup and the site access page, each in the states that change what they show.
+const EXTENSION_PAGES = [
+  {
+    name: 'popup connected',
+    path: 'popup.html',
+    ready: { selector: '#fact-server', text: 'Answers at' },
+    page: { version: '21.0.3', angular: true, devMode: true, overlay: true },
+    width: 320,
+  },
+  {
+    name: 'popup no Angular',
+    path: 'popup.html',
+    ready: { selector: '#next', text: 'frame' },
+    page: { version: null, angular: false, devMode: false, overlay: false },
+    width: 320,
+  },
+  {
+    name: 'site access with sites',
+    path: 'options.html',
+    ready: { selector: '#hosts li', text: 'staging' },
+    origins: ['https://staging.example.com/*', 'http://192.168.1.20/*'],
+  },
+  {
+    name: 'site access empty',
+    path: 'options.html',
+    ready: { selector: '#empty', text: 'No other sites' },
+    origins: [],
+  },
+];
+
 // Each status the bridge can show, the text that marks it, and the inspected page behind it.
 const STATES = [
   { name: 'page not answering', text: 'not answering', page: { eval: 'silent' } },
@@ -211,6 +260,39 @@ try {
         await context.close();
       }
     }
+
+    for (const entry of EXTENSION_PAGES) {
+      for (const width of entry.width ? [entry.width] : [1280, 360]) {
+        const label = `${scheme} ${width} ${entry.name}`;
+        const context = await browser.newContext({
+          colorScheme: scheme,
+          reducedMotion: 'reduce',
+          viewport: { width, height: 600 },
+        });
+        await context.addInitScript(fakeExtensionChrome, {
+          page: { origin: extension.origin, ...entry.page },
+          origins: entry.origins ?? [],
+        });
+        const tab = await context.newPage();
+        tab.on('pageerror', (error) => failures.push(`${label}: page error ${error.message}`));
+        try {
+          await tab.goto(`${extension.origin}/${entry.path}`);
+          await tab
+            .locator(entry.ready.selector, { hasText: entry.ready.text })
+            .first()
+            .waitFor({ timeout: 10_000 });
+          const overflow = await tab.evaluate(
+            () => document.documentElement.scrollWidth > window.innerWidth,
+          );
+          if (overflow) failures.push(`${label}: the page scrolls sideways`);
+          await analyze(tab, label);
+        } catch (error) {
+          failures.push(`${label}: the page did not show (${error.message.split('\n')[0]})`);
+        } finally {
+          await context.close();
+        }
+      }
+    }
   }
 } finally {
   await browser.close();
@@ -222,4 +304,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log('\nThe extension panel passes axe in every state.');
+console.log('\nThe extension panel, toolbar popup and site access page pass axe in every state.');

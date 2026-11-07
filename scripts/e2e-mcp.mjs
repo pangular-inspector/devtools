@@ -635,6 +635,11 @@ const READ_PLAN = [
   ['analog-scan-prerender', null, () => ({})],
   ['analog-scan-content', null, () => ({})],
   ['analog-lint', null, () => ({})],
+  ['analog-scan-build', null, () => ({})],
+  ['analog-scan-nitro', null, () => ({})],
+  ['analog-scan-runtime-config', null, () => ({})],
+  ['analog-inspect-transform', null, () => ({ file: '/src/app/pages/index.page.ts' })],
+  ['analog-inspect-render-mode', null, () => ({ path: '/' })],
   ['capacitor-list-calls', null, () => ({})],
   ['capacitor-list-plugins', null, () => ({})],
   ['tanstack-list-queries', null, () => ({})],
@@ -690,6 +695,8 @@ const READ_PLAN = [
   ['ngrx-inspect-store', '/destinations', () => ({})],
   ['ngrx-inspect-store', '/destinations', (ctx) => ({ store: ctx.storeId('TravelStore') })],
   ['ngrx-inspect-store', '/destinations', () => ({ store: 'TravelStore' })],
+  ['ngrx-explain-change', '/destinations', () => ({ path: 'saved' })],
+  ['ngrx-explain-change', '/destinations', () => ({ path: 'saved', store: 'TravelStore' })],
   [
     'ngrx-history',
     '/destinations',
@@ -741,6 +748,8 @@ const READ_PLAN = [
 
   ['explain-pipe', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
   ['explain-pipe', '/examples/pipes', () => ({ name: 'date' })],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({})],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
 
   ['list-ssr-requests', '/examples/http', () => ({ limit: 5 })],
   [
@@ -753,6 +762,7 @@ const READ_PLAN = [
   ['list-http-calls', '/examples/http', () => ({ failed: true })],
   ['list-http-calls', '/examples/http', () => ({ view: 'waterfall', headers: true })],
   ['list-http-rules', '/examples/http', () => ({})],
+  ['lint-http', '/examples/http', () => ({})],
   ['inspect-transfer-state', '/examples/http', () => ({})],
   ['list-ssr-overrides', '/examples/http', () => ({})],
 
@@ -771,6 +781,11 @@ const READ_PLAN = [
   ['lint-routes', '/examples/routes/details', () => ({})],
   ['router-config', '/examples/routes/details', () => ({})],
   ['explain-navigation', '/examples/routes/details', () => ({ format: 'repro' })],
+  ['diff-navigations', '/examples/routes/details', () => ({})],
+  ['follow-navigations', '/examples/routes/details', () => ({})],
+  ['follow-navigations', '/examples/routes/details', () => ({ since: 0, waitMs: 0 })],
+  ['preview-navigation', '/examples/routes/details', () => ({ url: '/destinations/kyoto' })],
+  ['preview-navigation', '/examples/routes/details', () => ({ url: '/trips' })],
 
   ['inspect-forms', '/examples/forms', () => ({})],
   ['inspect-forms', '/examples/forms', (ctx) => ({ form: ctx.formIds[0] })],
@@ -816,6 +831,7 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'record-guards',
   'ngrx-dispatch',
   'ngrx-restore',
+  'ngrx-store-devtools',
   'tanstack-run-query',
   'run-form-action',
   'fill-form',
@@ -825,6 +841,7 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'remove-ssr-override',
   'set-component-property',
   'set-signal',
+  'load-defer-block',
   'watch-signal',
   'record-pipes',
   'track-subscriptions',
@@ -832,6 +849,8 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'audit',
   'clear-recordings',
   'analog-run-api',
+  'analog-run-nitro-task',
+  'analog-purge-nitro-cache',
   'plugin_travel_clear-saved',
   'highlight',
 ]);
@@ -1070,6 +1089,15 @@ async function runReadPlan(client, app, state, ctx) {
     if (name === 'ngrx-import-session' && !record.isError) {
       ctx.sessionId = record.markdown.match(/`(s[\w-]+|[0-9a-f-]{6,})`/)?.[1];
       if (!ctx.sessionId) recordWarning(record, 'could not find the session id in the answer');
+    }
+    if (name === 'ngrx-explain-change' && args.path) {
+      // A real answer for the path: its newest changes, or that none is in the kept log.
+      check(
+        record.markdown.includes(`\`${args.path}\``) &&
+          /last changed in #\d+|No entry in the kept log/.test(record.markdown),
+        'http ngrx-explain-change',
+        `does not answer for path ${args.path}`,
+      );
     }
     if (name === 'list-pages') {
       check(
@@ -1572,11 +1600,31 @@ async function runActions(state) {
       'the log gets a Restore entry',
       /restore/i.test(history.split('\n').slice(-5).join('\n')),
     );
+    const why = await read('ngrx-explain-change', { seq: beforeSave.seq, page: ctx.pageId });
+    write(
+      'ngrx-explain-change',
+      `explains log entry #${beforeSave.seq}, the toggleSaved call`,
+      why.includes(`#${beforeSave.seq}`) && why.includes('toggleSaved'),
+      why.slice(0, 300),
+    );
   } else {
     write('ngrx-restore', 'found a toggleSaved entry to restore', false);
   }
   await act('ngrx-restore', { latest: true, page: ctx.pageId }, 'any');
   await act('ngrx-restore', { seq: 999_999, page: ctx.pageId }, 'refusal');
+  // ngrx-store-devtools: pause and resume recording, and refuse an entry that does not exist
+  await act('ngrx-store-devtools', { op: 'pause', paused: true, page: ctx.pageId }, 'any');
+  await act('ngrx-store-devtools', { op: 'pause', paused: false, page: ctx.pageId }, 'any');
+  r = await act('ngrx-store-devtools', { op: 'toggle', seq: 999_999, page: ctx.pageId }, 'any');
+  write(
+    'ngrx-store-devtools',
+    'toggling an entry that does not exist answers isError with the reason',
+    r.isError === true &&
+      /No log entry #999999|has no @ngrx\/store Store|needs provideStoreDevtools\(\)/.test(
+        r.markdown,
+      ),
+    r.markdown.slice(0, 300),
+  );
   await act('ngrx-dispatch', { type: '[E2E] Ping', payload: { id: 1 } }, 'refusal');
 
   // plugin action
@@ -1642,7 +1690,24 @@ async function runActions(state) {
     doubledAfter,
   );
 
-  // watch-signal
+  // load-defer-block
+  await app.go('/examples/defer');
+  await sleep(800);
+  const deferRow = (await read('defer-blocks', {})).match(
+    /\| `(d\d+)` \|[^|\n]*\| placeholder \|[^|\n]*\| on interaction \|/,
+  );
+  r = await act('load-defer-block', { block: deferRow?.[1] ?? 'd0' });
+  await sleep(800);
+  write(
+    'load-defer-block',
+    'the on interaction block shows its content without a click',
+    (await page.getByText('Rendered after the button was used.').count()) > 0,
+    r.markdown.slice(0, 300),
+  );
+
+  // watch-signal, back on the signals page after the defer example
+  await app.go('/examples/signals');
+  await sleep(800);
   const graph = jsonBlock(await read('inspect-signals', { component: 'app-signals-example' }));
   const countNode = graph?.nodes?.find((node) => node.label === 'count');
   r = await act('watch-signal', { node: countNode?.id ?? 'count', stacks: true });
@@ -1874,6 +1939,10 @@ async function runActions(state) {
   await act('tanstack-run-query', { action: 'invalidate', key: 'products' }, 'refusal');
   await act('analog-run-api', { path: '/api/products' }, 'refusal');
   await act('analog-run-api', { path: '/api/products', method: 'DELETE' }, 'refusal');
+  await act('analog-run-nitro-task', { name: 'db:migrate' }, 'refusal');
+  await act('analog-run-nitro-task', { name: 'db:migrate', confirm: true }, 'refusal');
+  await act('analog-purge-nitro-cache', {}, 'refusal');
+  await act('analog-purge-nitro-cache', { confirm: true }, 'refusal');
 
   // Forms: fill-form and run-form-action on the booking form.
   await app.go('/destinations');
@@ -2139,11 +2208,13 @@ const ACTION_VALID = {
   'record-change-detection': () => ({ record: 'stop' }),
   'track-subscriptions': () => ({ action: 'stop' }),
   'record-pipes': () => ({ action: 'stop' }),
+  'load-defer-block': () => ({ block: 'd0' }),
   'clear-recordings': () => ({ target: 'router' }),
   'set-component-property': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
   'set-signal': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
   'watch-signal': () => ({ stacks: false }),
   'ngrx-restore': () => ({ seq: 999_999 }),
+  'ngrx-store-devtools': () => ({ op: 'toggle', seq: 999_999 }),
   'ngrx-dispatch': () => ({ type: '[E2E] Ping' }),
   'tanstack-run-query': () => ({ action: 'refetch', key: 'nothing' }),
   'run-form-action': (ctx) => ({ action: 'revalidate', form: ctx.formIds?.[0] ?? 'x' }),
@@ -2157,6 +2228,8 @@ const ACTION_VALID = {
   }),
   'remove-ssr-override': () => ({ id: 'no-such-override' }),
   'analog-run-api': () => ({ path: '/api/none' }),
+  'analog-run-nitro-task': () => ({ name: 'none' }),
+  'analog-purge-nitro-cache': () => ({}),
   'plugin_travel_clear-saved': () => ({}),
   'change-detection': () => ({}),
   hydration: () => ({}),
@@ -2590,6 +2663,8 @@ async function runVariants(opts, sdk, browser, config, state) {
           'clear-recordings',
           'tanstack-run-query',
           'analog-run-api',
+          'analog-run-nitro-task',
+          'analog-purge-nitro-cache',
           'plugin_travel_clear-saved',
         ]) {
           check(!names.has(name), scope, `${name} is still listed`);
@@ -2990,6 +3065,18 @@ function runDocs(state) {
     'params',
     'replaceurl',
     'skiplocationchange',
+    'cookies',
+    'files',
+    'payload',
+    'op',
+    'toggle',
+    'jump',
+    'commit',
+    'reset',
+    'pause',
+    'block',
+    'element',
+    'locator',
   ]);
   // Library tools are documented but not listed for the demo, which uses none of the libraries.
   docs.phantomTools = [...documented].filter(
@@ -3058,7 +3145,7 @@ function runDocs(state) {
   docs.argumentDrift = argDrift;
   // The counts the docs state.
   const builtIns = live.length + 1; // devframe_state_read is listed too, under Shared state
-  docs.statedToolCount = toolsMd.match(/^\s*([A-Z][a-z-]+) tools, grouped/m)?.[1];
+  docs.statedToolCount = toolsMd.match(/^\s*([A-Z][a-z]+(?:[- ][a-z]+)*) tools, grouped/m)?.[1];
   docs.liveBuiltInTools = live.length;
   docs.liveTotalTools = state.tools.size;
   const actionLive = [...state.tools.values()]

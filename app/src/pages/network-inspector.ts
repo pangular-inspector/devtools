@@ -31,6 +31,15 @@ import { Select, type SelectOption } from '../ui/select';
 import { VirtualWindow } from '../ui/virtual-window';
 import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
+import { SearchField } from '../ui/search-field';
+import { CallCopy } from './network/call-copy';
+import { CallOriginTag } from './network/call-origin';
+import { HarExport } from './network/har-export';
+import { HttpLint } from './network/http-lint';
+import { PayloadInsights } from './network/payload-insights';
+import { RuleMatchCount } from './network/rule-match-count';
+import { RulePresets } from './network/rule-presets';
+import { presetRules } from '@pangular-inspector/devtools/internal/http-data';
 
 type HttpSide = 'client' | 'server';
 
@@ -43,6 +52,7 @@ interface HttpRule {
   status?: number;
   delayMs?: number;
   body?: string;
+  chance?: number;
 }
 
 interface HttpCall {
@@ -61,6 +71,8 @@ interface HttpCall {
   rulePattern?: string;
   pageUrl?: string;
   requestId?: string;
+  /** The Angular API that likely started the call, from a stack heuristic. */
+  origin?: 'httpResource' | 'resource' | 'defer';
   cacheStored?: boolean;
   cacheSkip?: CacheSkip;
   at: number;
@@ -211,6 +223,7 @@ interface RuleDraft {
   status: string;
   delayMs: string;
   body: string;
+  chance: string;
 }
 
 const EMPTY_DRAFT: RuleDraft = {
@@ -220,7 +233,20 @@ const EMPTY_DRAFT: RuleDraft = {
   status: '',
   delayMs: '',
   body: '',
+  chance: '',
 };
+
+/** A new fault rule id, unique enough for one rule list. */
+function newRuleId(): string {
+  return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** The chance field as a whole percent, null when it is not one from 1 to 99, undefined when empty. */
+function chanceOf(text: string): number | null | undefined {
+  if (!text.trim()) return undefined;
+  const chance = Number(text);
+  return Number.isInteger(chance) && chance >= 1 && chance <= 99 ? chance : null;
+}
 
 function pathOf(url: string): string {
   try {
@@ -298,7 +324,22 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 
 @Component({
   selector: 'app-network-inspector',
-  imports: [JsonPipe, HttpHeadersView, LimitNote, NetworkWaterfall, RovingList, Select],
+  imports: [
+    SearchField,
+    CallCopy,
+    CallOriginTag,
+    HarExport,
+    JsonPipe,
+    HttpHeadersView,
+    HttpLint,
+    LimitNote,
+    NetworkWaterfall,
+    PayloadInsights,
+    RovingList,
+    RuleMatchCount,
+    RulePresets,
+    Select,
+  ],
   template: `
     <p class="page-intro">
       HttpClient calls made while rendering on the server and in the browser, from the live page and
@@ -337,6 +378,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       >
         Clear timeline
       </button>
+      <app-har-export
+        [calls]="timeline()"
+        [ssrRequest]="pageSsrRequest()"
+        [title]="selected()?.title ?? ''"
+        [pageUrl]="selected()?.url"
+        (done)="message.set($event)"
+      />
       <p class="message" role="status">{{ message() }}</p>
     </div>
 
@@ -569,23 +617,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
           aria-label="Filter the HTTP timeline"
           [class.no-calls]="!timeline().length"
         >
-          <div class="search">
-            <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-            <input
-              id="timeline-search"
-              type="search"
-              placeholder="Find a URL or method…"
-              aria-label="Find a URL or method"
-              autocomplete="off"
-              spellcheck="false"
-              [value]="callQuery()"
-              (input)="callQuery.set($any($event.target).value)"
-              (keydown.escape)="callQuery.set('')"
-            />
-          </div>
+          <app-search-field
+            class="search"
+            inputId="timeline-search"
+            placeholder="Filter by URL or method"
+            saveKey="network"
+            [(value)]="callQuery"
+          />
           <app-select
             class="side-filter"
             ariaLabel="Side"
@@ -698,6 +736,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                             >fetch()</span
                           >
                         }
+                        @if (entry.origin) {
+                          <app-call-origin [origin]="entry.origin" />
+                        }
                         @if (entry.cacheHit) {
                           <span class="tag">transfer cache</span>
                         }
@@ -771,6 +812,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     Copy
                   </button>
                 }
+                <app-call-copy [call]="detail" (done)="message.set($event)" />
                 <button
                   type="button"
                   class="ghost"
@@ -817,11 +859,25 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
         }
       </section>
 
+      <section class="panel wide" aria-labelledby="lint-heading">
+        <h2 id="lint-heading">HTTP lint</h2>
+        <app-http-lint
+          [calls]="selected()?.calls ?? []"
+          [serverCalls]="renderServerCalls()"
+          (open)="openCall($event)"
+        />
+      </section>
+
       <section class="panel" aria-labelledby="rules-heading">
         <h2 id="rules-heading">Fault injection</h2>
         @if (!canWrite()) {
           <p id="http-writes-off" class="muted small">{{ writesOff }}</p>
         }
+        <app-rule-presets
+          [disabled]="!canWrite()"
+          [describedBy]="canWrite() ? '' : 'http-writes-off'"
+          (add)="addPreset($event)"
+        />
         <form id="rule-form" class="rule-form" (submit)="addRule($event)">
           <label>
             <span
@@ -837,6 +893,12 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               placeholder="e.g. /api/products"
             />
           </label>
+          <app-rule-match-count
+            [calls]="timeline()"
+            [pattern]="draft().pattern"
+            [method]="draft().method"
+            [target]="draft().target"
+          />
           <div class="row">
             <div class="field-group">
               <span id="rule-method-label">Method</span>
@@ -882,6 +944,20 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               />
             </label>
           </div>
+          <label>
+            <span>Chance (%) <span class="hint">(optional, share of matching requests)</span></span>
+            <input
+              id="rule-chance"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="99"
+              step="1"
+              placeholder="100"
+              [value]="draft().chance"
+              (input)="patch('chance', $event)"
+            />
+          </label>
           <label>
             <span>Mock JSON body <span class="hint">(optional)</span></span>
             <textarea
@@ -949,6 +1025,8 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 <span>{{ targetLabel(rule.target) }}</span>
                 @if (rule.status === undefined) {
                   <span>passthrough</span>
+                } @else if (rule.status === 0) {
+                  <span class="status bad">network error</span>
                 } @else {
                   <span
                     class="status"
@@ -963,6 +1041,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                 }
                 @if (rule.body) {
                   <span>mock body</span>
+                }
+                @if (rule.chance) {
+                  <span>{{ rule.chance }}% of requests</span>
                 }
               </span>
               @if (mocksOnServer(rule)) {
@@ -1243,6 +1324,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             @if (payload.error) {
               <p class="bad" role="alert">{{ payload.error }}</p>
             }
+            <app-payload-insights [size]="payload.size" [entries]="payload.entries" />
             <div class="entries">
               @for (entry of payload.entries; track entry.key) {
                 <details>
@@ -2292,6 +2374,12 @@ export class NetworkInspector {
     return this.serverCalls().filter((c) => !c.pageUrl || c.pageUrl === initialUrl);
   });
 
+  /** The server calls of the SSR request that served the selected page, for the HTTP lint. */
+  readonly renderServerCalls = computed(() => {
+    const id = this.pageRequestId();
+    return id ? this.serverCalls().filter((c) => c.requestId === id) : [];
+  });
+
   readonly timeline = computed(() =>
     [...this.pageServerCalls(), ...(this.selected()?.calls ?? [])].sort((a, b) => b.at - a.at),
   );
@@ -2364,6 +2452,11 @@ export class NetworkInspector {
     () => this.visibleCalls().find((c) => c.id === this.selectedCallId()) ?? null,
   );
 
+  /** The SSR request that served the selected page, for the HAR export. */
+  readonly pageSsrRequest = computed(
+    () => this.requests().find((r) => r.id === this.pageRequestId()) ?? null,
+  );
+
   readonly selectedRequest = computed(
     () => this.requests().find((r) => r.id === this.selectedRequestId()) ?? null,
   );
@@ -2412,6 +2505,8 @@ export class NetworkInspector {
     const status = draft.status.trim() ? Number(draft.status) : body ? 200 : undefined;
     if (status !== undefined && !isHttpRuleStatus(status)) return null;
     if (status === undefined && !delayMs) return null;
+    const chance = chanceOf(draft.chance);
+    if (chance === null) return null;
     return {
       pattern,
       enabled: true,
@@ -2420,6 +2515,7 @@ export class NetworkInspector {
       ...(status !== undefined ? { status } : {}),
       ...(delayMs ? { delayMs } : {}),
       ...(body ? { body } : {}),
+      ...(chance !== undefined ? { chance } : {}),
     };
   });
 
@@ -2434,6 +2530,7 @@ export class NetworkInspector {
     if (this.bodyError()) return '';
     if (draft.status.trim() && !isHttpRuleStatus(Number(draft.status)))
       return 'Pick a status from the list.';
+    if (chanceOf(draft.chance) === null) return 'Chance is a whole percent from 1 to 99.';
     if (!this.draftRule()) return 'Set a status, a delay or a mock body.';
     if (!draft.status.trim() && draft.body.trim())
       return 'With no status, the mock body returns 200.';
@@ -2631,7 +2728,9 @@ export class NetworkInspector {
   }
 
   mocksOnServer(rule: Pick<HttpRule, 'target' | 'status'>): boolean {
-    return rule.target !== 'client' && rule.status !== undefined && rule.status < 400;
+    return (
+      rule.target !== 'client' && rule.status !== undefined && rule.status > 0 && rule.status < 400
+    );
   }
 
   payloadLabel(entry: PayloadEntry): string | null {
@@ -2682,10 +2781,7 @@ export class NetworkInspector {
     event.preventDefault();
     const draft = this.draftRule();
     if (!draft || this.addingRule()) return;
-    const rule: HttpRule = {
-      id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      ...draft,
-    };
+    const rule: HttpRule = { id: newRuleId(), ...draft };
     this.addingRule.set(true);
     const added = await this.saveRules((rules) => [[...rules, rule], rule], 'Rule added.');
     this.addingRule.set(false);
@@ -2693,6 +2789,20 @@ export class NetworkInspector {
       this.draft.set({ ...EMPTY_DRAFT });
       this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus();
     }
+  }
+
+  /** Adds the rules of a built-in preset after the current ones. */
+  async addPreset(id: string) {
+    const added = presetRules(id, newRuleId);
+    if (!added.length) return;
+    if (this.rules().length + added.length > MAX_RULES) {
+      this.message.set(`You can add up to ${MAX_RULES} rules. Remove one to add the preset.`);
+      return;
+    }
+    await this.saveRules(
+      (rules) => [[...rules, ...added], added[0]],
+      `Added ${added.length === 1 ? 'a rule' : `${added.length} rules`} for every browser request.`,
+    );
   }
 
   toggleRule(id: string) {

@@ -98,7 +98,7 @@ Each entry point exports only its documented API. The values below were internal
 | `/http`                        | `MAX_CALLS`, `MAX_DELAY_MS`, `MAX_RULES`, `RULES_STORAGE_KEY`, `claimTransferEntry`, `clientRules`, `decodePayload`, `httpRegistry`, `matchRule`, `pangularHttpInterceptor`, `parseBody`, `resetTransferEntries`, `ruleHasEffect`, `ruleStatus`, `sanitizeCalls`, `sanitizeRules`, `storeRules`, `transferCacheEligible`. Use `providePangularHttp()` or `withPangular()`                     |
 | `/popup`                       | `registerNgrxSignals`. Import it from `/overlay` or `/overlay-manual`                                                                                                                                                                                                                                                                                                                         |
 
-What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PANGULAR_INSPECTORS`, `PANGULAR_LIMITS` and `resolvePangularConfig`. `.` and `/devframe` export the same plus `createPangular`, `initDevframe` and the devframe definition as the default export. `/hub` exports `PANGULAR_HUB_BASE`, `hubEnabled` and `initPangularHub`. `/cli` exports `createPangularCli`, and `/http` exports `providePangularHttp` and `withPangular`. The overlay, Angular Native and NativeScript entries keep their exports.
+What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PANGULAR_INSPECTORS`, `PANGULAR_LIMITS` and `resolvePangularConfig`. `.` and `/devframe` export the same plus `createPangular`, `initDevframe` and the devframe definition as the default export. `/hub` exports `PANGULAR_HUB_BASE`, `hubEnabled` and `initPangularHub`. `/cli` exports `createPangularCli`, `buildReport` and `DEFAULT_REPORT_DIR`, and `/http` exports `providePangularHttp` and `withPangular`. The overlay, Angular Native and NativeScript entries keep their exports.
 
 ### Security
 
@@ -129,23 +129,41 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - New hub options: `enabled`, `allowLan`, `terminals`, `serverPlugins`, `extraDevframes` and `browserDistFolder`. The Vite plugin takes `extraDevframes` too, to mount other devframes on the same hub (#373).
 - Open in editor: <kbd>Alt</kbd>+click a component on the page, or a file and line in the panel.
 - A command palette (<kbd>⌘K</kbd> or <kbd>Ctrl+K</kbd>) with a command for every tab and action.
-- A **Settings** page: theme, hidden, pinned and reordered tabs, passive mode, and a **Browser agents** switch.
+- A **Settings** page: theme, hidden, pinned and reordered tabs, passive mode, a counts launcher, and a **Browser agents** switch.
+- An opt-in counts launcher: the popup's floating button becomes a pill with the render and error counts of the page while the panel is closed. Off by default, turned on in **Settings**.
+- One search field, named **Filter**, on every page, with saved filter chips per view (kept in the browser's `localStorage`).
+- A splitter between the **Injectors** tree and its detail, and between the **NgRx Store** change list and its entry, with the width saved per view.
+- Chrome extension: an **Angular component** pane in the Elements panel that shows the selected element's component, inputs and signals, masked like the panel.
+- Chrome extension: a toolbar button whose popup shows the Angular version, the build, the devtools server and the overlay of the current tab. It asks for `activeTab` and `scripting`, which add no install warning.
+- Chrome extension: a site access page that lists the hosts allowed from the panel, with **Remove**.
+- Chrome extension: apps inside a frame (Storybook, micro-frontend shells) are found. The panel reads that frame and looks for its server on the frame's origin.
 - A splitter for the docked popup, pop-out into its own window, and the `popup.hotkey` option.
 - Item links (`#tab=&id=&page=`) and the `open-in-panel` agent tool.
 - A **Terminals** dock that runs the project's build and test commands (opt in with `terminals: true`).
+- `ng add @pangular-inspector/devtools` wires the devtools in: the Vite plugin for a Vite or Analog app, `initPangularHub()` in an Express `server.ts`, or the standalone CLI steps otherwise, and the overlay in `main.ts` behind `ngDevMode`. It leaves files it does not recognize alone and prints the snippet, and a second run changes nothing (#373).
+- The Vite plugin's `lanAddress` option (off by default) injects the dev server's LAN address as `__PANGULAR_LAN_URL__` into the app and into development builds, so a Capacitor or NativeScript app on a phone finds the devtools. It needs `allowLan` in effect and `server.host` on the network. `lanDevtoolsURL()` reads it, and the NativeScript overlay connects there when no `baseURL` is given (#373).
 - Hub messages and toasts, a dock group with badges, and an **All tools** dock.
 - New entry points: `/overlay-manual` (starts nothing on import), `/plugin`, `/capacitor-hook`, `/store-hook`, `/startup-hook`, `/ssr` and `/cd-data`.
-- New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup` and `plugins`.
+- New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup`, `plugins` and `redaction.entropy`.
+- `limits.cdSlowMs` (default 16 ms) sets when a change detection cycle counts as slow. The recording flags cycles over it, the `change-detection` agent tool counts and marks them, and the panel chart draws its budget line there instead of at a fixed 16.6 ms.
+- `redaction.entropy`, off by default, masks long high-entropy strings that no name or shape rule catches, such as an opaque token in a harmless field. `true` masks runs of 24 characters or more; `{minLength, threshold}` sets other limits. Hex values, UUIDs, ULIDs and camelCase identifiers stay readable, and known shapes keep their prefix. It applies on every redaction path, on the page and on the devtools server, and shows as **Entropy masking** on the Dashboard.
 - After pairing, focus moves to the active tab with a **Connected** note.
 
 #### Inspectors
 
 - **Components:** edit inputs, properties and writable signals; `@for` blocks; directive hosts; hydration status per component with an outline on the page; nested values on demand; console handles; expand all and collapse all.
-- **Change detection:** a per-cycle chart, a flame graph, hook timing, export and import of recordings, flash checks on the page, a Pangular track in the Chrome Performance panel, an Angular profiling toggle, and what triggered each check, with wasted checks, OnPush hints and components that need zone.js.
+- **Components:** **Copy as JSON** (the redacted values the panel shows) and **Copy host path** (a CSS selector for `document.querySelector`) in the detail header; an outline that fades over one second on a value that changed since the last refresh; **Show in Signals** for the component and for each signal property, also as a `#tab=signals&id=` deep link and through `open-in-panel`; and the `@defer` blocks of the selected component's template.
+- **Components:** pick a component with the keyboard: the arrow keys move the highlight through the components on the page and Enter picks, from the panel or the page. Directives show a **Likely** source file from the source scan, matched by class name.
+- **Defer blocks:** a block that hydrated before the devtools attached shows **hydrated before inspection** in the panel and in the `defer-blocks` tool. Each row opens its details: id, state and hydration times, root elements, triggers, its last state transitions, and a link to a hydration mismatch inside it, marked with a **mismatch** badge.
+- **Change detection:** a recording that keeps running when the tab reloads (until **Stop recording**), a **Most often checked** table next to **Slowest components** with class names that select an instance, a per-cycle chart, a flame graph, hook timing, export and import of recordings, flash checks on the page, a Pangular track in the Chrome Performance panel, an Angular profiling toggle, and what triggered each check, with wasted checks, OnPush hints and components that need zone.js.
 - **Leaks:** live subscriptions and effects per component, and components that stay alive after they are destroyed.
 - **Signals:** the live signal graph drawn, watched signals, and links from components to injectors.
 - **Injectors:** a page picker, a created provider's value, startup timing and the slowest providers.
 - **NgRx Store:** full state for every entry still in the log, session export and import, generated tests, and NGXS, Elf and MiniRx through their Redux DevTools integration.
+- **NgRx Store:** the state is a tree with search, **Copy path** and the paths of the newest change marked. Store DevTools gets **Pause recording**, **Jump to committed state**, **Commit**, **Reset…** and **Skip this action** (#368).
+- **NgRx Store:** an **Action frequency** table counts each action, method and write since load, with durations and the peak per second, and flags an effect that dispatches the same action 20 times within a second (#368).
+- **NgRx Store:** the opt-in `ngrx.trace` option records the redacted app frames each change log entry came from, shown as source links in the entry (#368).
+- **NgRx Store:** a signal store that uses `withDevtools()` is watched through `watchState` only, without wrapping its methods or signals (#368).
 - **TanStack Query:** a tab for queries and mutations, with invalidate and refetch.
 - **SSR & HTTP:** the page's own `fetch()` calls next to the `HttpClient` ones (#369), a network waterfall, search and filters on the timeline, response preview format, copy and mock, TransferState keys and edits in SSR overrides, and SSR tracing for fetch handlers such as Hono, h3 and Nitro.
 - **Errors:** a tab for `ErrorHandler` errors, uncaught errors, unhandled rejections and the console, with NG0xxx codes and explainers for NG0100, hydration mismatches and missing providers. **Server errors** lists SSR render errors and Vite transform and compile errors, and `list-server-errors` reads them (#372).
@@ -155,37 +173,85 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
 - **Performance:** a tab for LCP, INP, CLS, FCP and TTFB with the element and component behind each, the slowest interactions and long tasks (#372).
 - **Build:** a tab for the Vite dev server's module graph with its lazy boundaries, and the chunk sizes of the last production build (#372, #373).
+- **Analog:** a request playground with path params, query, headers, cookies, response headers and timing, per-route history and **Copy as curl** or **Copy as fetch**; the Vite transform stack of a page file (**Transform** in **Routes**); a dev server render mode check and a build analysis with chunk sizes per page in **Render**; a frontmatter check against a JSON Schema set in the new `analog.contentSchema` option, the `injectContentFiles` and `injectContent` call sites and a markdown preview in **Content**; a **Data** view with the full `load()` value on demand and the TransferState entries the browser reused or fetched again; and a **Runtime** view with `import.meta.env`, Nitro `runtimeConfig`, the `analog()` options and Nitro plugins, storage and cache entries, with Nitro tasks to run and a cache purge behind `actions.analog` (#369).
+- **Forms:** a **Schema** view of the rules a Signal Form's schema sets on each field; edit a control's value, touched and dirty state in its row of the **Fields** view (behind `actions.forms`); a WebMCP tool's input schema, and **Try this tool** to run it on its form from the panel (`try-webmcp` in `run-form-action`); a form's history exported as a Playwright test from the **Timeline** view and from `export-form` (`format: "playwright"`); timeline origins worked out per form, so typing in one form no longer tags code changes in another form as user; the `missing-autocomplete` and `submit-disabled-while-invalid` accessibility rules in the forms lint; while a WebMCP call's submit runs, only its status and submit outcome is tagged agent, not values app code writes meanwhile.
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
+- **Pipes:** while recording, a pipe that returns an equal result 20 calls in a row is marked **churning**, in the panel and in `explain-pipe`. **Sort pipes** orders the list by calls or by time in `transform`, and **Called while recording** shows only the recorded pipes (#369).
+- **Components:** a **Pipes in template** block lists the pipes the selected component's template uses on the page, and opens one in the **Pipes** tab (#369).
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
+- The server keeps at most 256 KB of JSON for each NgRx store's state. Past it, the largest slices show `[too large: N KB]`, so one huge slice can't fill the server's memory or the panel.
+- `withPangular({ transferCache })` takes Angular's `HttpTransferCacheOptions` and passes them to the transfer cache that `provideClientHydration()` sets up. The SSR & HTTP tab uses them to explain each transfer cache outcome, including a new **Filter** reason.
+- The Dashboard has a **Security** block: whether the one-time code is on or locked, how many trusted tokens there are and when they expire, how many pairing tokens the server accepts, and who may reach the server (reach, allowed origins and hosts). The panel reads it with the `security-status` RPC, which answers trusted clients only and never carries a token or the code.
+- **Injectors:** selecting an element injector reads it again on the page, and **Refresh** in the toolbar reads every injector again. Element injectors are still cached between updates, since reading what they inject is costly.
+- **Injectors:** the Environment view lists lazy route injectors the router already loaded but no rendered element uses, with an **inactive** chip. `inspect-providers` and the `injector-tree` resource mark them `inactive: true`.
+- **Injectors:** a collapsed **Hint** above the live tree lists providers your source declares that nothing on the page injected so far. It is a hint, not an error.
+- **Injectors:** source mode lists `provide*()` calls it can't resolve to tokens, such as your own provider functions, under a collapsed **Helpers (unresolved)** group instead of dropping them. `scan-providers` gives them `type: "helper"`.
+- **Injectors:** each **Injected here** row has a **Resolution** button that draws the lookup path for that token: asked, provides it, not asked, skipped, or the null injector.
+- **Injectors:** live provider rows say where the source scan declares the token, with links.
+- **Injectors:** a truncated tree carries the server's `limits`, and the notice names them.
+- **Signals:** a node's details link it to its declaration in the source scan, or list the candidates when the name matches several.
+- **Signals:** a history entry shows what changed from the entry before, path by path.
+- **Signals:** **Restore** works on writable signal fields (`signal()`, `linkedSignal()`, `model()`) of services in root and route graphs, not on computed ones.
+- **Signals:** hosts with directives but no component have a graph, in the **Graph of** picker and in `inspect-signals`, which also takes an element injector id such as `inj-12`.
+- **Signals:** effect run counts and times, where Angular's profiler reports effect runs. No Angular version up to 22.1 does, so the line stays hidden there.
+- **Signals:** the unnamed signal hint says that the compiler names signals from Angular 20.1.
+
+#### SSR & HTTP tools
+
+- **Live match count in the fault rule form.** Under **URL pattern**, the SSR & HTTP tab says how many of the recorded calls the pattern matches with the chosen method and side, as you type.
+- **Fault rule presets: Offline, Slow 3G and Flaky.** Each adds plain rules for every browser request: a network error, a 2000 ms delay, or a 503 for 30% of requests. Two rule fields make them possible and work on any rule: status `0` fails a request as a network error (an `HttpErrorResponse` with status 0), and `chance` (1 to 99) applies a rule to that share of matching requests. `set-http-rule` takes both.
+- **HAR export.** **Export HAR** in the SSR & HTTP tab saves the timeline as a HAR 1.2 file: the SSR request that served the page, then its server and client calls, with headers and response previews. Values are masked as in the panel.
+- **Copy as fetch and Copy as cURL.** The response preview copies the open call as a `fetch()` statement or a `curl` command, built from the masked copy, so values that match the redaction rules stay `[redacted]`. Check a snippet for other secrets, such as a token in a custom header, before you share it. Nothing is sent.
+- **TransferState payload checks.** The payload section shows the size against a 100 KB budget, the largest entries with size bars, and URLs the transfer cache stored under more than one key. `inspect-transfer-state` adds the same warnings to its key list.
+- **HTTP lint and the `lint-http` agent tool.** A new HTTP lint section flags the same GET fired again within 2000 ms, chains of 3 or more calls that ran one after another and could start together, and server calls the browser made again. `lint-http` returns the same findings with call ids.
+- **A Server-Timing entry per server HttpClient call.** Traced renders add `fetch-1;desc="GET /api/products";dur=12` and so on, for the first 20 calls, so Chrome's Timing tab shows each call. The description is the method and the masked path, without the query.
+- **Calls labeled by the API that likely started them.** The interceptor reads the call stack and tags a call **likely httpResource()**, **likely resource()** or **likely @defer** in the timeline, in `list-http-calls` and in the HAR export. It is a guess from Angular's frame names in development builds.
 
 #### Agents and MCP
 
-- 102 agent tools. New tools include `audit`, `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `list-server-errors`, `web-vitals`, `module-graph`, `chunk-sizes`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
+- 117 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `list-server-errors`, `web-vitals`, `module-graph`, `chunk-sizes`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `load-defer-block` (loads one `@defer` block as if its trigger fired, behind `actions.components`), `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, `ngrx-store-devtools`, `ngrx-explain-change` (#368), the TanStack Query, Capacitor, plugin and NgRx session tools, tools for HTTP fault rules and SSR overrides, and the Analog tools `analog-scan-build`, `analog-scan-nitro`, `analog-purge-nitro-cache`, `analog-run-nitro-task`, `analog-scan-runtime-config`, `analog-inspect-transform` and `analog-inspect-render-mode` (#369).
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.
 - Per-page resource templates and `list_changed` notifications (#417).
+- A `pangular:pipe-usages` resource with the pipes in the source, every template use, and the live pipe usage of the pages (#369).
 - Five MCP prompts for common workflows: `inspect-page`, `debug-error`, `fix-form`, `performance-pass` and `verify-fix` (#416). Server instructions describe the tiers and the tools.
 - Agent skills shipped in the package, installed with `pangular skills install`.
 - Read-only tools for browser agents through WebMCP, off by default (`agent.browserTools`).
 - `pangular mcp --print-config` prints the client config for Claude Code, Cursor and VS Code.
+
+#### Router tools
+
+- **Compare two navigations.** The Routes tab has a **Compare** view, and each navigation a **Compare** button, that list which query params, route params, route data, outlets, components, guard and resolver verdicts and phase timings changed between two recorded navigations. Agents get the same answer from `pangular:diff-navigations`. Each navigation now keeps the routes it activated, with redacted params and data.
+- **Live open redirect check.** A guard, resolver or error handler redirect whose target is the value of a query param, and code that navigates to the value of a return-URL query param, are flagged as they happen: an **open redirect risk** badge in **Navigations**, a warning in the hub's **Messages** dock, a line in `pangular:explain-navigation`, and a `redirect-from-query` lint warning that names the guard or code.
+- **Navigation API and error handler in the router timeline.** Each navigation shows the browser Navigation API event it came with (`push`, `replace`, `reload` or `traverse`, and whether the user started it). Navigation API events the router did not make show as **History changes outside the router** in **Navigations**, `pangular:inspect-route` and `pangular:explain-navigation`, which explains a browser URL that differs from the router's. A `withNavigationErrorHandler()` handler that throws is recorded with its message.
+- **HTTP calls per navigation.** `pangular:explain-navigation` and a new **HTTP calls** button on each navigation list the `HttpClient` calls the SSR & HTTP inspector recorded for it, with status and time: the ones that started while it ran, and the ones that started within 5 seconds after it ended and before the next navigation.
+- **Three router lint rules.** `always-run-parent` flags `runGuardsAndResolvers: 'always'` on a parent route with guards or resolvers. `lazy-component-eager` flags a `loadComponent` route whose component another route already imports eagerly. The `resolver-refetch` rule is a timing heuristic: from the SSR & HTTP inspector's calls, it flags a `GET` the page made while a navigation's resolvers ran and again after the navigation ended, which suggests the routed component fetches what a resolver already loaded. A guard can make the first `GET` too, so the rule does not prove the resolver made it. Turn any of them off with `lint.rules`.
+- **Follow navigations from an agent.** `pangular:follow-navigations` returns the navigations that are new or changed since a cursor, across pages, and can wait up to 30 seconds for the next one, so an agent can follow a login and redirect flow without polling.
+- **What happens if I go to a URL.** The **Config** view has a **What happens** button, and agents a `pangular:preview-navigation` tool, that predict a navigation from the live route config without navigating: the redirects it follows, the route chain and params, and in order the guards, lazy chunks, resolvers and components that run, with each route's source file and the render mode.
 
 #### CLI
 
 - `pangular lint` runs the source lints and prints JSON or SARIF (#418).
 - `pangular skills` lists or installs the bundled agent skills.
 - `pangular dev` takes `--proxy-origin`, `--allowed-origin` and `--auth-token`.
+- `pangular dev --lan-address` prints the server's LAN URL and the `--define` that injects it into a device build. It needs `--host` on the network and changes no access setting (#373).
 - `pangular build` refuses an `--outDir` that would delete files that are not a previous report, unless `--force` is passed.
+- `buildReport()` from `@pangular-inspector/devtools/cli` writes the static report from a script, with the output folder checks of `pangular build`. Unlike `pangular build`, it resolves `outDir` against the working directory, and `config` takes a config object, not a file path.
 - The source scan reads Nx projects.
+- `pangular token --rotate` drops every trusted token of the project and prints a new one-time code from each running server (the CLI, the Vite plugin or the Express hub, several at once when they share the project), which also ends a lock after too many wrong codes. `pangular token` prints how many tokens there are.
+- The CLI start-up output names the NativeScript setup view (`?view=nativescript`) next to the Angular Native one.
 
 ### Performance
 
 - Pages push deltas instead of full snapshots, at most about once a second, and idle pages send only a small heartbeat.
 - NgRx store updates no longer slow down as the store grows (#432).
 - The NgRx collector serializes a signal store or the classic `Store` only when its state, computed values or method stats changed, and the overlay compares a report version instead of the serialized report, so an unchanged store costs no serialization on each check. A change made in place, without a new state object, can show late (#368).
+- The forms collector skips reading and serializing the forms after change detection when nothing changed since the last read (no form event, input, DOM change, WebMCP call or panel action, and the same Signal Form values, errors and root flags), and reads again at least every 5 seconds (#368).
 - Collectors schedule their work outside the Angular zone, so an app that writes a signal or logs during change detection settles again on zone.js.
 - Long lists and trees in the panel render only the visible rows.
+- The pipe source scan behind `scan-pipes`, `explain-pipe`, the pipe lint and the audit keeps each file's result until the file or its `templateUrl` changes, and skips the walk while the Vite watcher saw no change (#369).
 - The agent tool list is much smaller: shorter descriptions, and library tools only for apps that use them.
 
 ### Fixes
@@ -229,14 +295,19 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The **Routes** tab tells screen readers how each outlet in **Outlets** is nested, as it already did for **Active routes** (#370).
 - The **Forms** timeline tags a change as **agent** only when a WebMCP call wrote it, or when it is in the call's own form while the call runs (#368). Typing in any form while a long WebMCP submit is pending is tagged **user**, not **agent**.
 - The **Pipes** tab no longer marks two `| async` usages of a Promise, a Subject, an `asObservable()` view of one or an NgRx store select as duplicates, since their subscribers share one execution (#369). Any other source that two `| async` usages subscribe to shows as **possible duplicate subscription**, and `explain-pipe` says **Possible duplicate subscriptions**, because the page can't see `share()` or `shareReplay()` in a pipe.
+- Recording pipe calls counts a pipe from its first call when it sits in a template branch that renders later, and patches a pipe class that a newly added view brings as soon as the page sees the view, instead of on the next report (#369).
 - Browser DevTools show the app's own line as the caller of a `console` call again. The browser entries ship source maps that list the console tap in `x_google_ignoreList`, so its wrapper frame is skipped (#369).
 - The Angular Native overlay gates the injector profiler like the NativeScript overlay: in a development build with no `window`, importing it defines one until Angular publishes its debug utilities, so the **Providers** lists fill (#371).
+- `record-change-detection` with `record: "start"` passes on why a page that answered could not record, from its capability report: the Angular version it runs, or a profiler hook the recording could not attach to yet. It no longer waits out the 3 seconds and blames the Angular version (#366).
+- `explain-ssr-request` names a hydration mismatch as a component only when the page read its class, and as an element (`<app-card>`) or text node (`#text`) otherwise (#366).
+- Redaction leaks found by a corpus of fake secrets run through every redaction path are closed: a secret pair after another word and a colon (`Error: password: "…"`), the key after `Authorization: ApiKey` in an Analog server body that is not JSON, secret pairs in the fragment or matrix params of an Analog server message, headers with a camelCase secret name such as `newPassword`, and tokens used as NgRx state keys.
 
 ### Docs
 
 - A quick start, and a panel screenshot on every inspector page.
 - Pages for the command palette, settings, terminals, the popup and hub, configuration, other servers (Hono, h3, Fastify), Capacitor, the timeline, errors, audit, TanStack Query, agent skills, browser agents and writing a plugin.
 - A roadmap page.
+- The Capacitor and NativeScript guides show the Android network security config and the iOS App Transport Security and local network settings a device needs to reach the devtools over the LAN (#373).
 - The Express and other servers pages say which port the WebSocket side-car uses (the first free one from 9777), how to pin it with `ws: {port}`, and how to serve the socket on the app's own server with `attach(server)` (#426).
 - A **Renamed tools** table in the agent tools page, and the public API and the supported versions in the publishing guide.
 - Corrected guides and samples from the readiness review: the Vite auth default in the Analog guide and the glossary, JSON samples without a path comment, no separate devframe install in the package README, and `ws: false` for a panel-only devframe host.

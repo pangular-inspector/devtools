@@ -1,4 +1,5 @@
 import { redactCredentials } from './credential-redact.ts';
+import { redactHighEntropy } from './entropy-redact.ts';
 import { REDACTED, isRedactedKey, redactJwt, wordsOf } from './forms-privacy.ts';
 
 /**
@@ -166,6 +167,14 @@ type PairReplacer = (
  * strong secret name also takes the rest of its token (`=`) or line (`:`),
  * so a separator inside a password doesn't leave its tail readable.
  */
+/** A pair value that is one key name and its `:` or `=`, read again as the next pair. */
+const NEXT_KEY_VALUE = /^[\w$%.[\]-]+[:=]$/;
+/**
+ * A pair value that is a chain of key names (`context:password:`), the last one
+ * possibly ending in `=` (`context:password=`).
+ */
+const KEY_CHAIN_VALUE = /^(?:[\w$%.[\]-]+:)+[\w$%.[\]-]*[:=]$/;
+
 function replacePairs(text: string, pair: PairReplacer): string {
   const re = new RegExp(TEXT_PAIR.source, TEXT_PAIR.flags);
   let out = '';
@@ -184,6 +193,30 @@ function replacePairs(text: string, pair: PairReplacer): string {
       const tail = (eq.trim() === ':' ? STRONG_TAIL_COLON : STRONG_TAIL_EQ).exec(text.slice(end));
       // Punctuation that ends the sentence or the list stays: `(api_key=x, user=7)`.
       end += (tail?.[0] ?? '').replace(TRAILING_PUNCTUATION, '').length;
+    }
+    // A value that is itself the next key (`Error: password: "x"` reads `password:` as the
+    // value of `Error`) is read again from its start, so that pair is found too. A `key=`
+    // value counts only after `: ` with a space, so `xmlns:auth="urn:a"` stays one name.
+    // For a chain such as `context:password:` only its last key is read again, so a chain
+    // like `a:a:a:` is skipped in one step and the scan stays linear.
+    // A chain ending in `=` counts when a space follows (`context:password= "x"`) or when its
+    // last key is a strong secret name outside an XML namespace (`context:password="x"`), so
+    // `xmlns:auth="urn:a"` stays one attribute.
+    const chainKey = value.slice(value.lastIndexOf(':', value.length - 2) + 1, -1);
+    const chain =
+      !NEXT_KEY_VALUE.test(value) &&
+      KEY_CHAIN_VALUE.test(value) &&
+      (value.endsWith(':') ||
+        /\s/.test(text.charAt(at + match.length)) ||
+        (!/^xmlns:/i.test(value) && isStrongSecretKey(decode(chainKey))));
+    const nextKey = chain || (NEXT_KEY_VALUE.test(value) && (value.endsWith(':') || /\s/.test(eq)));
+    if (replaced === match && value && !/^["']/.test(value) && nextKey) {
+      const lastKey = chain ? value.lastIndexOf(':', value.length - 2) + 1 : 0;
+      const valueAt = at + match.length - value.length + lastKey;
+      out += text.slice(last, valueAt);
+      last = valueAt;
+      re.lastIndex = valueAt;
+      continue;
     }
     out += text.slice(last, at) + replaced;
     last = end;
@@ -265,6 +298,8 @@ export function redactText(
       out = out.split(form).join(REDACTED);
     }
   }
+  // Opt-in (`redaction.entropy`), after every named rule, so a known shape keeps its prefix.
+  out = redactHighEntropy(out, REDACTED);
   // After the known secrets, so an address can't swallow the start of one and leave the rest readable.
   return mode === 'url' ? maskEmails(out) : out;
 }

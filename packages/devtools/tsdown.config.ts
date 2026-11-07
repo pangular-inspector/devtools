@@ -59,4 +59,23 @@ export const nodeConfig = {
   },
 } satisfies UserConfig;
 
-export default defineConfig([browserConfig, nodeConfig]);
+/**
+ * The `ng add` schematic, as CommonJS: the Angular CLI loads schematic
+ * factories with `require()`. Its JSON files are copied next to it, and
+ * `schematics` in `package.json` points at the collection.
+ */
+export const schematicsConfig = {
+  name: 'schematics',
+  entry: { 'schematics/ng-add/index': 'src/schematics/ng-add/index.ts' },
+  format: 'cjs',
+  platform: 'node',
+  dts: false,
+  external: [/^@angular-devkit\//],
+  outExtensions: () => ({ js: '.cjs' }),
+  copy: (resolved) => [
+    { from: 'src/schematics/collection.json', to: `${resolved.outDir}/schematics` },
+    { from: 'src/schematics/ng-add/schema.json', to: `${resolved.outDir}/schematics/ng-add` },
+  ],
+} satisfies UserConfig;
+
+export default defineConfig([browserConfig, nodeConfig, schematicsConfig]);

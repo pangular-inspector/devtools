@@ -28,6 +28,7 @@ import { createSsrMiddleware } from './ssr-middleware.ts';
 import { releaseServerState } from './server-state.ts';
 import { disabledHub, hubEnabled, type PangularHub } from './hub-off.ts';
 import { hubStorageDir } from './auth-store.ts';
+import type { PangularSecurityHost } from './security-status.ts';
 import pkg from '../package.json' with { type: 'json' };
 
 export const PANGULAR_HUB_BASE = DEVFRAMES_HUB_BASE;
@@ -178,7 +179,10 @@ function hubMcpFor(options: {
  * @internal
  */
 export function startPangularHub(
-  options: Omit<PangularHubOptions, 'enabled' | 'allowLan'> = {},
+  options: Omit<PangularHubOptions, 'enabled' | 'allowLan'> & {
+    /** How the caller lets clients in, for the Dashboard's security status. */
+    security?: PangularSecurityHost;
+  } = {},
   gate?: HubOriginPolicy,
 ): PangularHub {
   const {
@@ -187,6 +191,7 @@ export function startPangularHub(
     terminals: terminalsOn,
     serverPlugins,
     extraDevframes,
+    security,
     ...hubOptions
   } = options;
   const { config, rest: picked } = pickPangularConfig(hubOptions);
@@ -214,7 +219,7 @@ export function startPangularHub(
     allowedOrigins: hubAllowedOrigins(rest.allowedOrigins),
     mcp: pangularMcp(hubMcpFor({ ...rest, auth }), resolvePangularConfig(config)),
     devframes: [
-      createPangular(config, { authTokens, serverPlugins }),
+      createPangular(config, { authTokens, serverPlugins, security }),
       ...extraDevframesOf(extraDevframes),
     ],
     ui: hubUi(),
@@ -377,5 +382,14 @@ export function initPangularHub(options: PangularHubOptions = {}): PangularHub {
     originCheckOff: hubOptions.allowedOrigins === false,
     remote,
   });
-  return startPangularHub({ ...hubOptions, terminals: terminalsOn }, policy);
+  const origins = hubOptions.allowedOrigins;
+  const security: PangularSecurityHost = {
+    auth: authOn,
+    originCheck: origins !== false,
+    allowedOrigins: Array.isArray(origins) ? origins : [],
+    customOrigins: !!origins && !Array.isArray(origins),
+    // Without the origin check there is no gate, so other machines get answers too.
+    network: remote || origins === false,
+  };
+  return startPangularHub({ ...hubOptions, terminals: terminalsOn, security }, policy);
 }

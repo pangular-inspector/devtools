@@ -17,7 +17,7 @@ Read `docs/contributing/ui-guidelines.md` first; it is the source of truth for t
 - Styles are SCSS in the component `styles` field, starting with `@use 'mixins' as m;`.
 - Colors only through CSS variables (`--surface`, `--text-2`, `--accent`, ...). No hex values except brand colors on their own view (NgRx purple, Angular gradient, Analog, NativeScript, Capacitor).
 - Controls are `var(--control-h)` tall. Use `app/src/ui/select.ts` for every dropdown; never a native `<select>`.
-- Page structure: intro line, sticky toolbar (search with icon and `Escape` to clear, filters, count, actions), content (list or tree plus sticky detail on wide screens), and loading, error with Retry, empty and no-match states.
+- Page structure: intro line, sticky toolbar (`app/src/ui/search-field.ts` named "Filter", filters, count, actions), content (list or tree plus sticky detail on wide screens), and loading, error with Retry, empty and no-match states.
 - Headings start at `h2` and never skip a level. Section labels use `m.label`.
 - Rows are keyboard reachable (buttons or ARIA tree items with arrow keys). Selection is keyed by stable ids from the page.
 - Rows that map to an element in the app call `request-page-highlight` on hover and focus, and clear it on leave and blur.

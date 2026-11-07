@@ -54,7 +54,8 @@ describe('FormsTimeline filters', () => {
   it('labels the path filter and the event type select', async () => {
     const fixture = await setup(EVENTS);
     const input = root(fixture).querySelector('input[type="search"]')!;
-    expect(input.getAttribute('aria-label')).toBe('Filter by field path');
+    expect(input.getAttribute('aria-label')).toBe('Filter');
+    expect(input.getAttribute('placeholder')).toBe('Filter by field path');
     const select = root(fixture).querySelector('button[role="combobox"]')!;
     expect(select.getAttribute('aria-label')).toBe('Event type');
     expect(total(fixture)).toBe('6 events');
@@ -114,7 +115,10 @@ describe('FormsTimeline filters', () => {
 
   it('announces the count when a filter changes, not on every new event', async () => {
     const fixture = await setup(EVENTS);
-    const status = () => root(fixture).querySelector('[role="status"]')?.textContent?.trim();
+    const status = () =>
+      [...root(fixture).querySelectorAll('[role="status"]')]
+        .find((e) => !e.closest('app-search-field'))
+        ?.textContent?.trim();
     expect(root(fixture).querySelector('.total')?.hasAttribute('aria-live')).toBe(false);
     await typePath(fixture, 'name');
     const filtered = status();

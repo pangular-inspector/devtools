@@ -98,6 +98,23 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+describe('StoreInspector change list splitter', () => {
+  it('sizes the change list from the splitter before it, with the arrow keys', async () => {
+    localStorage.removeItem('pangular-pref:pane:store-log');
+    const { fixture } = await mount([entry(1)]);
+    const bar = root(fixture).querySelector<HTMLElement>('.log-layout > app-splitter')!;
+    expect(bar.getAttribute('role')).toBe('separator');
+    expect(bar.getAttribute('aria-label')).toBe('Resize the change list');
+    const layout = root(fixture).querySelector<HTMLElement>('.log-layout')!;
+    expect(layout.style.getPropertyValue('--log-list-size')).toBe('300px');
+    bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await settle(fixture);
+    expect(layout.style.getPropertyValue('--log-list-size')).toBe('316px');
+    expect(localStorage.getItem('pangular-pref:pane:store-log')).toBe('316');
+    localStorage.removeItem('pangular-pref:pane:store-log');
+  });
+});
+
 describe('StoreInspector dispatch', () => {
   it('suggests action types from source and the log, and dispatches the typed action', async () => {
     const { fixture, calls } = await mount([entry(1)], () =>
@@ -231,11 +248,10 @@ describe('StoreInspector copy', () => {
 
   it('copies the formatted state shown in the panel', async () => {
     const { fixture } = await mount([]);
-    const shown = root(fixture).querySelector('pre.tree')!.textContent;
+    expect(root(fixture).querySelector('app-state-tree .tree')!.textContent).toContain('items');
     copyButton(fixture, 'Copy state')!.click();
     await settle(fixture);
-    expect(copied).toEqual([shown]);
-    expect(copied[0]).toBe('{\n  items: []\n}');
+    expect(copied).toEqual(['{\n  items: []\n}']);
     expect(message(fixture)).toBe('Copied.');
   });
 

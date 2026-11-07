@@ -62,6 +62,7 @@ export const PANGULAR_LIMITS = {
   httpCalls: { default: 200, min: 10, max: 2000 },
   changeLog: { default: 200, min: 10, max: 2000 },
   cdCycles: { default: 200, min: 10, max: 2000 },
+  cdSlowMs: { default: 16, min: 1, max: 1000 },
   capacitorCalls: { default: 200, min: 10, max: 2000 },
   idleAfterMs: { default: 60_000, min: 0, max: 600_000 },
 } as const;
@@ -80,13 +81,19 @@ export const CACHE_SKIP_TEXT = {
   'set-cookie': 'the response sets a cookie',
   error: 'failed responses are not stored',
   mocked: 'a fault rule answered before the transfer cache ran',
+  filter: 'the transferCache filter passed to withPangular() left it out',
   'cache-off-or-filter':
     'the transfer cache is off, or its filter (or another withHttpTransferCacheOptions setting) left it out',
 } as const;
 
 export type CacheSkip = keyof typeof CACHE_SKIP_TEXT;
 
+/**
+ * The statuses a fault rule can answer with. `0` fails the request the way a
+ * dropped connection does: an `HttpErrorResponse` with status 0.
+ */
 export const HTTP_RULE_STATUSES: readonly (readonly [status: number, reason: string])[] = [
+  [0, 'Network error (offline)'],
   [200, 'OK'],
   [201, 'Created'],
   [202, 'Accepted'],
@@ -156,6 +163,17 @@ export function isHttpRuleStatus(status: unknown): status is number {
   return HTTP_RULE_STATUSES.some(([code]) => code === status);
 }
 
+/** A rule status that fails the request: a network error (0) or 400 and up. */
+export function isFailingRuleStatus(status: number): boolean {
+  return status === 0 || status >= 400;
+}
+
+/** The share of matching requests a fault rule with `chance` applies to, in percent. */
+export const HTTP_RULE_CHANCE: { readonly min: number; readonly max: number } = {
+  min: 1,
+  max: 99,
+};
+
 /**
  * Options shared by `initPangularHub()`, the Vite plugin and
  * `createPangular()`. Everything is on when left out.
@@ -188,6 +206,14 @@ export interface PangularConfig {
     secretNames?: string[];
     /** Field names to show even when they look secret, like `window.__PANGULAR_FORMS__.unmask`. */
     unmask?: string[];
+    /**
+     * Also mask high-entropy strings that no name or shape rule catches, such
+     * as an opaque token in a harmless-looking field. Off by default. Hex
+     * values (hashes, UUIDs), ULIDs and camelCase identifiers stay readable.
+     * `true` uses runs of 24 characters or more and 4.5 bits per character;
+     * an object sets `minLength` (16 to 512) and `threshold` (2 to 6 bits).
+     */
+    entropy?: boolean | { minLength?: number; threshold?: number };
   };
   limits?: {
     /**
@@ -206,6 +232,12 @@ export interface PangularConfig {
     changeLog?: number;
     /** Change detection cycles kept per page while recording. Default 200. */
     cdCycles?: number;
+    /**
+     * A change detection cycle longer than this, in ms, counts as slow: the
+     * recording flags it and the chart draws it over the line. Default 16
+     * (about one frame at 60 frames per second), from 1 to 1000.
+     */
+    cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
     /**
@@ -236,6 +268,24 @@ export interface PangularConfig {
     /** Rule status by rule name. `false` turns the rule off; `true` or omitted keeps it on. */
     rules?: Record<string, boolean>;
   };
+  analog?: {
+    /**
+     * A JSON Schema file, relative to the Analog project root, that the
+     * frontmatter of every markdown file under `src/content` must match, such
+     * as `content.schema.json`. The Content tab and `analog-lint` report the
+     * files that don't. Left out, the frontmatter is only checked for syntax.
+     */
+    contentSchema?: string;
+  };
+  ngrx?: {
+    /**
+     * Record where each NgRx change log entry came from: the app frames of the
+     * dispatch, method call or `patchState`, with origins and query strings
+     * removed and secrets masked. Off by default, since taking a stack on every
+     * write costs time.
+     */
+    trace?: boolean;
+  };
 }
 
 /** What a `plugins` entry can turn off; each is on when left out. */
@@ -265,7 +315,8 @@ export interface ResolvedPangularConfig {
     browserTools: boolean;
   };
   actions: Record<PangularAction, boolean>;
-  redaction: { secretNames: string[]; unmask: string[] };
+  /** `entropy` is set only when it is on, so a default config keeps its two lists. */
+  redaction: { secretNames: string[]; unmask: string[]; entropy?: EntropyOptions };
   limits: Record<PangularLimit, number>;
   popup: { hotkey: string | false };
   /** The `plugins` entries that were given, by plugin id. */
@@ -273,6 +324,9 @@ export interface ResolvedPangularConfig {
   lint: {
     rules: Record<string, boolean>;
   };
+  /** `contentSchema` is left out when it is not set. */
+  analog: { contentSchema?: string };
+  ngrx: { trace: boolean };
 }
 
 /** The switches of one plugin under `config`, whether or not it has a `plugins` entry. */
@@ -429,6 +483,7 @@ export function enabledPanelTabs(config: ResolvedPangularConfig): (typeof PANEL_
 export const PANEL_LINK_ITEMS: Partial<Record<PanelTab, string>> = {
   components: 'a component instance, by its id in the component tree',
   injectors: "a component's element injector, by the component's id",
+  signals: "a component's signal graph, by the component's id",
   forms: 'a form, by its id',
 };
 
@@ -574,6 +629,72 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
+// `redaction.entropy`. Defined here rather than in `entropy-redact.ts`, since
+// the panel type-checks this file, which has no imports.
+
+/** How `redaction.entropy` judges a run, once it is on. */
+export interface EntropyOptions {
+  /** Shortest run that can be masked. */
+  minLength: number;
+  /** The most bits per character a run needs, however long it is. */
+  threshold: number;
+}
+
+/** `redaction.entropy: true`. */
+export const ENTROPY_DEFAULTS: Readonly<EntropyOptions> = Object.freeze({
+  minLength: 24,
+  threshold: 4.5,
+});
+
+/** The `minLength` values `redaction.entropy` takes: whole numbers in this range. */
+export const ENTROPY_MIN_LENGTH = { min: 16, max: 512 } as const;
+/**
+ * The `threshold` values it takes, in bits per character. Six bits is the most
+ * a run over the base64 alphabet can have.
+ */
+export const ENTROPY_THRESHOLD = { min: 2, max: 6 } as const;
+
+/** Whether `value` is a usable `minLength`. */
+export function validEntropyMinLength(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= ENTROPY_MIN_LENGTH.min &&
+    value <= ENTROPY_MIN_LENGTH.max
+  );
+}
+
+/** Whether `value` is a usable `threshold`. */
+export function validEntropyThreshold(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= ENTROPY_THRESHOLD.min &&
+    value <= ENTROPY_THRESHOLD.max
+  );
+}
+
+/**
+ * The options a `redaction.entropy` value turns on, or `undefined` while it
+ * is off: `true` and an object turn it on, anything else leaves it off. A
+ * field that is missing or out of range takes its default.
+ */
+export function resolveEntropy(value: unknown): EntropyOptions | undefined {
+  if (value === true) return { ...ENTROPY_DEFAULTS };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { minLength, threshold } = value as { minLength?: unknown; threshold?: unknown };
+  return {
+    minLength: validEntropyMinLength(minLength) ? minLength : ENTROPY_DEFAULTS.minLength,
+    threshold: validEntropyThreshold(threshold) ? threshold : ENTROPY_DEFAULTS.threshold,
+  };
+}
+
+/** `{entropy}` when `redaction.entropy` turns it on, `{}` while it is off. */
+function entropyOf(value: unknown): { entropy?: EntropyOptions } {
+  const entropy = resolveEntropy(value);
+  return entropy ? { entropy } : {};
+}
+
 function flag(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
@@ -651,6 +772,7 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
     redaction: {
       secretNames: names(redaction['secretNames']),
       unmask: names(redaction['unmask']),
+      ...entropyOf(redaction['entropy']),
     },
     limits: Object.fromEntries(
       (Object.keys(PANGULAR_LIMITS) as PangularLimit[]).map((key) => [
@@ -661,7 +783,18 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
     popup: { hotkey: popupHotkey(record(input['popup'])['hotkey']) },
     plugins: pluginEntries(input['plugins']),
     lint: { rules: lintRules(input['lint']) },
+    analog: analogOptions(input['analog']),
+    ngrx: { trace: flag(record(input['ngrx'])['trace'], false) },
   };
+}
+
+const MAX_SCHEMA_PATH = 500;
+
+function analogOptions(value: unknown): { contentSchema?: string } {
+  const schema = record(value)['contentSchema'];
+  return typeof schema === 'string' && schema.trim() && schema.length <= MAX_SCHEMA_PATH
+    ? { contentSchema: schema.trim() }
+    : {};
 }
 
 const MAX_LINT_RULE_ENTRIES = 200;
@@ -745,6 +878,11 @@ function describe(value: unknown): string {
   return typeof value === 'string' ? `the string ${JSON.stringify(value)}` : `a ${typeof value}`;
 }
 
+/** A number as it was written, anything else as `describe()` names it. */
+function shown(value: unknown): string {
+  return typeof value === 'number' ? String(value) : describe(value);
+}
+
 const CONFIG_KEYS = [
   'inspectors',
   'agent',
@@ -754,6 +892,8 @@ const CONFIG_KEYS = [
   'popup',
   'plugins',
   'lint',
+  'analog',
+  'ngrx',
 ] as const;
 
 /**
@@ -807,7 +947,27 @@ export function pangularConfigProblems(config: unknown): string[] {
       booleans('actions', actions, PANGULAR_ACTIONS, 'allowed');
     }
   }
-  const redaction = object('redaction', input['redaction'], ['secretNames', 'unmask']);
+  const redaction = object('redaction', input['redaction'], ['secretNames', 'unmask', 'entropy']);
+  const entropy = redaction['entropy'];
+  if (entropy !== undefined && typeof entropy !== 'boolean') {
+    if (!isRecord(entropy)) {
+      problems.push(
+        `\`redaction.entropy\` should be true, false or an object, got ${describe(entropy)}. It was ignored, so it is off.`,
+      );
+    } else {
+      const fields = object('redaction.entropy', entropy, ['minLength', 'threshold']);
+      if (fields['minLength'] !== undefined && !validEntropyMinLength(fields['minLength'])) {
+        problems.push(
+          `\`redaction.entropy.minLength\` should be a whole number from ${ENTROPY_MIN_LENGTH.min} to ${ENTROPY_MIN_LENGTH.max}, got ${shown(fields['minLength'])}. It uses ${ENTROPY_DEFAULTS.minLength}.`,
+        );
+      }
+      if (fields['threshold'] !== undefined && !validEntropyThreshold(fields['threshold'])) {
+        problems.push(
+          `\`redaction.entropy.threshold\` should be a number of bits from ${ENTROPY_THRESHOLD.min} to ${ENTROPY_THRESHOLD.max}, got ${shown(fields['threshold'])}. It uses ${ENTROPY_DEFAULTS.threshold}.`,
+        );
+      }
+    }
+  }
   for (const key of ['secretNames', 'unmask'] as const) {
     const value = redaction[key];
     if (value === undefined) continue;
@@ -890,6 +1050,20 @@ export function pangularConfigProblems(config: unknown): string[] {
       }
     }
   }
+  const analog = object('analog', input['analog'], ['contentSchema']);
+  const contentSchema = analog['contentSchema'];
+  if (
+    contentSchema !== undefined &&
+    (typeof contentSchema !== 'string' ||
+      !contentSchema.trim() ||
+      contentSchema.length > MAX_SCHEMA_PATH)
+  ) {
+    problems.push(
+      `\`analog.contentSchema\` should be the path of a JSON Schema file, got ${describe(contentSchema)}. It was ignored.`,
+    );
+  }
+  const ngrx = object('ngrx', input['ngrx'], ['trace']);
+  boolean('ngrx.trace', ngrx['trace'], 'off');
   return problems;
 }
 
@@ -924,8 +1098,60 @@ export function configFromConnection(
 export function pickPangularConfig<T extends PangularConfig>(
   options: T,
 ): { config: PangularConfig; rest: Omit<T, keyof PangularConfig> } {
-  const { inspectors, agent, actions, redaction, limits, popup, plugins, lint, ...rest } = options;
-  return { config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint }, rest };
+  const {
+    inspectors,
+    agent,
+    actions,
+    redaction,
+    limits,
+    popup,
+    plugins,
+    lint,
+    analog,
+    ngrx,
+    ...rest
+  } = options;
+  return {
+    config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint, analog, ngrx },
+    rest,
+  };
+}
+
+/**
+ * The `lanAddress` option of the Vite plugin and `--lan-address` of `pangular dev`: off (the
+ * default), on with the machine's own LAN address, or on with the IPv4 address given.
+ */
+export type LanAddressOption = boolean | string;
+
+/** `lanAddress` once read: off, or on with the address to use when one was given. */
+export type ResolvedLanAddress = { on: false } | { on: true; address?: string };
+
+// No leading zeros: `010.0.0.1` would read as octal in some tools, and `00.0.0.0` would dodge the unspecified check.
+const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+/**
+ * Reads `lanAddress`. Anything but `true` or a network IPv4 address, such as `192.168.1.20`,
+ * leaves it off with a warning: a loopback or unspecified address is no LAN address.
+ */
+export function resolveLanAddress(
+  value: unknown,
+  warn: (message: string) => void = () => undefined,
+): ResolvedLanAddress {
+  if (value === undefined || value === false) return { on: false };
+  if (value === true) return { on: true };
+  if (typeof value === 'string' && IPV4.test(value)) {
+    if (value.startsWith('127.') || value === '0.0.0.0') {
+      warn(
+        `[pangular] Ignoring lanAddress: ${value} is not a network address. Pass true, or your machine's LAN address such as 192.168.1.20.`,
+      );
+      return { on: false };
+    }
+    return { on: true, address: value };
+  }
+  warn(
+    `[pangular] Ignoring lanAddress: got ${describe(value)}. Pass true, or your machine's LAN address such as 192.168.1.20.`,
+  );
+  return { on: false };
 }
 
 /** Form actions that work without a `formId`: they act on the page, not on one form. */
@@ -951,6 +1177,7 @@ export const FORM_WRITE_ACTIONS: readonly string[] = [
   'disable',
   'submit',
   'restore',
+  'try-webmcp',
 ];
 
 /** Router actions that start, stop, repeat or probe a navigation. */
@@ -1026,6 +1253,13 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'inspect-component': { kind: 'tool', inspectors: ['components'], page: true },
   'list-components': { kind: 'tool', inspectors: ['components'], page: true },
   'defer-blocks': { kind: 'tool', inspectors: ['components'], page: true },
+  'load-defer-block': {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    actions: ['components'],
+    page: true,
+  },
   'for-blocks': { kind: 'tool', inspectors: ['components'], page: true },
   hydration: { kind: 'tool', inspectors: ['components'], page: true },
   'change-detection': { kind: 'tool', inspectors: ['components'], page: true },
@@ -1097,6 +1331,16 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
     actions: ['ngrx'],
     page: true,
   },
+  // Toggle, jump, commit, reset and pause in the Store DevTools history.
+  // Destructive: commit and reset erase the history they act on.
+  'ngrx-store-devtools': {
+    kind: 'tool',
+    inspectors: ['ngrx'],
+    safety: 'destructive',
+    actions: ['ngrx'],
+    page: true,
+  },
+  'ngrx-explain-change': { kind: 'tool', inspectors: ['ngrx'], page: true },
   'redux-inspect-stores': { kind: 'tool', inspectors: ['ngrx'], page: true },
 
   // tanstackQuery
@@ -1142,6 +1386,9 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   router: { kind: 'resource', inspectors: ['router'], page: true },
   'inspect-route': { kind: 'tool', inspectors: ['router'], page: true },
   'explain-navigation': { kind: 'tool', inspectors: ['router'], page: true },
+  'diff-navigations': { kind: 'tool', inspectors: ['router'], page: true },
+  'follow-navigations': { kind: 'tool', inspectors: ['router'], page: true },
+  'preview-navigation': { kind: 'tool', inspectors: ['router'], page: true },
   'list-routes': { kind: 'tool', inspectors: ['router'], page: true },
   'lint-routes': { kind: 'tool', inspectors: ['router'], page: true },
   'router-config': { kind: 'tool', inspectors: ['router'], page: true },
@@ -1169,11 +1416,14 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'scan-pipe-usage': { kind: 'tool', inspectors: ['pipes'] },
   'explain-pipe': { kind: 'tool', inspectors: ['pipes'] },
   'record-pipes': { kind: 'tool', inspectors: ['pipes'], safety: 'action', page: true },
+  'suggest-pipe-migrations': { kind: 'tool', inspectors: ['pipes'] },
+  'pipe-usages': { kind: 'resource', inspectors: ['pipes'] },
 
   // http
   'list-ssr-requests': { kind: 'tool', inspectors: ['http'], page: true },
   'explain-ssr-request': { kind: 'tool', inspectors: ['http'], page: true },
   'list-http-calls': { kind: 'tool', inspectors: ['http'], page: true },
+  'lint-http': { kind: 'tool', inspectors: ['http'], page: true },
   'list-http-rules': { kind: 'tool', inspectors: ['http'], page: true },
   'set-http-rule': {
     kind: 'tool',
@@ -1225,6 +1475,27 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'analog-scan-prerender': { kind: 'tool', inspectors: ['analog'] },
   'analog-scan-content': { kind: 'tool', inspectors: ['analog'] },
   'analog-lint': { kind: 'tool', inspectors: ['analog'] },
+  'analog-scan-build': { kind: 'tool', inspectors: ['analog'] },
+  'analog-scan-nitro': { kind: 'tool', inspectors: ['analog'] },
+  // Deletes Nitro cache entry files on disk.
+  'analog-purge-nitro-cache': {
+    kind: 'tool',
+    inspectors: ['analog'],
+    safety: 'destructive',
+    actions: ['analog'],
+  },
+  'analog-scan-runtime-config': { kind: 'tool', inspectors: ['analog'] },
+  // Runs a project task on the dev server; it can change data.
+  'analog-run-nitro-task': {
+    kind: 'tool',
+    inspectors: ['analog'],
+    safety: 'action',
+    actions: ['analog'],
+    page: true,
+  },
+  // Both ask the running Vite dev server.
+  'analog-inspect-transform': { kind: 'tool', inspectors: ['analog'], page: true },
+  'analog-inspect-render-mode': { kind: 'tool', inspectors: ['analog'], page: true },
 
   // http, router and analog: erases what the three inspectors record.
   'clear-recordings': {
@@ -1320,9 +1591,10 @@ export function actionBlockedMessage(action: PangularAction): string {
   const what = {
     forms: 'Writing to forms',
     router: 'Navigating and clearing navigations',
-    ngrx: 'Restoring NgRx state and dispatching actions',
+    ngrx: 'Restoring NgRx state, dispatching actions and changing the Store DevTools history',
     http: 'Changing HTTP mock rules and SSR overrides, and clearing HTTP calls',
-    analog: 'Calling API routes and clearing server calls',
+    analog:
+      'Calling API routes, clearing server calls, running Nitro tasks and purging the Nitro cache',
     components: 'Editing component properties and signals',
     tanstackQuery: 'Invalidating and refetching TanStack queries',
     plugins: 'Running plugin actions',
@@ -1371,6 +1643,8 @@ export const SHARED_RPC: readonly string[] = [
   'audit-session',
   'request-axe-run',
   'axe-result',
+  // Auth and access settings for the Dashboard, for trusted clients; no inspector owns them.
+  'security-status',
 ];
 
 /**
@@ -1401,11 +1675,13 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'select-component': 'components',
   'request-component-pick': 'components',
   'cancel-component-pick': 'components',
+  'request-component-pick-move': 'components',
   'component-pick-result': 'components',
   'request-page-highlight': 'components',
   'component-screenshot-result': 'components',
   'request-component-edit': 'components',
   'component-edit-result': 'components',
+  'defer-load-result': 'components',
   'request-hydration-overlay': 'components',
   'request-component-value': 'components',
   'component-value-result': 'components',
@@ -1436,6 +1712,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'request-ngrx-history': 'ngrx',
   'import-ngrx-session': 'ngrx',
   'request-provider-value': 'injectors',
+  'request-injector-refresh': 'injectors',
   'provider-value-result': 'injectors',
   'push-redux-stores': 'ngrx',
   'forget-redux-stores-page': 'ngrx',
@@ -1460,6 +1737,9 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'router-lint': 'router',
   'router-match': 'router',
   'router-export': 'router',
+  'router-diff': 'router',
+  'router-http': 'router',
+  'router-preview': 'router',
   'forget-router-page': 'router',
   'clear-router-navigations': 'router',
   'get-pipes': 'pipes',
@@ -1491,6 +1771,16 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'analog-render': 'analog',
   'analog-text': 'analog',
   'analog-call-api': 'analog',
+  'analog-content-preview': 'analog',
+  'analog-transform': 'analog',
+  'analog-build': 'analog',
+  'analog-nitro': 'analog',
+  'analog-nitro-purge': 'analog',
+  'analog-run-nitro-task': 'analog',
+  'analog-runtime-config': 'analog',
+  'analog-render-check': 'analog',
+  'analog-load-data': 'analog',
+  'analog-load-data-result': 'analog',
   'push-plugins': 'plugins',
   'forget-plugins-page': 'plugins',
   'request-plugin-action': 'plugins',
@@ -1782,7 +2072,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
 const ACTION_LABEL: Record<PangularAction, string> = {
   forms: 'Form writes',
   router: 'Navigation',
-  ngrx: 'NgRx restore and dispatch',
+  ngrx: 'NgRx restore, dispatch and Store DevTools',
   http: 'HTTP mocking',
   analog: 'Analog API calls',
   components: 'Component edits',
@@ -1797,10 +2087,24 @@ const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
   httpCalls: (value) => `${value} HTTP calls`,
   changeLog: (value) => `${value} NgRx changes`,
   cdCycles: (value) => `${value} change detection cycles`,
+  cdSlowMs: (value) => `slow cycles over ${value} ms`,
   capacitorCalls: (value) => `${value} Capacitor plugin calls`,
   idleAfterMs: (value) =>
     value ? `idle ${value / 1000} s after the last agent call` : 'never idle',
 };
+
+/** `On`, with the options that differ from `redaction.entropy: true`, or nothing while it is off. */
+function entropySummary(entropy: EntropyOptions | undefined): string[] {
+  if (!entropy) return [];
+  const parts = ['On'];
+  if (entropy.minLength !== ENTROPY_DEFAULTS.minLength) {
+    parts.push(`${entropy.minLength} characters or more`);
+  }
+  if (entropy.threshold !== ENTROPY_DEFAULTS.threshold) {
+    parts.push(`up to ${entropy.threshold} bits per character`);
+  }
+  return parts;
+}
 
 /** The options that differ from the defaults, as label and value pairs. Empty when nothing is changed. */
 export function summarizePangularConfig(
@@ -1828,6 +2132,7 @@ export function summarizePangularConfig(
   );
   add('Extra secret names', config.redaction.secretNames);
   add('Unmasked names', config.redaction.unmask);
+  add('Entropy masking', entropySummary(config.redaction.entropy));
   add(
     'Limits',
     (Object.keys(PANGULAR_LIMITS) as PangularLimit[])
@@ -1900,6 +2205,8 @@ export interface CdCycle {
   refreshed?: number;
   /** Refreshed checks where nothing the component renders changed. */
   unchanged?: number;
+  /** True when the cycle took longer than the recording's `slowMs`. */
+  slow?: boolean;
 }
 
 /**
@@ -2063,6 +2370,8 @@ export interface CdRecording {
   cycles: CdCycle[];
   /** Older cycles removed at `limits.cdCycles`. */
   dropped: number;
+  /** Cycles longer than this, in ms, are slow (`limits.cdSlowMs`). Missing from older pages: read it as 16. */
+  slowMs?: number;
   components: CdComponentStat[];
   /**
    * Component classes checked but left out of `components`: past the 100
@@ -2320,6 +2629,22 @@ export interface DeferNoteBlock {
   triggers: string[];
   /** Page clock, ms since epoch, when the state or hydration state last changed. */
   since: number;
+  /** Page clock, ms since epoch, when the overlay saw the block hydrate. */
+  hydratedAt?: number;
+}
+
+/**
+ * The hydration state of a block as the panel and the defer-blocks tool word
+ * it. A block that is `hydrated` without a `hydratedAt` hydrated before the
+ * overlay attached, so no one saw it happen.
+ */
+export function deferHydrationLabel(
+  block: Pick<DeferNoteBlock, 'hydration' | 'hydratedAt'>,
+): string {
+  if (block.hydration === 'hydrated' && block.hydratedAt === undefined) {
+    return 'hydrated before inspection';
+  }
+  return block.hydration;
 }
 
 export interface DeferNote {
@@ -2386,4 +2711,44 @@ export function deferNotes(block: DeferNoteBlock, pageNow: number): DeferNote[] 
     notes.push({ kind: 'dehydrated', text: 'still dehydrated', label: 'dehydrated' });
   }
   return notes;
+}
+
+/** Whether the one-time code is off, accepted, or locked after too many wrong codes. */
+export type OneTimeCodeState = 'off' | 'accepting' | 'locked';
+
+/**
+ * The answer of the `security-status` RPC (`security-status.ts`), for trusted
+ * clients: how the server lets clients in. It never carries a token, a
+ * pairing token or the one-time code.
+ */
+export interface SecurityStatus {
+  /** False when the host did not say how it is set up; the access fields are then defaults. */
+  reported: boolean;
+  /** Whether clients need the one-time code, a trusted token or a pairing token. */
+  auth: boolean;
+  /** Whether the server checks the `Origin` of requests and WebSocket upgrades. */
+  originCheck: boolean;
+  /** Origins allowed beyond this machine and the Chrome extension, at most 20. */
+  allowedOrigins: string[];
+  /** Whether a custom origin registry decides beyond `allowedOrigins`. */
+  customOrigins: boolean;
+  /** `Host` names allowed beyond loopback, or `any`. */
+  allowedHosts: string[] | 'any';
+  /** Whether the server answers other machines, not only this one. */
+  network: boolean;
+  /** Trusted tokens from the one-time code: how many, and when they expire. */
+  tokens: {
+    count: number;
+    nextExpiresAt: number | null;
+    lastExpiresAt: number | null;
+    /** How long a token stays trusted. */
+    ttlMs: number;
+  };
+  /** Pairing tokens the server accepts instead of the code. Only their count. */
+  pairingTokens: number;
+  oneTimeCode: {
+    state: OneTimeCodeState;
+    /** When the current code expires; only while it is accepting codes. */
+    expiresAt?: number;
+  };
 }

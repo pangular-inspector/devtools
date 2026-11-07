@@ -15,6 +15,7 @@ import { panelConfig } from '../devtools-config';
 import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 import { PluginSectionView, filteredCount } from './plugin-view';
+import { SearchField } from '../ui/search-field';
 
 /** One plugin as a page reported it (`rpc/plugins-register.ts`). */
 export interface PanelPluginEntry {
@@ -84,7 +85,7 @@ const STATUS_TONE: Record<PanelPluginEntry['status'], string> = {
 
 @Component({
   selector: 'app-plugins-inspector',
-  imports: [Select, PluginSectionView],
+  imports: [SearchField, Select, PluginSectionView],
   template: `
     @if (!loaded()) {
       <p class="state" role="status">Loading plugins…</p>
@@ -121,21 +122,13 @@ const STATUS_TONE: Record<PanelPluginEntry['status'], string> = {
             </button>
           }
         </div>
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #search
-            type="search"
-            aria-label="Filter rows and items"
-            placeholder="Filter rows and items"
-            [value]="filter()"
-            (input)="filter.set($any($event.target).value)"
-            (keydown.escape)="filter.set('')"
-          />
-        </div>
+        <app-search-field
+          #search
+          class="search"
+          placeholder="Filter rows and items"
+          saveKey="plugins"
+          [(value)]="filter"
+        />
         @if (pageOptions().length > 1) {
           <app-select
             class="page-select"

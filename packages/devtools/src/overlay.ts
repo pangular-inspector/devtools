@@ -9,6 +9,7 @@ import {
 } from './overlay-connection.ts';
 import { createOverlayLink, type LinkClient } from './overlay-link.ts';
 export { registerNgrxSignals } from './ngrx-register.ts';
+export { lanDevtoolsURL } from './lan-url.ts';
 import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
 import { attachPipes } from './pipes-collector.ts';
@@ -29,6 +30,8 @@ import { attachReduxStores } from './redux-stores-collector.ts';
 import { uninstallReduxDevtoolsHook } from './redux-devtools-hook.ts';
 import { attachTanstackQuery } from './query-collector.ts';
 import { collectInjectorTree } from './injector-tree.ts';
+import { registerInjectorRefresh } from './injector-refresh.ts';
+import { trackEffectRuns } from './effect-runs.ts';
 import { registerProviderValues } from './provider-values.ts';
 import {
   clearNavigations,
@@ -70,7 +73,12 @@ import {
   componentHostOf,
   selectedComponentDetail,
 } from './component-tree.ts';
-import { startComponentPick } from './component-pick.ts';
+import {
+  PICK_KEYS,
+  startComponentPick,
+  type PickKey,
+  type PickMoveResult,
+} from './component-pick.ts';
 import { registerComponentEdit } from './component-edit-overlay.ts';
 import { registerComponentValues } from './component-values-overlay.ts';
 import type { ScreenshotRequest } from './component-screenshot.ts';
@@ -107,6 +115,11 @@ import { attachChangeDetection } from './cd-overlay.ts';
 import { attachAngularInfo } from './ng-capabilities.ts';
 import { pageDebugApi, type NgDebugApi } from './debug-api.ts';
 import { createScanBackoff } from './router-attach.ts';
+import {
+  capturePlatformNavigations,
+  navigationApi,
+  type PlatformNavigation,
+} from './router-platform-nav.ts';
 import { DEVTOOLS_BASES, SETUP_URL } from './panel-frame.ts';
 import { overlayStarts } from './overlay-start.ts';
 import { clearHighlight, showHighlight } from './page-highlight.ts';
@@ -114,14 +127,18 @@ import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 import { createDeltaChannel } from './delta-channel.ts';
 import { COMPONENT_TREE_SHAPE, INJECTOR_TREE_SHAPE } from './push-delta.ts';
 import { createDomDirty } from './dom-dirty.ts';
-import { domTree } from './host-tree.ts';
+import { angularRoots, domTree } from './host-tree.ts';
+import { angularDeferInternals, loadDeferBlock, registerDeferLoad } from './defer-load.ts';
 import { LEASED_PUSH_MS, createPageLease, throttle } from './page-lease.ts';
 import { setTimeoutOutside } from './outside-angular.ts';
 import { createPageHeartbeat, keepaliveAfter } from './page-heartbeat.ts';
+import { selectedComponentSummary } from './element-sidebar.ts';
 
 declare global {
   interface Window {
     __pangularComponentOf?: (el: unknown) => string | null;
+    /** The masked summary of the component that owns an element, for the extension's Elements sidebar. */
+    __pangularComponentDetail?: (el: unknown) => ReturnType<typeof selectedComponentSummary>;
     __pangularPageId?: string;
   }
 }
@@ -435,6 +452,10 @@ async function startOverlay(
   if (!own(restoreSignalHook ?? (() => {}))) return;
   const writeHookMissing = on.signals && !restoreSignalHook;
 
+  // Effect run counts, where the page's Angular profiler reports effect runs.
+  const effectRuns = on.signals ? trackEffectRuns(getNg) : null;
+  if (effectRuns) own(effectRuns.stop);
+
   let signalTarget: SignalTarget = null;
   let lastSignalKey = '';
   let signalSentAt = 0;
@@ -444,6 +465,7 @@ async function startOverlay(
   async function pushSignalGraph(force = false) {
     const graph = signalWatch.attach(collectSignalGraph(getNg(), signalTarget));
     if (!graph) return;
+    effectRuns?.attach(graph.nodes);
     const key = graphKey(graph);
     if (!force && key === lastSignalKey) {
       if (!keepaliveDue(signalSentAt, tickMs())) return;
@@ -523,6 +545,8 @@ async function startOverlay(
   const injectorChannel = channel('push-injector-tree', 'ping-injector-tree', INJECTOR_TREE_SHAPE);
   // Reads the value of a provider the injectors already created, for the Injectors view.
   if (on.injectors) registerProviderValues(my.rpc, pageId, getNg);
+  // Re-reads the element injector the panel selected, or every injector on Refresh.
+  if (on.injectors) registerInjectorRefresh(my.rpc, pageId, () => pushInjectorTree(true));
   // Wakes up with a push of every leased report when a panel or an agent looks again.
   const lease = createPageLease(my, pageId, {
     wake: () =>
@@ -569,9 +593,11 @@ async function startOverlay(
     ? attachHydrationOverlay(my, pageId, () => void pushTree(true).catch(() => {}))
     : null;
   const cd = on.components
-    ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => lease.active)
+    ? attachChangeDetection(my, pageId, getNg, limits, tickMs, () => lease.active)
     : null;
-  const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
+  const ngrx = on.ngrx
+    ? attachNgrx(my, pageId, getNg, limits.changeLog, { trace: devtoolsConfig.ngrx.trace })
+    : null;
   // NGXS, Elf and MiniRx report through their Redux DevTools integration.
   if (!on.ngrx) uninstallReduxDevtoolsHook();
   const otherStores = on.ngrx ? attachReduxStores(my, pageId, { maxLog: limits.changeLog }) : null;
@@ -616,6 +642,7 @@ async function startOverlay(
 
   const navigations: NavigationRecord[] = [];
   const preloads: PreloadRecord[] = [];
+  const platformNavigations: PlatformNavigation[] = [];
   const configTracker = new ConfigTracker();
   let router: Record<string, unknown> | null = null;
   let routerCount = 0;
@@ -694,6 +721,9 @@ async function startOverlay(
     routerCleanup.push(captureCallers(router, navigations, ng));
     routerCleanup.push(captureDiagnostics(router, navigations));
     routerCleanup.push(capturePreloads(preloaderOf(ng, routerRoot), preloads, scheduleRouterPush));
+    routerCleanup.push(
+      capturePlatformNavigations(navigationApi(), navigations, platformNavigations, onRouterChange),
+    );
   }
 
   /** True when the watched router was destroyed or its root left the page (HMR, re-bootstrap). */
@@ -714,6 +744,7 @@ async function startOverlay(
     // A new router counts navigation ids from 1 again, so old records would take its events.
     resetNavigations(navigations);
     preloads.length = 0;
+    platformNavigations.length = 0;
     config = undefined;
     configTruncated = 0;
     setup = undefined;
@@ -765,6 +796,7 @@ async function startOverlay(
         if (linksTruncated) report['linksTruncated'] = linksTruncated;
         if (linksUnchecked) report['linksUnchecked'] = linksUnchecked;
         report['preloads'] = preloads;
+        if (platformNavigations.length) report['platformNavigations'] = platformNavigations;
         report['instrumented'] = instrumented;
       }
       const payload = JSON.stringify(report);
@@ -827,9 +859,31 @@ async function startOverlay(
     startup && paced(() => void startup.push().catch(() => {})),
     perf && paced(() => void perf.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
-  const pushAll = () => collectors.forEach((run) => run());
+  // The counts on the launcher pill (`popup.ts`), handed over when they change.
+  let renders = 0;
+  let shownCounts = '';
+  const showCounts = () => {
+    const counts = { renders, errors: errors?.errorCount() ?? 0 };
+    const key = `${counts.renders}|${counts.errors}`;
+    if (key === shownCounts) return;
+    const popup = overlayPopup();
+    // No popup yet: leave shownCounts as it was, so a popup that loads later still gets the counts.
+    if (!popup) return;
+    shownCounts = key;
+    void popup.then((m) => m.setLauncherCounts(counts)).catch(() => {});
+  };
+  const pushAll = () => {
+    collectors.forEach((run) => run());
+    showCounts();
+  };
   pushAll();
-  const watch = () => watchChangeDetection({ getNg, refresh: pushAll, pollMs: limits.refreshMs });
+  const watch = () =>
+    watchChangeDetection({
+      getNg,
+      refresh: pushAll,
+      onRender: () => renders++,
+      pollMs: limits.refreshMs,
+    });
   refresher = watch();
 
   // A tab in the background runs its timers about once a minute, so it stops
@@ -935,6 +989,7 @@ async function startOverlay(
     handler: (message: { pageId?: unknown } | undefined) => {
       if (!on.router || message?.pageId !== pageId) return;
       clearNavigations(navigations);
+      platformNavigations.length = 0;
       lastRouterPayload = '';
       scheduleRouterPush();
     },
@@ -985,23 +1040,43 @@ async function startOverlay(
   });
 
   let cancelComponentPick: (() => void) | null = null;
+  let moveComponentPick: ((key: PickKey) => PickMoveResult) | null = null;
   if (on.components) {
     my.rpc.register({
       name: 'component-pick',
       type: 'event',
       jsonSerializable: true,
-      handler: (request: { requestId?: unknown; pageId?: unknown; cancel?: unknown } | null) => {
+      handler: (
+        request: { requestId?: unknown; pageId?: unknown; cancel?: unknown; move?: unknown } | null,
+      ) => {
         if (!request || (request.pageId && request.pageId !== pageId)) return;
+        // A key from the panel moves the running pick; it never starts or cancels one.
+        if (request.move !== undefined) {
+          const key = PICK_KEYS.find((k) => k === request.move);
+          const result: PickMoveResult = !key
+            ? { moved: false, error: 'Unknown key.' }
+            : (moveComponentPick?.(key) ?? { moved: false, error: 'No pick is running.' });
+          if (typeof request.requestId === 'string') {
+            void my.rpc
+              .call('component-pick-result', { requestId: request.requestId, pageId, result })
+              .catch(() => {});
+          }
+          return;
+        }
         cancelComponentPick?.();
         if (request.cancel === true || typeof request.requestId !== 'string') return;
         const requestId = request.requestId;
         const pick = startComponentPick({
           getNg,
-          highlight: { show: showHighlight, clear: clearHighlight },
+          highlight: { show: (el, reveal) => showHighlight(el, { reveal }), clear: clearHighlight },
         });
         cancelComponentPick = pick.cancel;
+        moveComponentPick = pick.move;
         void pick.result.then((result) => {
-          if (cancelComponentPick === pick.cancel) cancelComponentPick = null;
+          if (cancelComponentPick === pick.cancel) {
+            cancelComponentPick = null;
+            moveComponentPick = null;
+          }
           if (result.ok) {
             componentTarget = result.id;
             consoleGlobals.selectComponent(result.id);
@@ -1024,6 +1099,16 @@ async function startOverlay(
       allowed: devtoolsConfig.actions.components,
       edited: () => void pushTree(true).catch(() => {}),
     });
+    registerDeferLoad(my.rpc, pageId, {
+      allowed: devtoolsConfig.actions.components,
+      load: (id) => {
+        const ng = getNg();
+        // A fresh read, so the load acts on the block as it is now.
+        deferTracker.collect(ng, document, controlFlowReader(ng));
+        return loadDeferBlock(ng, angularDeferInternals(), deferTracker.find(id), angularRoots());
+      },
+      loaded: () => void pushTree(true).catch(() => {}),
+    });
     // Loaded on the first capture, so pages that never take one don't pay for it.
     my.rpc.register({
       name: 'component-screenshot',
@@ -1043,6 +1128,11 @@ async function startOverlay(
     window.__pangularComponentOf = componentOf;
     own(() => {
       if (window.__pangularComponentOf === componentOf) delete window.__pangularComponentOf;
+    });
+    const detailOf = (el: unknown) => selectedComponentSummary(getNg(), el);
+    window.__pangularComponentDetail = detailOf;
+    own(() => {
+      if (window.__pangularComponentDetail === detailOf) delete window.__pangularComponentDetail;
     });
     own(installSourceHelpers(pageId, getNg));
   }

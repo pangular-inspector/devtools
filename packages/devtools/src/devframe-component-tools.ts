@@ -696,6 +696,7 @@ export function registerComponentAgentTools(env: RegisterComponentAgentToolsEnv)
             clear: record === 'clear',
           }),
         acks: cdAcks,
+        angularOf: angularPages.get,
       });
       if ('refused' in answer) return answer;
       const next = answer.markdown;
@@ -797,7 +798,14 @@ export function registerComponentAgentTools(env: RegisterComponentAgentToolsEnv)
       }
       const matches = (g: PageGraph) =>
         !bySelector &&
-        ([g.componentSelector, g.component?.name, g.component?.id].includes(wanted) ||
+        ([
+          g.componentSelector,
+          g.component?.name,
+          g.component?.id,
+          g.element?.id,
+          g.element?.injectorId,
+        ].includes(wanted) ||
+          (!!g.element && g.element.directives.includes(wanted)) ||
           (!!g.injector && injectorMatches(g.injector, wanted)));
       const latestMatch = () =>
         byRecency(
@@ -884,7 +892,7 @@ export function registerComponentAgentTools(env: RegisterComponentAgentToolsEnv)
     id: 'pangular:inspect-providers',
     title: 'Inspect injectors and providers',
     description:
-      'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected.',
+      'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected. `inactive: true` marks a lazy route injector off the rendered path.',
     inputSchema: {
       type: 'object',
       properties: {

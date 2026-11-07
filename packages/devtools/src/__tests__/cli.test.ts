@@ -36,6 +36,23 @@ describe('pangular build --outDir', () => {
     }
   });
 
+  it('treats a folder named like ..app as a child, so its parent is refused even with --force', () => {
+    const parent = fixtureDir('pangular-cli-dots-');
+    const cwd = join(parent, '..app');
+    mkdirSync(join(cwd, 'src'), { recursive: true });
+    for (const outDir of [parent, '..']) {
+      expect(() => checkReportOutDir(outDir, { cwd, force: true })).toThrow(
+        /working directory or one of its parents/,
+      );
+    }
+    expect(() =>
+      checkReportOutDir(join(cwd, 'dist-report'), { cwd: parent, invokedFrom: cwd, force: true }),
+    ).not.toThrow();
+    expect(() =>
+      checkReportOutDir(parent, { cwd: join(cwd, 'src'), invokedFrom: cwd, force: true }),
+    ).toThrow(/working directory or one of its parents/);
+  });
+
   it('sees through symlinks to the working directory and its parents, even with --force', () => {
     const root = fixtureDir('pangular-cli-link-');
     const cwd = join(root, 'workspace');
@@ -134,20 +151,22 @@ describe('pangular build --outDir', () => {
 });
 
 describe('pangular dev startup', () => {
-  it('prints the Angular Native view next to the panel URL', () => {
+  it('prints the Angular Native view and the NativeScript setup next to the panel URL', () => {
     for (const origin of ['http://localhost:9999', 'http://localhost:9999/']) {
       const lines = startupLines(origin, 9999, { mcp: true });
       expect(lines).toContain('  Panel: http://localhost:9999/');
       expect(lines).toContain('  Angular Native apps: http://localhost:9999/?view=angular-native');
+      expect(lines).toContain('  NativeScript setup: http://localhost:9999/?view=nativescript');
       expect(lines).toContain('  MCP:   http://localhost:9999/__mcp');
     }
   });
 
-  it('keeps the Angular Native line without MCP and on a fallback port', () => {
+  it('keeps the Angular Native and NativeScript lines without MCP and on a fallback port', () => {
     const lines = startupLines('http://127.0.0.1:4321', 4321, { mcp: false });
     expect(lines.slice(1)).toEqual([
       '  Panel: http://127.0.0.1:4321/',
       '  Angular Native apps: http://127.0.0.1:4321/?view=angular-native',
+      '  NativeScript setup: http://127.0.0.1:4321/?view=nativescript',
       '  Port 9999 is taken, so the server uses port 4321.',
     ]);
   });

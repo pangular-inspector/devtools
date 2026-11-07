@@ -54,6 +54,24 @@ describe('watchChangeDetection', () => {
     watcher.stop();
   });
 
+  it('reports every template update to onRender, not only one per burst', () => {
+    page('22.1.7');
+    const ng = fakeNg();
+    const onRender = vi.fn();
+    const refresh = vi.fn();
+    const watcher = watchChangeDetection({ getNg: () => ng, refresh, onRender });
+    for (let i = 0; i < 5; i++) ng.emit(2);
+    // A template creation and a tick with no template update are not renders.
+    ng.emit(0);
+    ng.emit(12);
+    expect(onRender).toHaveBeenCalledTimes(5);
+    vi.advanceTimersByTime(250);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    watcher.stop();
+    ng.emit(2);
+    expect(onRender).toHaveBeenCalledTimes(5);
+  });
+
   it('ignores ticks that update no template', () => {
     page('22.1.7');
     const ng = fakeNg();

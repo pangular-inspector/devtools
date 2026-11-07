@@ -268,6 +268,80 @@ describe('signalPeekFor', () => {
 
   it('asks nothing when the component tree has no such component', () => {
     expect(signalPeekFor({ component: 'Card' }, [])).toBeNull();
-    expect(signalPeekFor({ component: 'Card' }, [hits[0]!])).toBeNull();
+  });
+
+  it('asks for a directive host when no component matches', () => {
+    expect(signalPeekFor({ component: 'Tooltip' }, [hits[0]!])).toEqual({
+      target: { id: 'c3' },
+      pageId: 'p1',
+    });
+  });
+
+  it('sends an element injector id as given', () => {
+    expect(signalPeekFor({ component: 'inj-4' }, hits)).toEqual({ target: { env: 'inj-4' } });
+  });
+});
+
+describe('element injector peeks', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  class Tooltip {}
+
+  function directivePage() {
+    document.body.innerHTML = `<app-root ng-version="22.0.0"><button tooltip>Hi</button></app-root>`;
+    const button = document.querySelector('button')!;
+    const ng: SignalDebugNg = {
+      ...fakeNg(),
+      getDirectives: (el) => (el === button ? [new Tooltip()] : []),
+      ɵgetSignalGraph: (injector) =>
+        injector === (button as unknown)
+          ? { nodes: [{ id: '20', kind: 'effect', label: 'position', epoch: 1 }], edges: [] }
+          : { nodes: [], edges: [] },
+    };
+    return { ng, button };
+  }
+
+  it('reads the graph of a host with directives but no component', () => {
+    const { ng, button } = directivePage();
+    const graph = collectSignalGraph(ng, { id: elementId(button) });
+    expect(graph?.component).toBeUndefined();
+    expect(graph?.element).toEqual({
+      id: elementId(button),
+      tag: 'button',
+      directives: ['Tooltip'],
+    });
+    expect(graph?.nodes).toEqual([expect.objectContaining({ id: '20', label: 'position' })]);
+  });
+
+  it('answers a peek by element injector id with that element graph', async () => {
+    const { ng, button } = directivePage();
+    // The injector tree hands out the element injector id.
+    const { collectInjectorTree } = await import('../injector-tree.ts');
+    const tree = collectInjectorTree({
+      ...ng,
+      ɵgetInjectorProviders: () => [],
+    } as never);
+    const injectorId = JSON.stringify(tree).match(
+      /"id":"(inj-\d+)","type":"element","name":"button"/,
+    )![1]!;
+    const session = fakeRpc();
+    registerSignalPeek(session.rpc, 'p1', (target: SignalTarget) => collectSignalGraph(ng, target));
+    session.handlers.get(PEEK_EVENT)!({ requestId: 'q1', env: injectorId });
+    await Promise.resolve();
+    const [, answer] = session.calls.find(([name]) => name === PEEK_RESULT)!;
+    expect(answer).toMatchObject({
+      requestId: 'q1',
+      graph: { element: { id: elementId(button), injectorId }, nodes: [{ id: '20' }] },
+    });
+    // An unknown element injector id gets no graph rather than a fallback.
+    session.handlers.get(PEEK_EVENT)!({ requestId: 'q2', env: 'inj-99999' });
+    await Promise.resolve();
+    expect(
+      session.calls.find(([, a]) => (a as { requestId: string }).requestId === 'q2')![1],
+    ).toMatchObject({
+      graph: null,
+    });
   });
 });

@@ -29,13 +29,13 @@ Large forms are cut to keep answers small. Each cut says what was left out; pass
 ## Fix and verify
 
 1. Call `list-form-changes` for the form and keep the marker it returns.
-2. Fix the code, or reproduce the user's steps with `fill-form` (types through the inputs like a user) or `run-form-action` (`set-value`, `touch-all`, `revalidate`, `submit`). `submit`, `reset`, `restore` and `fill-form` with `submit` need `confirm: true`; ask the user before you submit.
+2. Fix the code, or reproduce the user's steps with `fill-form` (types through the inputs like a user) or `run-form-action` (`set-value`, `touch-all`, `revalidate`, `submit`). `submit`, `reset`, `restore`, `try-webmcp` and `fill-form` with `submit` need `confirm: true`; ask the user before you submit.
 3. `wait-for` with `condition: "form"` and `until: "settled"` (or `valid`, `submitted`) waits for async validators.
 4. `explain-form-changes` with `after` set to the marker lists every field whose value or status ended up different. That is your proof.
-5. `export-form` with `format: "fixture"` turns the state into a test fixture with the expected status.
+5. `export-form` with `format: "fixture"` turns the state into a test fixture with the expected status, and `format: "playwright"` turns the recorded history into a Playwright test.
 
 ## Notes
 
 - Secret-looking values stay masked, and action tools don't write secret fields unless the project unmasks them.
 - A native `<select>` only takes the value of one of its options; the answer says `has no option with the value ...` otherwise.
-- A Signal Form that sets `experimentalWebMcpTool` also shows its WebMCP tool state in `inspect-forms`.
+- A Signal Form that sets `experimentalWebMcpTool` also shows its WebMCP tool state and input schema in `inspect-forms`. `run-form-action` with `try-webmcp` runs that tool with `value` as its input; it fills and submits the form, so ask first.

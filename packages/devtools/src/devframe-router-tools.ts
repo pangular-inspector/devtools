@@ -1,3 +1,7 @@
+import { diffNavigationsText } from './rpc/router-diff.ts';
+import { MAX_WAIT_MS, streamText, type NavigationStream } from './rpc/router-stream.ts';
+import { previewNavigationText } from './rpc/router-preview.ts';
+import type { HttpCall } from './http-rules.ts';
 import {
   explainNavigationText,
   inspectRouteText,
@@ -41,6 +45,12 @@ export interface RegisterRouterAgentToolsEnv {
     reportedAt: number;
     url: string | undefined;
   }[];
+  navigationStream: NavigationStream;
+  previewScans: () => {
+    sources: ReturnType<typeof extractRoutes>;
+    serverRoutes: ReturnType<typeof scanServerRoutes>;
+  };
+  routerHttpCalls: (pageId: string) => readonly HttpCall[] | undefined;
 }
 
 export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
@@ -55,6 +65,9 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
     routerPages,
     routerState,
     withPageUrls,
+    navigationStream,
+    previewScans,
+    routerHttpCalls,
   } = env;
   agent.registerTool({
     id: 'pangular:inspect-route',
@@ -125,7 +138,99 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
         if (args.perf) return { markdown: refusal('Pass either `perf` or `format: "repro"`.') };
         return { markdown: exportNavigationText(state, { page: args.page, id: args.id }) };
       }
-      return { markdown: explainNavigationText(state, args, Date.now(), limits.navigations) };
+      return {
+        markdown: explainNavigationText(
+          state,
+          args,
+          Date.now(),
+          limits.navigations,
+          routerHttpCalls,
+        ),
+      };
+    },
+  });
+
+  agent.registerTool({
+    id: 'pangular:diff-navigations',
+    title: 'Diff two navigations',
+    description:
+      'What changed between two recorded navigations: URL, outcome, query params, route params and data, the component in each outlet, guard and resolver verdicts and timing. `b` defaults to the newest finished navigation, `a` to the last earlier one to the same path.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page: pageProperty,
+        a: { type: 'integer', description: 'Id of the earlier navigation.' },
+        b: { type: 'integer', description: 'Id of the later navigation.' },
+      },
+    },
+    handler: async (args: { page?: string; a?: number; b?: number }) => {
+      const state = routerState.value() as RouterState;
+      if (!state.pages.length) return { markdown: noRouter };
+      return { markdown: diffNavigationsText(state, args) };
+    },
+  });
+
+  agent.registerTool({
+    id: 'pangular:follow-navigations',
+    title: 'Follow navigations',
+    description: `New and changed navigations since a cursor, oldest first, to follow a login or redirect flow without polling. Without \`since\`, the latest 5 and a cursor; pass it back as \`since\`, with \`waitMs\` (up to ${MAX_WAIT_MS}) to wait for the next one.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page: pageProperty,
+        since: {
+          type: 'integer',
+          minimum: 0,
+          description: 'The cursor a previous call returned. Without it, the last 5 navigations.',
+        },
+        waitMs: {
+          type: 'integer',
+          minimum: 0,
+          maximum: MAX_WAIT_MS,
+          description:
+            'With `since`: how long to wait for a navigation when none came yet (default 0).',
+        },
+      },
+    },
+    handler: async (args: { page?: string; since?: number; waitMs?: number }) => {
+      const state = routerState.value() as RouterState;
+      if (args.page && !state.pages.some((p) => p.pageId === args.page)) {
+        return { markdown: noPage(args.page, state) };
+      }
+      if (typeof args.since !== 'number' || !Number.isFinite(args.since)) {
+        const all = navigationStream.read(0, args.page);
+        const read = { ...all, entries: all.entries.slice(-5) };
+        delete read.reset;
+        return { markdown: streamText(read, { waited: false }) };
+      }
+      const since = Math.floor(args.since);
+      const wait = typeof args.waitMs === 'number' && args.waitMs > 0 ? args.waitMs : 0;
+      const read = await navigationStream.wait(since, wait, args.page);
+      return { markdown: streamText(read, { since, waited: wait > 0 }) };
+    },
+  });
+
+  agent.registerTool({
+    id: 'pangular:preview-navigation',
+    title: 'Preview a navigation',
+    description:
+      'What going to a URL would do, predicted from the live route config without navigating: redirects, the route chain and params, then in order the guards, lazy chunks, resolvers and components that run, with source files and the render mode.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page: pageProperty,
+        url: { type: 'string', description: 'A path such as /admin/users?tab=roles.' },
+      },
+      required: ['url'],
+    },
+    handler: async (args: { page?: string; url?: string }) => {
+      const state = routerState.value() as RouterState;
+      if (!state.pages.length) return { markdown: noRouter };
+      if (typeof args.url !== 'string' || !args.url) {
+        return { markdown: refusal('Pass `url`, such as /users/42.') };
+      }
+      const { sources, serverRoutes } = previewScans();
+      return { markdown: previewNavigationText(state, args, sources, serverRoutes) };
     },
   });
 
@@ -195,7 +300,12 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
     handler: async (args: { page?: string }) => {
       const state = routerState.value() as RouterState;
       if (!state.pages.length) return { markdown: noRouter };
-      return { markdown: lintRoutesText(state, args, undefined, { rules: config.lint.rules }) };
+      return {
+        markdown: lintRoutesText(state, args, undefined, {
+          rules: config.lint.rules,
+          httpFor: routerHttpCalls,
+        }),
+      };
     },
   });
 

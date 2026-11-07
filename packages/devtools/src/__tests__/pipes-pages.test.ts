@@ -258,6 +258,28 @@ describe('pipe page targets', () => {
     expect(mergePipePageReport(pages, page('tab-2'), 1001).pipes[0].staleCheck).toBeUndefined();
   });
 
+  it('keeps a churn finding, merges it across pages and says so in explain-pipe', async () => {
+    expect(
+      isPipePageReport({
+        ...page('x'),
+        pipes: [{ ...page('x').pipes[0], churn: { streak: 'a' } }],
+      }),
+    ).toBe(false);
+    const a = page('tab-1');
+    a.pipes[0].churn = { streak: 24, detectedAt: 2000 };
+    const b = page('tab-2');
+    b.pipes[0].churn = { streak: 31, detectedAt: 3000 };
+    const pages = new Map();
+    mergePipePageReport(pages, a, 1000);
+    expect(mergePipePageReport(pages, b, 1001).pipes[0].churn).toEqual({
+      streak: 31,
+      detectedAt: 2000,
+    });
+    const { invoke, explain } = await boot();
+    await invoke('push-pipes', a);
+    expect(await explain()).toContain('**Churning:**');
+  });
+
   it('does not repeat the data by page when only one page reports', () => {
     const state = mergePipePageReport(new Map(), page('tab-1'), 1000);
     expect(state.pages).toBeUndefined();

@@ -18,11 +18,14 @@ import {
   sourceLocation,
   sourceOf,
   type RouteNode,
+  type RoutePreview,
   type RouterPage,
   type SourceRoute,
 } from './router-types';
 import { SourceLink } from '../ui/source-link';
+import { RoutePreviewCard } from './route-preview';
 import { plural } from '../format';
+import { SearchField } from '../ui/search-field';
 
 /** "3 of 12 routes": the filtered count, worded like the other panel pages. */
 export function routeCountText(matches: number, total: number): string {
@@ -52,7 +55,7 @@ interface TestedUrl {
 
 @Component({
   selector: 'app-route-tree',
-  imports: [JsonPipe, SourceLink],
+  imports: [SearchField, JsonPipe, RoutePreviewCard, SourceLink],
   template: `
     <form class="test" (submit)="$event.preventDefault(); predict()">
       <label for="test-url">Test a URL</label>
@@ -66,6 +69,7 @@ interface TestedUrl {
         (input)="editUrl($any($event.target).value)"
       />
       <button type="submit" class="small primary">Predict</button>
+      <button type="button" class="small" (click)="whatHappens()">What happens</button>
       <button
         type="button"
         class="small"
@@ -101,6 +105,9 @@ interface TestedUrl {
         }
       </div>
     }
+    @if (preview(); as card) {
+      <app-route-preview [preview]="card" />
+    }
     @if (message()) {
       <p class="message" role="status">{{ message() }}</p>
     }
@@ -110,15 +117,13 @@ interface TestedUrl {
     }
 
     <div class="filter-row">
-      <input
+      <app-search-field
         #filterInput
-        class="field filter"
-        type="search"
-        aria-label="Filter routes"
+        class="filter"
         placeholder="Filter by path, component or file"
+        saveKey="router-config"
         [value]="filter()"
-        (input)="setFilter($any($event.target).value)"
-        (keydown.escape)="setFilter('')"
+        (valueChange)="setFilter($event)"
       />
       @if (page().config) {
         <p class="muted summary">
@@ -472,6 +477,11 @@ export class RouteTree {
     source: this.pageId,
     computation: () => '',
   });
+  /** The "What happens" card for the URL in the box. */
+  readonly preview = linkedSignal<string, RoutePreview | null>({
+    source: this.pageId,
+    computation: () => null,
+  });
   private predictSeq = 0;
   private announceFlip = false;
   private probeSeq = 0;
@@ -574,6 +584,7 @@ export class RouteTree {
     this.predictSeq++;
     this.probeSeq++;
     this.match.set(null);
+    this.preview.set(null);
     this.message.set('');
   }
 
@@ -593,12 +604,43 @@ export class RouteTree {
     const pageId = this.pageId();
     const result = await routerCall<MatchResult>(this.rpc(), 'router-match', { pageId, url });
     if (seq !== this.predictSeq || pageId !== this.pageId()) return;
+    this.preview.set(null);
     this.match.set(result && { url, result });
     if (result) {
       if (this.message() === PAGE_UNREACHABLE) this.message.set('');
     } else {
       this.message.set(PAGE_UNREACHABLE);
     }
+  }
+
+  /** Predicts the redirects, guards, lazy chunks, resolvers and components of going to the URL. */
+  async whatHappens() {
+    const url = this.testUrl().trim();
+    const seq = ++this.predictSeq;
+    if (!url) {
+      this.preview.set(null);
+      this.askForUrl('preview');
+      return;
+    }
+    const pageId = this.pageId();
+    const result = await routerCall<RoutePreview | { error: string }>(
+      this.rpc(),
+      'router-preview',
+      { pageId, url },
+    );
+    if (seq !== this.predictSeq || pageId !== this.pageId()) return;
+    if (!result || 'error' in result) {
+      this.preview.set(null);
+      this.message.set(result?.error ?? PAGE_UNREACHABLE);
+      return;
+    }
+    this.match.set(null);
+    this.preview.set(result);
+    const steps = result.steps.length ? `, ${plural(result.steps.length, 'step')} listed` : '';
+    const head = result.chain.length
+      ? `${result.matched ? 'Matches' : 'Stops at'} ${result.chain.map((r) => r.path).join(' then ')}${steps}.`
+      : `${url} matches no route.`;
+    this.message.set(result.stopped ? `${head} ${result.stopped}` : head);
   }
 
   async probe() {

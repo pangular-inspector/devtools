@@ -1,3 +1,5 @@
+import { lintHttpText } from './rpc/http-lint.ts';
+import type { NavigationStream } from './rpc/router-stream.ts';
 import {
   capacitorCallsText,
   capacitorPluginsText,
@@ -54,6 +56,7 @@ export interface RegisterHttpAgentToolsEnv {
   registry: HttpRegistry;
   routerPages: Map<string, RouterPage>;
   setHttpRules: (rules: HttpRule[]) => HttpRule[];
+  navigationStream: NavigationStream;
 }
 
 export function registerHttpAgentTools(env: RegisterHttpAgentToolsEnv) {
@@ -68,6 +71,7 @@ export function registerHttpAgentTools(env: RegisterHttpAgentToolsEnv) {
     registry,
     routerPages,
     setHttpRules,
+    navigationStream,
   } = env;
   const httpSnapshot = () => httpState.value() as HttpState;
   agent.registerTool({
@@ -182,6 +186,17 @@ export function registerHttpAgentTools(env: RegisterHttpAgentToolsEnv) {
   });
 
   agent.registerTool({
+    id: 'pangular:lint-http',
+    title: 'Lint HTTP calls',
+    description:
+      "Checks a page's recorded HttpClient calls for duplicate GETs, waterfalls (calls run one after another that could start together) and server calls the browser repeated. Each finding lists call ids and a fix. Masked.",
+    inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
+    handler: async (args: { page?: string }) => ({
+      markdown: lintHttpText(httpSnapshot(), { page: pageArgument(args) }),
+    }),
+  });
+
+  agent.registerTool({
     id: 'pangular:capacitor-list-calls',
     title: 'List Capacitor plugin calls',
     description:
@@ -231,9 +246,14 @@ export function registerHttpAgentTools(env: RegisterHttpAgentToolsEnv) {
     status: {
       type: 'integer',
       description:
-        'Status to answer with: 400 or more fails the request, below 400 returns `body`.',
+        'Status to answer with: 400 or more fails the request, 0 fails it as a network error, others return `body`.',
     },
     delayMs: { type: 'integer', description: `Hold the request back (0-${MAX_DELAY_MS} ms).` },
+    chance: {
+      type: 'integer',
+      description:
+        'Apply to this percent of matching requests (1-99), rolled per request; the rest go on to the next rule. Every request when left out.',
+    },
     body: { description: 'Mock response body: JSON text or a JSON value. Alone it answers 200.' },
     enabled: { type: 'boolean', description: 'Default true.' },
   };
@@ -356,6 +376,7 @@ export function registerHttpAgentTools(env: RegisterHttpAgentToolsEnv) {
             if (clearRouterNavigations(routerPages, pageId)) {
               applyRouter(currentRouter(routerPages));
             }
+            navigationStream.clear(pageId);
             void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
             cleared.push(`router navigations for page "${pageId}"`);
           } else {
@@ -368,6 +389,7 @@ export function registerHttpAgentTools(env: RegisterHttpAgentToolsEnv) {
               });
             }
             applyRouter(currentRouter(routerPages));
+            navigationStream.clear();
             cleared.push('router navigations');
           }
         }

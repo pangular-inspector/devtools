@@ -20,7 +20,6 @@ import { registerHttpAgentTools } from './devframe-http-tools.ts';
 import { registerFormsAgentTools } from './devframe-forms-tools.ts';
 import { registerComponentAgentTools } from './devframe-component-tools.ts';
 import { registerRouterAgentTools } from './devframe-router-tools.ts';
-import type { PageGraph } from './devframe-env.ts';
 import { registerPerformance } from './rpc/perf-register.ts';
 import { registerBuild } from './rpc/build-register.ts';
 import { registerSnapshot } from './rpc/snapshot-tools.ts';
@@ -31,10 +30,11 @@ import { registerPlugins } from './rpc/plugins-register.ts';
 import { registerStartup } from './rpc/startup-register.ts';
 import type { PangularServerPlugin } from './plugin.ts';
 import { registerAudit } from './rpc/audit-register.ts';
-import { sanitizeInjectorTree } from './rpc/injector-report.ts';
+import { INJECTOR_TREE_LIMITS, sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
+import { scanPipes } from './rpc/get-pipes.ts';
 import { createPageOwners, type OwnerBroadcast } from './rpc/page-owners.ts';
 import { trackPageSessions } from './rpc/page-sessions.ts';
 import { createOpenInEditor, defaultLauncher } from './rpc/open-in-editor.ts';
@@ -51,6 +51,7 @@ import { signalOwner } from './signal-graph.ts';
 import { scanNgrxStore } from './rpc/get-ngrx-store.ts';
 import { createNgrxHistory } from './rpc/ngrx-session-tools.ts';
 import { createProviderValues } from './rpc/provider-values.ts';
+import { requestInjectorRefresh } from './rpc/injector-refresh.ts';
 import {
   dispatchResultText,
   expireNgrxPages,
@@ -68,6 +69,7 @@ import {
   storeIdNamed,
   withUntrustedPreamble,
 } from './rpc/ngrx-live-tools.ts';
+import { createNgrxDevtoolsTools } from './rpc/ngrx-devtools-tools.ts';
 import {
   dispatchProblem,
   type NgrxRequest,
@@ -81,6 +83,7 @@ import type {
   InjectorTreeNode,
   LiveComponentNode,
   SignalChange,
+  SignalGraph,
   ZoneMode,
 } from './types.ts';
 import { ZONE_MODES } from './zone-mode.ts';
@@ -91,6 +94,8 @@ import {
   latestComponentPage,
   toComponentPage,
 } from './rpc/component-tools.ts';
+import { createDeferLoads } from './rpc/defer-loads.ts';
+import { PICK_KEYS } from './component-pick.ts';
 import { createComponentEdits } from './rpc/component-edits.ts';
 import { createSignalRestores } from './rpc/signal-restores.ts';
 import { createComponentValues } from './rpc/component-values.ts';
@@ -99,14 +104,17 @@ import {
   currentForms,
   expirePages,
   isPageReport,
+  matchForms,
   mergePageReport,
   type PageReport,
   type FormsState,
 } from './rpc/forms-tools.ts';
+import { playwrightTestText } from './rpc/forms-playwright.ts';
 import {
   explainFieldText,
   explainSubmitText,
   exportFormText,
+  type FieldArgs,
   formPayloadText,
   lintFormsFor,
 } from './rpc/forms-explain.ts';
@@ -132,6 +140,8 @@ import {
   type RouterState,
 } from './rpc/router-tools.ts';
 import { exportNavigationText, matchUrl, routerLintResult } from './rpc/router-config-tools.ts';
+import { extractRoutes } from './rpc/get-routes.ts';
+import { scanServerRoutes } from './rpc/server-routes.ts';
 import {
   httpRegistry,
   sanitizeCalls,
@@ -224,6 +234,8 @@ export {
 import { registerAuthTokens } from './auth-tokens.ts';
 import { registerCodeGuard } from './auth-guard.ts';
 import { expireAuthTokens, protectAuthFile, scopeAuthStore } from './auth-store.ts';
+import { securityStatusHandler, type PangularSecurityHost } from './security-status.ts';
+import { watchTokenRotation } from './auth-rotate.ts';
 import {
   BROWSER_TOOLS_CHANGED,
   BROWSER_TOOLS_STATE,
@@ -246,12 +258,18 @@ import { answeringText, type MarkdownAnswer } from './rpc/agent-output.ts';
 import { guardHandler } from './rpc/tool-input.ts';
 import { createPageOrder, defaultPage, rankPages, setPageOrder } from './rpc/default-page.ts';
 import { namingPageRead } from './rpc/page-read-scope.ts';
+import { navigationDiffResult } from './rpc/router-diff.ts';
+import { callsForNavigation, nextNavigation } from './rpc/router-http.ts';
+import { NavigationStream } from './rpc/router-stream.ts';
+import { routePreviewResult } from './rpc/router-preview.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
 import { createLibraryGate, usedLibraries } from './rpc/library-tools.ts';
 import { createPushAcks } from './rpc/push-acks.ts';
 import { refusal, ToolRefusal } from './rpc/refusal.ts';
+
+type PageGraph = SignalGraph & { pageId?: string };
 
 const clientAssets: RemoteAssets = {
   package: pkg.name,
@@ -267,6 +285,9 @@ type SetupInfo = DevframeSetupInfo & {
   notAProject?: string;
   /** Library inspectors the given config leaves to the project (`autoLibraries`). */
   autoLibraries?: readonly PangularInspector[];
+  /** How the host lets clients in, and how many pairing tokens it took, for `security-status`. */
+  security?: PangularSecurityHost;
+  pairingTokens?: number;
 };
 
 const pangular = defineDevframe({
@@ -945,6 +966,14 @@ const pangular = defineDevframe({
       : null;
 
     const routerPages = new Map<string, RouterPage>();
+    /** Every navigation the pages report, numbered, for pangular:follow-navigations. */
+    const navigationStream = new NavigationStream();
+    /** Drops the stream entries and signatures of pages that expired or were forgotten. */
+    const dropGoneStreamPages = () => {
+      for (const id of navigationStream.pageIds()) {
+        if (!routerPages.has(id)) navigationStream.clear(id);
+      }
+    };
     const routerState = await my.rpc.sharedState('router', {
       initialValue: { pages: [] } as RouterState,
     });
@@ -977,6 +1006,12 @@ const pangular = defineDevframe({
           applyRouter(currentRouter(routerPages));
         }
         feed.navigations(report.pageId, report.navigations);
+        // Merging a report expires stale pages too.
+        dropGoneStreamPages();
+        // A report that failed to merge left no page, so its navigations stay out of the stream.
+        if (routerPages.has(report.pageId)) {
+          navigationStream.record(report.pageId, report.navigations);
+        }
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
     });
@@ -1079,7 +1114,11 @@ const pangular = defineDevframe({
       name: 'router-lint',
       type: 'query',
       jsonSerializable: true,
-      handler: (pageId: unknown) => routerLintResult(pageFor(pageId), { rules: config.lint.rules }),
+      handler: (pageId: unknown) =>
+        routerLintResult(pageFor(pageId), {
+          rules: config.lint.rules,
+          httpFor: routerHttpCalls,
+        }),
     });
 
     register({
@@ -1091,6 +1130,73 @@ const pangular = defineDevframe({
         if (!page?.config || typeof message?.url !== 'string') return null;
         return matchUrl(page.config, message.url.slice(0, 2000));
       },
+    });
+
+    /** The HTTP inspector's calls of a page, for the router's per-navigation HTTP join. */
+    const routerHttpCalls = (pageId: string) =>
+      on.http ? httpPages.get(pageId)?.calls : undefined;
+
+    register({
+      name: 'router-http',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; id?: unknown }) => {
+        const page = pageFor(message?.pageId);
+        const nav = page?.navigations.find((n) => n.id === message?.id);
+        if (!page || !nav) return null;
+        return callsForNavigation(
+          nav,
+          nextNavigation(page.navigations, nav),
+          routerHttpCalls(page.pageId),
+        );
+      },
+    });
+
+    /** The source routes and ServerRoute entries a preview names, empty when the scan fails. */
+    const previewScans = () => {
+      let sources: ReturnType<typeof extractRoutes> = [];
+      let serverRoutes: ReturnType<typeof scanServerRoutes> = [];
+      try {
+        sources = extractRoutes(ctx.cwd);
+      } catch {
+        sources = [];
+      }
+      try {
+        serverRoutes = scanServerRoutes(ctx.cwd);
+      } catch {
+        serverRoutes = [];
+      }
+      return { sources, serverRoutes };
+    };
+
+    register({
+      name: 'router-preview',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; url?: unknown }) => {
+        const { sources, serverRoutes } = previewScans();
+        return routePreviewResult(
+          routerState.value() as RouterState,
+          {
+            page: typeof message?.pageId === 'string' ? message.pageId : undefined,
+            url: typeof message?.url === 'string' ? message.url : undefined,
+          },
+          sources,
+          serverRoutes,
+        );
+      },
+    });
+
+    register({
+      name: 'router-diff',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; a?: unknown; b?: unknown }) =>
+        navigationDiffResult(routerState.value() as RouterState, {
+          page: typeof message?.pageId === 'string' ? message.pageId : undefined,
+          a: typeof message?.a === 'number' ? message.a : undefined,
+          b: typeof message?.b === 'number' ? message.b : undefined,
+        }),
     });
 
     register({
@@ -1112,6 +1218,7 @@ const pangular = defineDevframe({
         if (!config.actions.router) throw new Error(actionBlockedMessage('router'));
         if (typeof pageId !== 'string') throw new Error('Give the id of the page to clear.');
         if (clearRouterNavigations(routerPages, pageId)) applyRouter(currentRouter(routerPages));
+        navigationStream.clear(pageId);
         void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
       },
     });
@@ -1123,6 +1230,7 @@ const pangular = defineDevframe({
       handler: (pageId: string) => {
         if (mayForget(pageId) && routerPages.delete(pageId)) {
           applyRouter(currentRouter(routerPages));
+          navigationStream.clear(pageId);
         }
       },
     });
@@ -1388,7 +1496,10 @@ const pangular = defineDevframe({
       const next = expirePages(formPages, now, limits.formTimeline, liveTtl);
       if (next) applyForms(next);
       const nextRouter = expireRouterPages(routerPages, now, liveTtl);
-      if (nextRouter) applyRouter(nextRouter);
+      if (nextRouter) {
+        applyRouter(nextRouter);
+        dropGoneStreamPages();
+      }
       const nextPipes = expirePipePages(pipePages, now, liveTtl);
       if (nextPipes) applyPipes(nextPipes);
       if (expireNgrxPages(ngrxPages, now, liveTtl)) applyNgrx();
@@ -1438,6 +1549,7 @@ const pangular = defineDevframe({
       registry,
       routerPages,
       setHttpRules,
+      navigationStream,
     });
 
     register({
@@ -1616,6 +1728,8 @@ const pangular = defineDevframe({
             return formPayloadText(state, target);
           case 'fixture':
             return exportFormText(state, { ...target, format: 'fixture' });
+          case 'playwright':
+            return playwrightTestText(state, { ...target, url: formPageUrl(state, target) });
           default:
             return explainFieldText(state, target);
         }
@@ -1838,6 +1952,29 @@ const pangular = defineDevframe({
     });
     for (const tool of componentEdits.tools) agent.registerTool(tool);
 
+    // Loads one @defer block when an agent asks: same gate and owner check as the writes above.
+    const deferLoads = createDeferLoads({
+      config,
+      pages: () => componentPages.values(),
+      broadcast: (method, message) => {
+        const pageId = (message as { pageId?: unknown } | null)?.pageId;
+        void (my.rpc.broadcast as (options: OwnerBroadcast) => Promise<void>)({
+          method,
+          args: [message],
+          optional: true,
+          filter: owners.deliversTo(typeof pageId === 'string' ? pageId : undefined),
+        });
+      },
+      answersFor,
+    });
+    register({
+      name: 'defer-load-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: deferLoads.answer,
+    });
+    agent.registerTool(deferLoads.tool);
+
     // Nested levels of component values: the panel opens them, inspect-component reads them.
     const componentValues = createComponentValues({
       pages: () => componentPages.values(),
@@ -1924,6 +2061,44 @@ const pangular = defineDevframe({
           void my.rpc.broadcast({
             method: 'component-pick',
             args: [{ requestId, pageId }],
+            optional: true,
+          });
+        });
+      },
+    });
+
+    // A keyboard move of the running pick: the panel sends the key, the page
+    // answers with the component it shows now on the pick's result channel.
+    register({
+      name: 'request-component-pick-move',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (target: { pageId?: unknown; key?: unknown } | null) => {
+        const key = PICK_KEYS.find((k) => k === target?.key);
+        if (!key) return { moved: false, error: 'Unknown key.' };
+        const asked = typeof target?.pageId === 'string' ? target.pageId : undefined;
+        const pageId = asked ?? latestComponentPage(componentPages.values())?.pageId;
+        if (!pageId || !componentPages.has(pageId)) {
+          return { moved: false, error: 'No page is connected. Open the app in a browser first.' };
+        }
+        return new Promise<Record<string, unknown>>((resolve) => {
+          const requestId = `pick${++pickSeq}`;
+          const timer = setTimeout(() => {
+            pendingPicks.delete(requestId);
+            resolve({ moved: false, error: 'The page did not answer.' });
+          }, 5_000);
+          timer.unref?.();
+          pendingPicks.set(requestId, {
+            pageId,
+            settle: (result) => {
+              clearTimeout(timer);
+              pendingPicks.delete(requestId);
+              resolve(result);
+            },
+          });
+          void my.rpc.broadcast({
+            method: 'component-pick',
+            args: [{ requestId, pageId, move: key }],
             optional: true,
           });
         });
@@ -2136,7 +2311,9 @@ const pangular = defineDevframe({
           pageId,
           roots: tree.roots,
           environment: tree.environment,
-          ...(report?.truncated === true || tree.truncated ? { truncated: true } : {}),
+          ...(report?.truncated === true || tree.truncated
+            ? { truncated: true, limits: INJECTOR_TREE_LIMITS }
+            : {}),
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
         };
@@ -2195,6 +2372,20 @@ const pangular = defineDevframe({
         providerValues.request(message?.pageId, message?.request),
     });
 
+    // The panel asks the page to read an element injector again (the one it
+    // selected), or every injector (Refresh). The page pushes a fresh tree.
+    register({
+      name: 'request-injector-refresh',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; injectorId?: unknown } | null) =>
+        requestInjectorRefresh(
+          message,
+          injectorPages.keys(),
+          (method, args) => void my.rpc.broadcast({ method, args: [args], optional: true }),
+        ),
+    });
+
     register({
       name: 'push-ngrx-state',
       type: 'action',
@@ -2228,6 +2419,12 @@ const pangular = defineDevframe({
         http: httpPages.values(),
         components: componentPages.values(),
       });
+    /** The address of the page a form is on, for the Playwright test export. */
+    function formPageUrl(state: FormsState, args: FieldArgs): string | undefined {
+      const forms = matchForms(state.forms, args.form, args.page);
+      const pageId = (forms[0]?.id ?? '').split('@')[1] ?? args.page;
+      return pageId ? livePageDetails().get(pageId)?.url : undefined;
+    }
     const withPageUrls = <T extends { pageId: string; reportedAt: number }>(pages: T[]) => {
       const details = livePageDetails();
       return pages.map((page) => {
@@ -2406,6 +2603,24 @@ const pangular = defineDevframe({
       read: () => ({ text: routerResourceText(routerState.value() as RouterState) }),
     });
 
+    agent.registerResource({
+      id: 'pangular:pipe-usages',
+      name: 'Angular Pipe Usages',
+      description:
+        'Pipes as JSON: `source` has each pipe with purity and template uses; `pipes`/`async` the live page usage, with churn and stale findings while recording. ' +
+        LIVE_RESOURCE_NOTE,
+      mimeType: 'application/json',
+      read: () => {
+        const live = currentPipes(pipePages);
+        return {
+          text: liveResourceText(
+            { source: scanPipes(ctx.cwd), ...live },
+            'pangular:scan-pipes and pangular:explain-pipe',
+          ),
+        };
+      },
+    });
+
     // The same states one page at a time, for the MCP resource templates (`agent-mcp.ts`).
     providePageResources(
       ctx,
@@ -2570,6 +2785,9 @@ const pangular = defineDevframe({
       routerPages,
       routerState,
       withPageUrls,
+      navigationStream,
+      previewScans,
+      routerHttpCalls,
     });
 
     agent.registerTool({
@@ -2639,6 +2857,13 @@ const pangular = defineDevframe({
     });
 
     for (const tool of ngrxHistory.tools) agent.registerTool(tool);
+    // Store DevTools history operations and the explain-change read (rpc/ngrx-devtools-tools.ts).
+    for (const tool of createNgrxDevtoolsTools({
+      ask: (page, request) => requestNgrxAction(page, request),
+      pages: () => ngrxPages,
+    })) {
+      agent.registerTool(tool);
+    }
 
     ({ waitForForm } = registerFormsAgentTools({
       agent,
@@ -2650,6 +2875,7 @@ const pangular = defineDevframe({
       pipePages,
       requestFormAction,
       requestPipeRecording,
+      formPageUrl,
     }));
 
     // Every reporting page, merged across inspectors, newest first.
@@ -2842,6 +3068,7 @@ const pangular = defineDevframe({
         ttl: liveTtl,
         owners,
         rules: config.lint.rules,
+        contentSchema: config.analog.contentSchema,
       });
     }
     feed.attachDocks(
@@ -2851,6 +3078,15 @@ const pangular = defineDevframe({
         components: componentTree,
       }),
     );
+    // Auth and access for the Dashboard, trusted clients only (`security-status.ts`).
+    if (pageTools) {
+      register({
+        name: 'security-status',
+        type: 'query',
+        jsonSerializable: true,
+        handler: securityStatusHandler(ctx, info?.security, info?.pairingTokens ?? 0),
+      });
+    }
     // The panel says which dock it shows, which clears that dock's unseen count.
     register({
       name: 'hub-dock-seen',
@@ -2874,6 +3110,8 @@ export interface PangularHostOptions {
   authTokens?: string[];
   /** Server plugins: agent tools and shared state of Pangular plugins (`plugin.ts`). */
   serverPlugins?: readonly PangularServerPlugin[];
+  /** How the host lets clients in, for the Dashboard's security status (`security-status.ts`). */
+  security?: PangularSecurityHost;
   /**
    * The folder the server scans, when it holds no Angular project (a wrong
    * `--root`). Source scan tools then refuse and name it, so the agent sees
@@ -2896,6 +3134,8 @@ export function createPangular(options: PangularConfig = {}, host: PangularHostO
         serverPlugins: host.serverPlugins,
         notAProject: host.notAProject,
         autoLibraries: autoLibraries(options),
+        security: host.security,
+        pairingTokens: host.authTokens?.length ?? 0,
       };
       // First, so devframe opens its token store in the private folder.
       // The stdio MCP server (no page tools) has no clients to trust.
@@ -2921,6 +3161,8 @@ function guardAuth(ctx: Parameters<typeof pangular.setup>[0]): void {
     console.warn('[pangular] The one-time code guard could not be registered.');
   }
   expireAuthTokens(ctx, protect);
+  // `pangular token --rotate` asks through the token folder (`auth-rotate.ts`).
+  if (dir) watchTokenRotation(ctx, dir);
 }
 
 /**

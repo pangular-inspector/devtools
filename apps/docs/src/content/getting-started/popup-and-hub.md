@@ -181,19 +181,20 @@ The tooltip comes back when the app stops reporting and its data expires. The An
 
 The hub keeps a list of messages, which the **Messages** dock lists and filters. Pangular Inspector posts to it when something happens in the app:
 
-| Message                                      | Level | Category    | Posted when                                                                                              |
-| -------------------------------------------- | ----- | ----------- | -------------------------------------------------------------------------------------------------------- |
-| `Agent ran <tool>`                           | info  | `agent`     | An [action tool](../agents/tools.md#action-tools) changes the app or the server, such as `set-http-rule` |
-| The NG error, such as `NG01203: ...`         | error | `runtime`   | A page reports a forms setup error (`NG01xxx`)                                                           |
-| `Navigation failed (NG04002): ...`           | error | `runtime`   | A page reports a failed navigation                                                                       |
-| `Hydration mismatch at <app-cart>`           | error | `hydration` | A page reports a node that failed to hydrate, with the expected and actual node                          |
-| The hydration message, such as `NG0505: ...` | warn  | `hydration` | A page logs an `NG05xx` hydration message                                                                |
+| Message                                                        | Level | Category    | Posted when                                                                                                                                 |
+| -------------------------------------------------------------- | ----- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Agent ran <tool>`                                             | info  | `agent`     | An [action tool](../agents/tools.md#action-tools) changes the app or the server, such as `set-http-rule`                                    |
+| The NG error, such as `NG01203: ...`                           | error | `runtime`   | A page reports a forms setup error (`NG01xxx`)                                                                                              |
+| `Navigation failed (NG04002): ...`                             | error | `runtime`   | A page reports a failed navigation                                                                                                          |
+| `Possible open redirect: target taken from query param <name>` | warn  | `runtime`   | A page reports a navigation or redirect whose target is the value of a query param ([details](../inspectors/router.md#open-redirect-check)) |
+| `Hydration mismatch at <app-cart>`                             | error | `hydration` | A page reports a node that failed to hydrate, with the expected and actual node                                                             |
+| The hydration message, such as `NG0505: ...`                   | warn  | `hydration` | A page logs an `NG05xx` hydration message                                                                                                   |
 
 Each message names the pages it came from (also as `page:<pageId>` labels) and has an **Open in Pangular** action that opens the dock that shows it. An error opens a toast the first time it shows up. When the same item comes back, from the same page after a reload or from another tab, the first message counts it (`(3 times)`) instead of posting it again. A call that only reads, like `change-detection` without `record`, posts nothing, and neither does a call that changed nothing: no page to act on, a refusal from the page or the config, or an argument to fix, such as `navigate` answering `No router state has been reported`. Text in messages is masked like the rest of the panel. An agent message shows the first line of the tool's answer that says what happened, past the untrusted-data notice, and the `page` argument, not the other arguments.
 
 A dock shows how many items it has that you have not seen yet: NgRx writes on **NgRx**, Analog writes on **Analog**, and everything else on **Angular**. The **Pangular** group shows the total. The badge is red while one of them is an error or a warning. Opening a dock clears its count, and opening **All tools** clears every count. The tools sidebar of the open group shows the same counts, in the same colours. The count is also part of the dock name that screen readers and the tooltip use, for example `Angular (2 new, with errors)`. When the unseen items hold warnings, such as an NG05xx hydration message, but no error, the name ends in `with warnings` instead.
 
-Messages follow the config. An inspector that is off posts nothing (forms errors need `inspectors.forms`, failed navigations `inspectors.router`, hydration messages `inspectors.http`), and an agent tool turned off with `agent.tools`, `agent.readOnly` or `actions` posts nothing either. See [Configuration](./configuration.md).
+Messages follow the config. An inspector that is off posts nothing (forms errors need `inspectors.forms`, failed navigations and open redirect warnings `inspectors.router`, hydration messages `inspectors.http`), and an agent tool turned off with `agent.tools`, `agent.readOnly` or `actions` posts nothing either. See [Configuration](./configuration.md).
 
 ### Terminals dock
 
@@ -239,6 +240,7 @@ A link can also select an item on its tab, on one page: `#tab=<tab>&id=<id>&page
 | ---------- | ---------------------------------------------------------- |
 | Components | A component instance, by its id in the component tree      |
 | Injectors  | The element injector of a component, by the component's id |
+| Signals    | The signal graph of a component, by the component's id     |
 | Forms      | A form, by its id                                          |
 
 On other tabs, `id` is ignored and the link opens the tab. `page` is the page id from `list-pages`. Without it, the tab looks on the page it shows. If the item is not on the page, the tab says so. The [`open-in-panel`](../agents/tools.md#open-in-panel) agent tool builds these links and switches the panels that are open to them.

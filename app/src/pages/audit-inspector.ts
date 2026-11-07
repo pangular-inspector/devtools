@@ -28,6 +28,7 @@ import {
   type AuditFinding,
   type AuditResponse,
 } from './audit-types';
+import { SearchField } from '../ui/search-field';
 
 type SeverityFilter = 'all' | 'error' | 'warning';
 
@@ -44,7 +45,7 @@ export const AUDIT_REFRESH_DELAY_MS = 150;
 
 @Component({
   selector: 'app-audit-inspector',
-  imports: [Select, AuditDiffView],
+  imports: [SearchField, Select, AuditDiffView],
   template: `
     @if (staticReport()) {
       <div class="state" role="status">
@@ -74,21 +75,13 @@ export const AUDIT_REFRESH_DELAY_MS = 150;
       </p>
 
       <div class="toolbar">
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #search
-            type="search"
-            aria-label="Filter findings"
-            placeholder="Filter by component, rule or text"
-            [value]="filter()"
-            (input)="filter.set($any($event.target).value)"
-            (keydown.escape)="filter.set('')"
-          />
-        </div>
+        <app-search-field
+          #search
+          class="search"
+          placeholder="Filter by component, rule or text"
+          saveKey="audit"
+          [(value)]="filter"
+        />
         <app-select
           class="filter-select"
           ariaLabel="Area"

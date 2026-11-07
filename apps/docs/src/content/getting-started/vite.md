@@ -100,6 +100,7 @@ pangular({
 | `allowedOrigins` | none                             | Extra exact origins allowed to reach the devtools, for example a tunnel.                                                   |
 | `auth`           | on                               | Whether the devtools ask for the one-time code, and its pairing tokens.                                                    |
 | `allowLan`       | `false`                          | Answer other machines, such as a phone on Wi-Fi, from listed origins.                                                      |
+| `lanAddress`     | `false`                          | Inject the dev server's LAN address into the app, for a phone app.                                                         |
 | `overlay`        | `true`                           | Add the overlay to the pages the dev server serves.                                                                        |
 | `terminals`      | `false`                          | Add a dock that runs the build and test commands. See [Terminals](./terminals.md).                                         |
 | `extraDevframes` | none                             | Other devframes to mount on the same hub, behind the same gate. See [Extra devframes](./configuration.md#extra-devframes). |
@@ -211,6 +212,43 @@ Start Vite on every interface too, with `server.host: true`. A request from anot
   With <code>allowLan</code>, any device on the network can send requests that claim a listed origin. Only the one-time code, or a pairing token, keeps it from reading your app's data. Use it on a trusted network, and turn it off when you're done.
 </ngmd-alert>
 
+### Inject the LAN address
+
+A phone app built from the same Vite config, such as a bundled [Capacitor](../guides/capacitor.md#use-the-injected-lan-address) build, has no `localhost` to find the devtools on. `lanAddress` injects the dev server's devtools URL on your network into the app as the global constant `__PANGULAR_LAN_URL__`, for example `http://192.168.1.20:5173/__devframes/pangular/`. `lanDevtoolsURL()` from `@pangular-inspector/devtools/overlay-manual` reads it.
+
+```ts
+// vite.config.ts
+import analog from '@analogjs/platform';
+import pangular from '@pangular-inspector/devtools/vite';
+import {defineConfig} from 'vite';
+
+export default defineConfig({
+  server: {host: true, port: 5173, strictPort: true},
+  plugins: [
+    analog(),
+    pangular({
+      allowLan: true,
+      allowedOrigins: ['capacitor://localhost'],
+      lanAddress: true,
+    }),
+  ],
+});
+```
+
+| `lanAddress`     | What it injects                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------- |
+| `false` or unset | Nothing. The default.                                                                           |
+| `true`           | The first private IPv4 address of this machine (`10.x`, `172.16.x` to `172.31.x`, `192.168.x`). |
+| `'192.168.1.20'` | That address. Use it when the machine has several networks.                                     |
+
+The plugin injects an address only where the devtools already answer it, and changes nothing about who may connect:
+
+- `allowLan` must be in effect: `allowLan: true`, the one-time code on, and a network origin in `allowedOrigins`. Otherwise the plugin prints `Not injecting the LAN address` with the reason.
+- `server.host` must put the dev server on the network, such as `true`. Set it in the config file, since a `vite build` doesn't see the `--host` flag of the dev server you run next to it.
+- The URL carries `server.port`, or `5173`. If Vite moves to another port because that one is taken, the plugin warns. `server.strictPort: true` makes Vite stop instead.
+
+The constant reaches the pages the dev server serves and development builds, such as `vite build --mode development`. A production build, the default mode of `vite build`, gets nothing. The dev server also prints the URL as **Pangular Inspector (LAN)**.
+
 ## Angular CLI apps
 
 <ngmd-alert severity="important">
@@ -221,7 +259,7 @@ Start Vite on every interface too, with `server.host: true`. A request from anot
 
 <ngmd-accordion>
   <ngmd-accordion-item title="Does the plugin change my production build?" open>
-    No. It applies to the dev server only, so the overlay script it adds is not part of a build.
+    No. It applies to the dev server only, so the overlay script it adds is not part of a build. With <a href="#inject-the-lan-address"><code>lanAddress</code></a>, a build in a mode other than <code>production</code> also gets the <code>__PANGULAR_LAN_URL__</code> constant, and nothing else.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why do I get a 403 from the devtools?">
     The request did not come from your machine, or its origin or the host it was sent to is not trusted. The terminal names a refused origin or host. Open the app on <code>localhost</code>, list your hostname in <code>server.allowedHosts</code>, or add the origin to <code>allowedOrigins</code>.

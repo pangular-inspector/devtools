@@ -13,63 +13,42 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { JsonPipe } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
-import { FormsFieldDetail } from './forms-field-detail';
+import { FormsActionBar } from './forms-action-bar';
+import { FormsExportTest } from './forms-export-test';
+import { FormsFields, matchesChip, type Chip, type FieldRow } from './forms-fields';
+import { FormsList } from './forms-list';
+import { FormsSchema } from './forms-schema';
 import { FormsLint, FormsSubmit } from './forms-report';
+import { FormsSetupErrors } from './forms-setup-errors';
 import { FormsTimeline } from './forms-timeline';
 import { FormsWebMcp, FormsWebMcpOthers } from './forms-webmcp';
 import {
+  BADGE_STYLES,
   FORMS_STYLES,
   KIND_LABELS,
-  SOURCE_LABELS,
   actionMessage,
   formAction,
   pageOf,
-  redactLabel,
   type CollectedForm,
   type FormEvent,
-  type FormFieldError,
   type FormFieldNode,
   type FormSetupError,
   type WebMcpPage,
 } from './forms-types';
 
-type Tab = 'fields' | 'timeline' | 'submit' | 'lint';
-type Chip = 'invalid' | 'dirty' | 'touched' | 'disabled' | 'hidden-error';
+type Tab = 'fields' | 'schema' | 'timeline' | 'submit' | 'lint';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'fields', label: 'Fields' },
+  { id: 'schema', label: 'Schema' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'submit', label: 'Submit' },
   { id: 'lint', label: 'Lint' },
 ];
-
-const CHIPS: { id: Chip; label: string }[] = [
-  { id: 'invalid', label: 'Invalid' },
-  { id: 'dirty', label: 'Dirty' },
-  { id: 'touched', label: 'Touched' },
-  { id: 'disabled', label: 'Disabled' },
-  { id: 'hidden-error', label: 'Error not shown' },
-];
-
-function matchesChip(node: FormFieldNode, chip: Chip): boolean {
-  switch (chip) {
-    case 'invalid':
-      return node.errors.length > 0;
-    case 'dirty':
-      return node.dirty && node.type === 'control';
-    case 'touched':
-      return node.touched && node.type === 'control';
-    case 'disabled':
-      return node.status === 'DISABLED';
-    case 'hidden-error':
-      return node.dom?.errorShown === false;
-  }
-}
 
 interface FormsSnapshot {
   forms?: CollectedForm[];
@@ -78,11 +57,6 @@ interface FormsSnapshot {
   dropped?: Record<string, number>;
   webMcp?: WebMcpPage[];
   setupErrors?: FormSetupError[];
-}
-
-interface FieldRow {
-  node: FormFieldNode;
-  depth: number;
 }
 
 function countErrors(node: FormFieldNode): number {
@@ -97,8 +71,12 @@ function countFields(node: FormFieldNode): number {
 @Component({
   selector: 'app-forms-inspector',
   imports: [
-    JsonPipe,
-    FormsFieldDetail,
+    FormsActionBar,
+    FormsExportTest,
+    FormsFields,
+    FormsList,
+    FormsSchema,
+    FormsSetupErrors,
     FormsTimeline,
     FormsSubmit,
     FormsLint,
@@ -113,26 +91,7 @@ function countFields(node: FormFieldNode): number {
       errors, a change timeline, submit explanations and a lint. Development builds only.
     </p>
     @if (pageSetupErrors().length) {
-      <div class="setup-errors" role="status">
-        <p class="setup-title">
-          Angular reported {{ pageSetupErrors().length }} forms setup
-          {{ pageSetupErrors().length === 1 ? 'error' : 'errors' }}
-        </p>
-        <p class="setup-hint">
-          A form with a setup error can be missing from the list or behave unlike its template.
-          Check the directives and value accessors it names.
-        </p>
-        <ul>
-          @for (error of pageSetupErrors(); track $index) {
-            <li>
-              <code>{{ error.message }}</code>
-              @if (setupErrorPages()) {
-                <span class="setup-page">on page {{ error.pageId }}</span>
-              }
-            </li>
-          }
-        </ul>
-      </div>
+      <app-forms-setup-errors [errors]="pageSetupErrors()" [showPages]="setupErrorPages()" />
     }
     @if (!rpc()) {
       <div class="empty" role="status">
@@ -173,47 +132,14 @@ function countFields(node: FormFieldNode): number {
       </div>
     } @else {
       <div class="layout">
-        <div class="sidebar">
-          <h2 class="list-heading" id="forms-list-heading">
-            Forms <span class="list-count">{{ visible().length }}</span>
-          </h2>
-          @if (hostPageId && (allPages() || otherPages())) {
-            <label class="page-toggle">
-              <input
-                type="checkbox"
-                [checked]="allPages()"
-                (change)="allPages.set($any($event.target).checked)"
-              />
-              All pages
-            </label>
-          }
-          <ul class="form-list" aria-labelledby="forms-list-heading">
-            @for (form of visible(); track form.id) {
-              <li>
-                <button
-                  type="button"
-                  class="form-item"
-                  [class.active]="form.id === selected()?.id"
-                  [attr.aria-current]="form.id === selected()?.id ? 'true' : null"
-                  (click)="selectForm(form.id)"
-                >
-                  <span class="dot" [attr.data-status]="form.root.status" aria-hidden="true"></span>
-                  <span class="label" [attr.title]="form.label">{{ form.label }}</span>
-                  <span class="kind"
-                    >{{ kindLabel(form.kind) }} · <span class="id">{{ form.id }}</span>
-                    <span class="sr-only">, {{ form.root.status }}</span></span
-                  >
-                  @if (counts().get(form.id)?.errors; as count) {
-                    <span class="count"
-                      >{{ count
-                      }}<span class="sr-only"> {{ count === 1 ? 'error' : 'errors' }}</span></span
-                    >
-                  }
-                </button>
-              </li>
-            }
-          </ul>
-        </div>
+        <app-forms-list
+          [forms]="visible()"
+          [selectedId]="selected()?.id"
+          [counts]="counts()"
+          [showToggle]="!!hostPageId && (allPages() || otherPages())"
+          [(allPages)]="allPages"
+          (selectForm)="selectForm($event)"
+        />
 
         @if (missing(); as label) {
           <section class="detail gone" aria-labelledby="forms-detail-title">
@@ -282,85 +208,25 @@ function countFields(node: FormFieldNode): number {
               [tool]="form.webMcp"
               [page]="webMcpPage(form.id)"
               [signalForm]="form.kind === 'signal'"
+              [formId]="form.id"
+              [rpc]="rpc()"
             />
 
-            <div class="action-bar">
-              <div class="actions" role="group" aria-label="Form actions">
-                <button
-                  type="button"
-                  class="small"
-                  [disabled]="!canWrite()"
-                  [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
-                  (click)="act('touch-all')"
-                >
-                  Touch all
-                </button>
-                <button
-                  type="button"
-                  class="small"
-                  [disabled]="!canWrite()"
-                  [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
-                  (click)="act('revalidate')"
-                >
-                  Revalidate
-                </button>
-                <button type="button" class="small" (click)="act('focus-first-invalid')">
-                  Focus first invalid
-                </button>
-                <button
-                  type="button"
-                  class="small"
-                  [class.on]="picking()"
-                  [attr.aria-pressed]="!!picking()"
-                  (click)="picking() ? cancelPick() : pick()"
-                >
-                  {{ picking() ? 'Cancel picking' : 'Pick field on page' }}
-                </button>
-                <span class="divider" aria-hidden="true"></span>
-                <button type="button" class="small" (click)="act('snapshot')">Snapshot</button>
-                @if (snapshot()) {
-                  <button
-                    type="button"
-                    class="small"
-                    [class.armed]="armed() === 'restore'"
-                    [disabled]="!canWrite()"
-                    [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
-                    [attr.title]="'Restore ' + snapshot()"
-                    (click)="confirmAct('restore')"
-                  >
-                    {{ armed() === 'restore' ? 'Confirm restore' : 'Restore ' + snapshot() }}
-                  </button>
-                }
-                <span class="spacer" aria-hidden="true"></span>
-                <button
-                  type="button"
-                  class="small danger"
-                  [class.armed]="armed() === 'reset'"
-                  [disabled]="!canWrite()"
-                  [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
-                  (click)="confirmAct('reset')"
-                >
-                  {{ armed() === 'reset' ? 'Confirm reset' : 'Reset' }}
-                </button>
-                <button
-                  type="button"
-                  class="small primary"
-                  [class.armed]="armed() === 'submit'"
-                  [disabled]="!canWrite()"
-                  [attr.aria-describedby]="canWrite() ? null : 'forms-writes-off'"
-                  (click)="confirmAct('submit')"
-                >
-                  {{ armed() === 'submit' ? 'Confirm submit' : 'Submit' }}
-                </button>
-              </div>
-              @if (!canWrite()) {
-                <p id="forms-writes-off" class="muted">{{ writesOff }}</p>
-              }
-              <p class="status" role="status">{{ message() }}</p>
-            </div>
+            <app-forms-action-bar
+              [canWrite]="canWrite()"
+              [writesOff]="writesOff"
+              [picking]="picking()"
+              [snapshot]="snapshot()"
+              [armed]="armed()"
+              [message]="message()"
+              (act)="act($event)"
+              (confirmAct)="confirmAct($event)"
+              (pick)="pick()"
+              (cancelPick)="cancelPick()"
+            />
 
             <div class="tabs" role="tablist" aria-label="Form views" (keydown)="onKey($event)">
-              @for (tab of tabs; track tab.id) {
+              @for (tab of tabs(); track tab.id) {
                 <button
                   type="button"
                   role="tab"
@@ -382,230 +248,28 @@ function countFields(node: FormFieldNode): number {
             >
               @switch (tab_()) {
                 @case ('fields') {
-                  <div class="filters">
-                    <div class="search">
-                      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="11" cy="11" r="7" />
-                        <path d="m20 20-3.5-3.5" />
-                      </svg>
-                      <input
-                        #fieldFilter
-                        class="filter"
-                        type="search"
-                        placeholder="Filter fields by path"
-                        aria-label="Filter fields by path"
-                        autocomplete="off"
-                        spellcheck="false"
-                        [value]="filter()"
-                        (input)="onFilter($event)"
-                        (keydown.escape)="filter.set('')"
-                      />
-                    </div>
-                    <fieldset class="chips">
-                      <legend class="sr-only">Show only fields that are</legend>
-                      @for (chip of chips; track chip.id) {
-                        <label>
-                          <input
-                            type="checkbox"
-                            [checked]="active().has(chip.id)"
-                            (change)="toggleChip(chip.id)"
-                          />
-                          {{ chip.label }}
-                        </label>
-                      }
-                    </fieldset>
-                  </div>
-                  <p class="sr-only" role="status">{{ filterStatus() }}</p>
-
-                  <div class="table-scroll" role="region" aria-label="Fields" tabindex="0">
-                    <table class="fields">
-                      <thead>
-                        <tr>
-                          <th scope="col">Field</th>
-                          <th scope="col">Value</th>
-                          <th scope="col">Status</th>
-                          <th scope="col">State</th>
-                          <th scope="col">Errors</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        @for (row of rows(); track row.node.path) {
-                          <tr
-                            [class.invalid]="row.node.errors.length"
-                            (mouseenter)="highlight(form.id, row.node.path)"
-                            (mouseleave)="highlight(null, '')"
-                          >
-                            <th
-                              scope="row"
-                              class="name"
-                              [style.padding-left.px]="12 + row.depth * 16"
-                            >
-                              <button
-                                type="button"
-                                class="field"
-                                [attr.aria-label]="
-                                  'Show details for ' + (row.node.path || 'the form')
-                                "
-                                [attr.aria-pressed]="row.node.path === fieldPath()"
-                                [attr.title]="row.node.path || '(form)'"
-                                (focus)="highlight(form.id, row.node.path)"
-                                (blur)="highlight(null, '')"
-                                (click)="toggleField(row.node.path)"
-                              >
-                                {{ row.node.key || '(form)' }}
-                              </button>
-                              <span class="type">{{ row.node.type }}</span>
-                            </th>
-                            <td class="value">
-                              @if (row.node.type === 'control') {
-                                <code>{{ row.node.value | json }}</code>
-                                @if (row.node.uncommitted !== undefined) {
-                                  <div class="muted">
-                                    typed <code>{{ row.node.uncommitted | json }}</code
-                                    >, not in the model yet
-                                  </div>
-                                }
-                                @if (row.node.defaultValue !== undefined) {
-                                  <div class="muted">
-                                    resets to <code>{{ row.node.defaultValue | json }}</code>
-                                  </div>
-                                }
-                              }
-                            </td>
-                            <td class="status-cell">
-                              @if (row.node.materialized === false) {
-                                <span class="muted">not created yet</span>
-                              } @else {
-                                <span class="badge" [attr.data-status]="row.node.status">{{
-                                  row.node.status
-                                }}</span>
-                              }
-                            </td>
-                            <td class="flags">
-                              @if (row.node.touched) {
-                                <span>touched</span>
-                              }
-                              @if (row.node.dirty) {
-                                <span>{{
-                                  row.node.changed === false ? 'dirty, unchanged' : 'dirty'
-                                }}</span>
-                              }
-                              @if (row.node.skipped) {
-                                <span>not validated ({{ row.node.skipped }})</span>
-                              }
-                              @if (row.node.stale?.length) {
-                                <span class="warn">stale: {{ row.node.stale!.join(', ') }}</span>
-                              }
-                              @if (row.node.dom?.drift !== undefined) {
-                                <span class="warn">view out of sync</span>
-                              }
-                              @if (row.node.redacted) {
-                                <span>redacted: {{ redactLabel(row.node.redacted) }}</span>
-                              }
-                              @if (row.node.required) {
-                                <span>required</span>
-                              }
-                              @if (row.node.readonly) {
-                                <span>readonly</span>
-                              }
-                              @if (row.node.hidden) {
-                                <span>hidden</span>
-                              }
-                              @if (row.node.updateOn) {
-                                <span>updates on {{ row.node.updateOn }}</span>
-                              }
-                              @if (row.node.debouncing) {
-                                <span>debouncing</span>
-                              }
-                              @if (row.node.validators?.sync) {
-                                <span>validators</span>
-                              }
-                              @if (row.node.validators?.async) {
-                                <span>async validator</span>
-                              }
-                              @for (rule of constraintList(row.node); track rule) {
-                                <span>{{ rule }}</span>
-                              }
-                              @if (row.node.accessor) {
-                                <span>{{ row.node.accessor }}</span>
-                              }
-                              @if (row.node.name) {
-                                <span>name {{ row.node.name }}</span>
-                              }
-                              @for (value of row.node.metadata ?? []; track $index) {
-                                <span>metadata {{ value | json }}</span>
-                              }
-                              @for (reason of row.node.disabledReasons ?? []; track $index) {
-                                <span>disabled: {{ reason }}</span>
-                              }
-                            </td>
-                            <td class="errors">
-                              @for (error of row.node.errors; track $index) {
-                                <div>
-                                  {{ errorText(row.node, error) }}
-                                  <code class="kind-tag">{{ error.kind }}</code>
-                                  @if (error.kind === 'standardSchema' && error.params?.['path']) {
-                                    <span class="source">at {{ error.params!['path'] }}</span>
-                                  }
-                                  @if (error.source) {
-                                    <span class="source">{{ sourceText(error) }}</span>
-                                  }
-                                </div>
-                              }
-                              @if (row.node.errors.length && row.node.dom?.errorShown === false) {
-                                <div class="unseen">not shown to the user</div>
-                              }
-                            </td>
-                          </tr>
-                          @if (row.node.truncated) {
-                            <tr>
-                              <td
-                                colspan="5"
-                                class="muted truncated"
-                                [style.padding-left.px]="28 + row.depth * 16"
-                              >
-                                {{ row.node.truncated }} more fields under
-                                {{ row.node.path || 'the form' }} not shown
-                              </td>
-                            </tr>
-                          }
-                        } @empty {
-                          <tr>
-                            <td colspan="5" class="no-match">
-                              <p>
-                                @if (filter()) {
-                                  No field path matches "{{ filter() }}".
-                                } @else {
-                                  No field matches the selected filters.
-                                }
-                              </p>
-                              @if (filtering()) {
-                                <button
-                                  type="button"
-                                  class="small"
-                                  (click)="clearFilters(fieldFilter)"
-                                >
-                                  Clear filters
-                                </button>
-                              }
-                            </td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  </div>
-
-                  @if (selectedNode(); as node) {
-                    <app-forms-field-detail
-                      [form]="form"
-                      [node]="node"
-                      [version]="version()"
-                      [rpc]="rpc()"
-                      (closed)="closeField()"
-                    />
-                  }
+                  <app-forms-fields
+                    [form]="form"
+                    [rows]="rows()"
+                    [fieldPath]="fieldPath()"
+                    [selectedNode]="selectedNode()"
+                    [version]="version()"
+                    [rpc]="rpc()"
+                    [filtering]="filtering()"
+                    [filterStatus]="filterStatus()"
+                    [(filter)]="filter"
+                    [(active)]="active"
+                    (toggleField)="toggleField($event)"
+                    (closeField)="closeField()"
+                    (clearFilters)="clearFilters($event)"
+                    (highlight)="highlight($event?.formId ?? null, $event?.path ?? '')"
+                  />
+                }
+                @case ('schema') {
+                  <app-forms-schema [form]="form" />
                 }
                 @case ('timeline') {
+                  <app-forms-export-test [formId]="form.id" [rpc]="rpc()" />
                   <app-limit-note
                     [dropped]="droppedEvents()"
                     [max]="maxEvents()"
@@ -646,65 +310,6 @@ function countFields(node: FormFieldNode): number {
       color: var(--text-2);
       line-height: 1.5;
     }
-    .setup-errors {
-      display: grid;
-      gap: 4px;
-      margin: 0 0 12px;
-      padding: 10px 12px;
-      border: 1px solid;
-      @include m.tint(warn);
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .setup-errors p {
-      margin: 0;
-    }
-    .setup-title {
-      font-weight: 600;
-    }
-    .setup-errors ul {
-      display: grid;
-      gap: 2px;
-      margin: 0;
-      padding: 0 0 0 16px;
-      min-width: 0;
-    }
-    .setup-errors code {
-      font-family: var(--font-mono);
-      font-size: 12.5px;
-      overflow-wrap: anywhere;
-    }
-    .setup-page {
-      margin-left: 6px;
-    }
-    .search {
-      position: relative;
-      display: flex;
-      flex: 1 1 220px;
-      min-width: 0;
-    }
-    .search > input {
-      flex: 1 1 auto;
-      width: 100%;
-      padding-left: 34px;
-    }
-    .search-icon {
-      position: absolute;
-      top: 50%;
-      left: 12px;
-      width: 14px;
-      height: 14px;
-      transform: translateY(-50%);
-      fill: none;
-      stroke: var(--text-3);
-      stroke-width: 2.2;
-      stroke-linecap: round;
-      pointer-events: none;
-    }
-    .search:focus-within .search-icon {
-      stroke: var(--accent);
-    }
     :host {
       display: block;
     }
@@ -713,145 +318,6 @@ function countFields(node: FormFieldNode): number {
       grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
       gap: 16px;
       align-items: start;
-    }
-    .sidebar {
-      min-width: 0;
-      padding: 8px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      animation: enter 0.35s var(--ease) both;
-    }
-    .list-heading {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin: 4px 8px 8px;
-      color: var(--text-3);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-    .list-count {
-      padding: 0 6px;
-      border-radius: 99px;
-      background: var(--surface-3);
-      color: var(--text-2);
-      font-size: 11px;
-      letter-spacing: 0;
-      line-height: 18px;
-      font-variant-numeric: tabular-nums;
-    }
-    .form-list {
-      display: grid;
-      gap: 2px;
-      align-content: start;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .form-list > li {
-      /* A page with many forms skips layout and paint for the entries out of view. */
-      content-visibility: auto;
-      contain-intrinsic-size: auto 52px;
-    }
-    .form-item {
-      width: 100%;
-      display: grid;
-      grid-template-columns: 8px minmax(0, 1fr) auto;
-      grid-template-areas: 'dot label count' '. kind kind';
-      gap: 2px 10px;
-      align-items: center;
-      padding: 8px 10px;
-      border: 0;
-      border-radius: var(--radius-sm);
-      background: transparent;
-      color: var(--text);
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
-      transition:
-        background-color 150ms var(--ease),
-        color 150ms var(--ease),
-        box-shadow 150ms var(--ease);
-    }
-    .form-item:hover {
-      background: var(--surface-2);
-    }
-    .form-item:active {
-      background: var(--surface-3);
-    }
-    .form-item.active {
-      background: var(--accent-soft);
-      box-shadow: inset 2px 0 0 var(--accent);
-      color: var(--text-strong);
-    }
-    .form-item:focus-visible {
-      /* Inside the entry: its paint containment would clip a ring drawn outside. */
-      outline: 2px solid var(--accent);
-      outline-offset: -2px;
-    }
-    .form-item .dot {
-      grid-area: dot;
-    }
-    .form-item .label {
-      grid-area: label;
-      min-width: 0;
-      overflow: hidden;
-      font-size: 13px;
-      font-weight: 500;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .form-item .kind {
-      grid-area: kind;
-      min-width: 0;
-      overflow: hidden;
-      color: var(--text-3);
-      font-size: 12px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .form-item .id {
-      font-family: var(--font-mono);
-      font-size: 11.5px;
-    }
-    .form-item.active .kind {
-      color: var(--text-2);
-    }
-    .form-item .count {
-      grid-area: count;
-      min-width: 20px;
-      padding: 0 7px;
-      border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
-      border-radius: 99px;
-      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-      color: var(--danger-text);
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 18px;
-      text-align: center;
-      font-variant-numeric: tabular-nums;
-    }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--ok);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 15%, transparent);
-    }
-    .dot[data-status='INVALID'] {
-      background: var(--danger);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 15%, transparent);
-    }
-    .dot[data-status='PENDING'] {
-      background: var(--warn);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 15%, transparent);
-    }
-    .dot[data-status='DISABLED'] {
-      background: var(--text-3);
-      box-shadow: none;
     }
     .detail {
       display: grid;
@@ -899,26 +365,6 @@ function countFields(node: FormFieldNode): number {
     }
     .gone p {
       margin: 0;
-    }
-    .page-toggle {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      min-height: 32px;
-      margin: 0 8px 8px;
-      color: var(--text-2);
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .page-toggle input {
-      width: 16px;
-      height: 16px;
-      margin: 0;
-      accent-color: var(--accent);
-    }
-    .page-toggle input:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
     }
     .error-summary {
       min-width: 0;
@@ -978,71 +424,7 @@ function countFields(node: FormFieldNode): number {
     .totals b.has-errors {
       color: var(--danger);
     }
-    /* Opaque tints so a selected or hovered row behind the badge cannot lower its contrast. */
-    .badge {
-      display: inline-block;
-      padding: 0 8px;
-      border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
-      border-radius: 99px;
-      background: color-mix(in srgb, var(--ok) 12%, var(--surface));
-      color: var(--ok-text);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      line-height: 20px;
-      white-space: nowrap;
-    }
-    .summary > .badge {
-      line-height: 22px;
-    }
-    .badge[data-status='INVALID'] {
-      border-color: color-mix(in srgb, var(--danger) 30%, transparent);
-      background: color-mix(in srgb, var(--danger) 12%, var(--surface));
-      color: var(--danger-text);
-    }
-    .badge[data-status='PENDING'] {
-      border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, var(--surface));
-      color: var(--warn-text);
-    }
-    .badge[data-status='DISABLED'] {
-      border-color: var(--border-strong);
-      background: var(--surface-2);
-      color: var(--text-2);
-    }
-    .action-bar {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-    .divider {
-      width: 1px;
-      height: 20px;
-      background: var(--border-strong);
-    }
-    .spacer {
-      flex: 1 1 0;
-    }
-    .actions .small:not(.primary):not(.danger) {
-      max-width: 240px;
-    }
-    .small.on {
-      background: var(--accent-soft);
-      border-color: var(--accent-line);
-      color: var(--text-strong);
-    }
-    .status:empty {
-      height: 0;
-      margin-top: -8px;
-    }
+    ${BADGE_STYLES}
     .tabs {
       display: inline-flex;
       justify-self: start;
@@ -1091,269 +473,6 @@ function countFields(node: FormFieldNode): number {
       min-width: 0;
       animation: enter 0.35s var(--ease) both;
     }
-    .filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 12px;
-      align-items: center;
-    }
-    .chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      min-width: 0;
-      margin: 0;
-      padding: 0;
-      border: 0;
-    }
-    .chips label {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      height: 28px;
-      padding: 0 12px;
-      border: 1px solid var(--control-border);
-      border-radius: 99px;
-      background: var(--surface-2);
-      color: var(--text-2);
-      font-size: 12px;
-      font-weight: 500;
-      white-space: nowrap;
-      cursor: pointer;
-      user-select: none;
-      transition:
-        background-color 150ms var(--ease),
-        border-color 150ms var(--ease),
-        color 150ms var(--ease);
-    }
-    .chips label:hover {
-      color: var(--text);
-      border-color: var(--text-3);
-    }
-    .chips input {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      opacity: 0;
-      cursor: pointer;
-    }
-    .chips label:has(input:checked) {
-      border-color: var(--accent-line);
-      background: var(--accent-soft);
-      color: var(--accent);
-    }
-    .chips label:has(input:focus-visible) {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-    .filter {
-      flex: 1 1 220px;
-      min-width: 0;
-      height: 34px;
-      padding: 0 12px 0 34px;
-      background: var(--bg);
-      border: 1px solid var(--control-border);
-      border-radius: var(--radius-sm);
-      color: var(--text);
-      font: inherit;
-      font-size: 13px;
-      transition:
-        border-color 150ms var(--ease),
-        box-shadow 150ms var(--ease);
-    }
-    .filter::placeholder {
-      color: var(--text-3);
-    }
-    .filter:hover {
-      border-color: color-mix(in srgb, var(--text-3) 55%, var(--control-border));
-    }
-    .filter:focus,
-    .filter:focus-visible {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
-    }
-    .table-scroll {
-      overflow-x: auto;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-    }
-    .table-scroll:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-    .fields {
-      width: 100%;
-      min-width: 680px;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    .fields th,
-    .fields td {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-      vertical-align: top;
-      line-height: 20px;
-    }
-    .fields tbody tr:last-child > * {
-      border-bottom: 0;
-    }
-    .fields thead th {
-      background: var(--surface-2);
-      color: var(--text-3);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      line-height: 16px;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    .fields tbody th {
-      color: var(--text);
-      font-weight: 500;
-      white-space: nowrap;
-    }
-    .fields tbody tr {
-      transition: background-color 150ms var(--ease);
-    }
-    .fields tbody tr:hover {
-      background: var(--surface-2);
-    }
-    .fields tbody tr.invalid > th {
-      box-shadow: inset 2px 0 0 color-mix(in srgb, var(--danger) 60%, transparent);
-    }
-    .fields tbody tr:has(.field[aria-pressed='true']) {
-      background: var(--accent-soft);
-    }
-    .fields tbody tr:has(.field[aria-pressed='true']) > th {
-      box-shadow: inset 2px 0 0 var(--accent);
-      color: var(--text-strong);
-    }
-    .name {
-      max-width: 280px;
-    }
-    .field {
-      display: inline-block;
-      max-width: 200px;
-      padding: 0;
-      overflow: hidden;
-      border: none;
-      border-radius: 4px;
-      background: none;
-      color: inherit;
-      font-family: var(--font-mono);
-      font-size: 12.5px;
-      font-weight: 500;
-      line-height: 20px;
-      text-align: left;
-      text-overflow: ellipsis;
-      vertical-align: top;
-      white-space: nowrap;
-      cursor: pointer;
-      transition: color 150ms var(--ease);
-    }
-    .field:hover {
-      color: var(--accent-hover);
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-    .field[aria-pressed='true'] {
-      color: var(--accent);
-    }
-    .field:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-    .type {
-      margin-left: 8px;
-      color: var(--text-3);
-      font-size: 11px;
-      font-weight: 400;
-      vertical-align: top;
-    }
-    .value {
-      min-width: 140px;
-      max-width: 320px;
-    }
-    .value code,
-    .errors code {
-      color: #fde68a;
-      overflow-wrap: anywhere;
-
-      @include m.light {
-        color: var(--accent);
-      }
-    }
-    .value .muted {
-      margin-top: 2px;
-      font-size: 12px;
-    }
-    .status-cell {
-      white-space: nowrap;
-    }
-    .flags {
-      min-width: 160px;
-    }
-    .flags span {
-      display: inline-block;
-      margin: 0 4px 4px 0;
-      padding: 0 8px;
-      border: 1px solid var(--border);
-      border-radius: 99px;
-      background: var(--surface-2);
-      color: var(--text-2);
-      font-size: 11px;
-      line-height: 18px;
-      white-space: nowrap;
-    }
-    .flags span.warn {
-      border-color: color-mix(in srgb, var(--warn) 30%, transparent);
-      background: color-mix(in srgb, var(--warn) 12%, var(--surface));
-      color: var(--warn-text);
-    }
-    .errors {
-      min-width: 180px;
-    }
-    .errors div {
-      color: var(--danger);
-      overflow-wrap: anywhere;
-    }
-    .errors div + div {
-      margin-top: 4px;
-    }
-    .errors .kind-tag {
-      margin-left: 6px;
-      color: var(--text-3);
-      font-size: 11px;
-    }
-    .source {
-      margin-left: 6px;
-      color: var(--text-2);
-      font-size: 11px;
-    }
-    .errors .unseen {
-      color: var(--warn);
-      font-size: 11px;
-    }
-    .truncated {
-      color: var(--text-3);
-      font-size: 12px;
-      font-style: italic;
-    }
-    .fields .no-match {
-      padding: 24px 12px;
-      color: var(--text-2);
-      text-align: center;
-    }
-    .fields .no-match p {
-      margin: 0 0 10px;
-    }
-    .fields .no-match p:last-child {
-      margin-bottom: 0;
-    }
     .empty {
       display: grid;
       justify-items: center;
@@ -1385,10 +504,6 @@ function countFields(node: FormFieldNode): number {
       .layout {
         grid-template-columns: minmax(0, 1fr);
       }
-      .form-list {
-        max-height: 240px;
-        overflow-y: auto;
-      }
     }
     @media (max-width: 480px) {
       .detail {
@@ -1398,10 +513,6 @@ function countFields(node: FormFieldNode): number {
         flex-basis: 100%;
         margin-left: 0;
       }
-      .spacer,
-      .divider {
-        display: none;
-      }
     }
   `,
 })
@@ -1409,7 +520,6 @@ export class FormsInspector {
   rpc = input<DevframeRpcClient | null>(null);
   focus = input<{ id: string } | null>(null);
   readonly canWrite = computed(() => actionAllowed(this.rpc(), 'forms'));
-  protected readonly redactLabel = redactLabel;
   protected readonly writesOff = actionBlockedMessage('forms');
   readonly focusHandled = output<void>();
 
@@ -1434,9 +544,16 @@ export class FormsInspector {
     return this.instrumented().some((page) => id.endsWith(`@${page}`));
   });
   readonly filter = signal('');
-  readonly tabs = TABS;
-  readonly chips = CHIPS;
-  readonly tab_ = signal<Tab>('fields');
+  /** The views of the selected form; Schema only for a Signal Form. */
+  readonly tabs = computed(() =>
+    this.selected()?.kind === 'signal' ? TABS : TABS.filter((tab) => tab.id !== 'schema'),
+  );
+  /** The open view, back on Fields when the next form has no such view. */
+  readonly tab_ = linkedSignal<{ id: Tab }[], Tab>({
+    source: this.tabs,
+    computation: (tabs, previous) =>
+      previous && tabs.some((tab) => tab.id === previous.value) ? previous.value : 'fields',
+  });
   readonly active = signal(new Set<Chip>());
   /** True while the path search or a chip hides fields, the same test `rows` applies. */
   readonly filtering = computed(() => !!this.filter() || this.active().size > 0);
@@ -1705,15 +822,6 @@ export class FormsInspector {
     );
   }
 
-  toggleChip(chip: Chip) {
-    this.active.update((set) => {
-      const next = new Set(set);
-      if (next.has(chip)) next.delete(chip);
-      else next.add(chip);
-      return next;
-    });
-  }
-
   async act(action: string, extra: Record<string, unknown> = {}) {
     const form = this.selected();
     if (!form) return;
@@ -1733,7 +841,7 @@ export class FormsInspector {
   }
 
   onKey(event: KeyboardEvent) {
-    const order = this.tabs.map((tab) => tab.id);
+    const order = this.tabs().map((tab) => tab.id);
     const index = order.indexOf(this.tab_());
     let next = index;
     if (event.key === 'ArrowRight') next = (index + 1) % order.length;
@@ -1747,23 +855,14 @@ export class FormsInspector {
     queueMicrotask(() => host.querySelector<HTMLElement>(`#forms-tab-${order[next]}`)?.focus());
   }
 
-  sourceText(error: FormFieldError) {
-    const label = SOURCE_LABELS[error.source ?? ''] ?? error.source ?? '';
-    return error.from !== undefined ? `${label} on ${error.from || 'the form'}` : label;
-  }
-
   /** Resets the path search and the chips, then hands focus back to the search field. */
-  clearFilters(search: HTMLInputElement) {
+  clearFilters(search: { focus(): void }) {
     this.filter.set('');
     this.active.set(new Set());
     const count = this.rows().length;
     const message = `Filters cleared. Showing ${count} ${count === 1 ? 'field' : 'fields'}.`;
     this.filterStatus.update((current) => (current === message ? `${message}\u00a0` : message));
     search.focus();
-  }
-
-  onFilter(event: Event) {
-    this.filter.set((event.target as HTMLInputElement).value);
   }
 
   highlight(formId: string | null, path: string) {
@@ -1776,15 +875,5 @@ export class FormsInspector {
 
   kindLabel(kind: CollectedForm['kind']) {
     return KIND_LABELS[kind];
-  }
-
-  constraintList(node: FormFieldNode) {
-    return Object.entries(node.constraints ?? {}).map(([name, value]) => `${name} ${value}`);
-  }
-
-  errorText(node: FormFieldNode, error: FormFieldError) {
-    return /^[a-z]/.test(error.message)
-      ? `${node.key || 'The form'} ${error.message}`
-      : error.message;
   }
 }

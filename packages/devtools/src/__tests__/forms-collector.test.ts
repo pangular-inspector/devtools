@@ -2,6 +2,7 @@
 import '@angular/compiler';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   FormField,
@@ -83,6 +84,13 @@ Component({
   imports: [Login, Profile, SlowSignUp],
   template: `<login-form /><profile-form /><slow-sign-up-form />`,
 })(SlowPage);
+
+class TwoForms {}
+Component({
+  selector: 'two-forms',
+  imports: [Login, Profile],
+  template: `<login-form /><profile-form />`,
+})(TwoForms);
 
 class Tasks {
   model = signal({ name: '', items: [{ n: -1 }] });
@@ -287,6 +295,54 @@ describe('forms collector', () => {
       ['"Ada"', 'user'],
       ['"Bob"', undefined],
     ]);
+  });
+
+  it('tags a change as user only in the form the user typed in', async () => {
+    const fixture = await mount(TwoForms);
+    const h = harness();
+    h.collector.push();
+    await tick();
+    const profile = fixture.debugElement.query(By.directive(Profile)).componentInstance as Profile;
+    const input = document.getElementById('email') as HTMLInputElement;
+    input.value = 'me@x.io';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    profile.form.name().value.set('Bob');
+    h.collector.push();
+    await tick();
+    const events = h.lastEvents().filter((e) => e.type === 'value');
+    expect(events.find((e) => e.path === 'email')).toMatchObject({ origin: 'user' });
+    const bob = events.find((e) => e.formId.startsWith('Profile') && e.detail === '"Bob"');
+    expect(bob).toBeDefined();
+    expect(bob?.origin).not.toBe('user');
+  });
+
+  it('skips reading the forms on a refresh when nothing changed', async () => {
+    const fixture = await mount(Profile);
+    const h = harness();
+    const ng = (globalThis as any).ng;
+    const original = ng.getDirectives;
+    let reads = 0;
+    ng.getDirectives = (el: Element) => {
+      reads++;
+      return original(el);
+    };
+    try {
+      await h.collector.sync();
+      await h.collector.sync();
+      await tick();
+      reads = 0;
+      await h.collector.sync();
+      expect(reads).toBe(0);
+      // A Signal Form reports no events, so its value tells the refresh to read again.
+      fixture.componentInstance.form.name().value.set('Bob');
+      await h.collector.sync();
+      expect(reads).toBeGreaterThan(0);
+      await h.collector.push();
+      await tick(LEASED_PUSH_MS + 100);
+      expect(h.reports().at(-1).forms[0].root.children[0].value).toBe('Bob');
+    } finally {
+      ng.getDirectives = original;
+    }
   });
 
   it('answers form actions for its own forms only', async () => {
@@ -538,6 +594,41 @@ describe('forms collector WebMCP attribution', () => {
       const own = events.filter((e) => e.type === 'value' && e.path === 'name');
       expect(own.find((e) => e.detail === '"Ada"')).toMatchObject({ origin: 'agent' });
       expect(own.find((e) => e.detail === '"Grace"')).toMatchObject({ origin: 'user' });
+      releaseSlowSubmit();
+      await pending;
+    } finally {
+      delete (navigator as any).modelContext;
+    }
+  });
+});
+
+describe('forms collector and a running WebMCP call', () => {
+  it('tags only the outcome of a running call as agent, not values app code writes meanwhile', async () => {
+    const tools = new Map<string, { execute: (args: unknown) => Promise<unknown> }>();
+    (navigator as any).modelContext = {
+      registerTool: async (tool: {
+        name: string;
+        execute: (args: unknown) => Promise<unknown>;
+      }) => {
+        tools.set(tool.name, tool);
+      },
+    };
+    try {
+      TestBed.configureTestingModule({ providers: [provideExperimentalWebMcpForms()] });
+      const h = harness();
+      const fixture = await mount(SlowSignUp);
+      await tick();
+      h.collector.push();
+      await tick();
+      const pending = tools.get('slow_sign_up')!.execute({ name: 'Ada' });
+      fixture.detectChanges();
+      await tick(LEASED_PUSH_MS + 100);
+      fixture.componentInstance.form.name().value.set('Code');
+      h.collector.push();
+      await tick(LEASED_PUSH_MS + 100);
+      const values = h.lastEvents().filter((e) => e.type === 'value' && e.path === 'name');
+      expect(values.find((e) => e.detail === '"Ada"')).toMatchObject({ origin: 'agent' });
+      expect(values.find((e) => e.detail === '"Code"')?.origin).not.toBe('agent');
       releaseSlowSubmit();
       await pending;
     } finally {

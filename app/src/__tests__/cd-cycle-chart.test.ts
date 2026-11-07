@@ -99,7 +99,20 @@ describe('CdCycleChart', () => {
     expect(heights[0]).toBeCloseTo((4 / 30) * 100);
     const budget = host().querySelector<HTMLElement>('.budget')!;
     expect(parseFloat(budget.style.bottom)).toBeCloseTo((FRAME_BUDGET_MS / 30) * 100);
-    expect(budget.textContent).toContain('16.6 ms budget');
+    expect(budget.textContent).toContain('16 ms budget');
+  });
+
+  it('draws the line at the recording slowMs and flags only cycles over it', async () => {
+    fixture = TestBed.createComponent(CdCycleChart);
+    fixture.componentRef.setInput('cycles', CYCLES);
+    fixture.componentRef.setInput('slowMs', 25);
+    await fixture.whenStable();
+    const budget = host().querySelector<HTMLElement>('.budget')!;
+    expect(budget.textContent).toContain('25 ms budget');
+    expect(parseFloat(budget.style.bottom)).toBeCloseTo((25 / 31.25) * 100);
+    const over = options().filter((o) => o.getAttribute('aria-label')!.includes('over budget'));
+    expect(over.map((o) => o.getAttribute('aria-label')!.split(',')[0])).toEqual(['Cycle 8']);
+    expect(host().textContent).toContain('1 over the 25 ms budget');
   });
 
   it('keeps the budget line inside the chart when every cycle is fast', async () => {
@@ -120,7 +133,7 @@ describe('CdCycleChart', () => {
     expect(options()[0].getAttribute('aria-label')).not.toContain('over budget');
     expect(host().querySelectorAll('.markers span.over')).toHaveLength(2);
     expect(host().querySelector('.summary')!.textContent).toContain(
-      'All 5 cycles. 2 over the 16.6 ms budget.',
+      'All 5 cycles. 2 over the 16 ms budget.',
     );
   });
 
@@ -168,7 +181,7 @@ describe('CdCycleChart', () => {
     expect(fixture.componentInstance.range()).toEqual({ from: 6, to: 8 });
     expect(selectedIds()).toEqual(['Cycle 6', 'Cycle 7', 'Cycle 8']);
     expect(host().querySelector('.summary')!.textContent).toContain(
-      'Cycles 6 to 8 (3). 2 over the 16.6 ms budget.',
+      'Cycles 6 to 8 (3). 2 over the 16 ms budget.',
     );
     const band = host().querySelector<HTMLElement>('.band')!;
     expect(parseFloat(band.style.left)).toBeCloseTo(20);
@@ -342,8 +355,8 @@ describe('CdRecording with the chart', () => {
     await fixture.whenStable();
     const host = fixture.nativeElement as HTMLElement;
     const table = () =>
-      [...host.querySelectorAll('.cd-grid table tbody tr')].map(
-        (tr) => tr.querySelector('td')!.textContent,
+      [...host.querySelectorAll('.cd-grid table:first-of-type tbody tr')].map((tr) =>
+        tr.querySelector('td')!.textContent!.trim(),
       );
     expect(host.querySelector('app-cd-cycle-chart')).not.toBeNull();
     expect(table()).toEqual(['List', 'Cart']);
@@ -363,6 +376,26 @@ describe('CdRecording with the chart', () => {
     fixture.componentInstance.showComponent.subscribe((name) => shown.push(name));
     host.querySelector<HTMLButtonElement>('app-cd-treemap button')!.click();
     expect(shown).toEqual(['Cart']);
+    fixture.destroy();
+  });
+
+  it("passes the page's slowMs to the chart", async () => {
+    const page: CdPage = {
+      pageId: 'p1',
+      supported: true,
+      recording: false,
+      startedAt: null,
+      dropped: 0,
+      slowMs: 3,
+      cycles: CYCLES,
+      components: [],
+      hosts: {},
+    };
+    const fixture = TestBed.createComponent(CdRecording);
+    fixture.componentRef.setInput('page', page);
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.budget')!.textContent).toContain('3 ms budget');
     fixture.destroy();
   });
 });

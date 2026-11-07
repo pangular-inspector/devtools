@@ -118,7 +118,11 @@ interface PangularConfig {
     browserTools?: boolean;
   };
   actions?: boolean | Partial<Record<PangularAction, boolean>>;
-  redaction?: {secretNames?: string[]; unmask?: string[]};
+  redaction?: {
+    secretNames?: string[];
+    unmask?: string[];
+    entropy?: boolean | {minLength?: number; threshold?: number};
+  };
   limits?: {
     refreshMs?: number;
     navigations?: number;
@@ -126,23 +130,26 @@ interface PangularConfig {
     httpCalls?: number;
     changeLog?: number;
     cdCycles?: number;
+    cdSlowMs?: number;
     capacitorCalls?: number;
     idleAfterMs?: number;
   };
   popup?: {hotkey?: string | false};
   plugins?: Record<string, boolean | {enabled?: boolean; tools?: boolean; actions?: boolean}>;
   lint?: {rules?: Record<string, boolean>};
+  analog?: {contentSchema?: string};
+  ngrx?: {trace?: boolean};
 }
 ```
 
 ### Inspectors and agent tools
 
-| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops every `action` and `destructive` tool in the [tier table](../agents/tools.md#action-tools): `run-form-action`, `fill-form`, `navigate`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection`, `probe-route`, `record-guards`, `analog-run-api` and `clear-recordings`. `audit` stays without its `axe` argument. |
-| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `agent.browserTools` | `false` | `true` registers the `read` agent tools on the page for [browser agents](../agents/browser-agents.md) (WebMCP and Chrome DevTools for agents). Off by default, because any script on the development page could then call them. This is where the **Browser agent tools** switch in [Settings](./settings.md#browser-agents) starts. The switch changes it for every page until the dev server restarts.                                                                                                                                                                                                                             |
+| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops every `action` and `destructive` tool in the [tier table](../agents/tools.md#action-tools): `run-form-action`, `fill-form`, `navigate`, `ngrx-dispatch`, `ngrx-restore`, `ngrx-store-devtools`, `tanstack-run-query`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `load-defer-block`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection`, `probe-route`, `record-guards`, `analog-run-api`, `analog-run-nitro-task`, `analog-purge-nitro-cache` and `clear-recordings`. `audit` stays without its `axe` argument. |
+| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `agent.browserTools` | `false` | `true` registers the `read` agent tools on the page for [browser agents](../agents/browser-agents.md) (WebMCP and Chrome DevTools for agents). Off by default, because any script on the development page could then call them. This is where the **Browser agent tools** switch in [Settings](./settings.md#browser-agents) starts. The switch changes it for every page until the dev server restarts.                                                                                                                                                                                                                                                                                                                             |
 
 The inspectors are `components`, `injectors`, `signals`, `ngrx`, `tanstackQuery`, `forms`, `router`, `pipes`, `http`, `analog`, `capacitor`, `errors`, `plugins`, `performance` ([Performance](../inspectors/performance.md)) and `build` ([Build](../inspectors/build.md)).
 
@@ -154,17 +161,17 @@ If you open a tab that is turned off, the panel says so, shows the option that t
 
 Actions are the writes that the panel and agents make to your app or the server.
 
-| Option                  | Default | What `false` blocks                                                                                                                                                                                                               |
-| ----------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `actions.forms`         | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `run-form-action` and `fill-form`.                                             |
-| `actions.router`        | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Drops the `navigate` and `probe-route` agent tools and router clearing in `clear-recordings`. `record-guards` and `list-routes` with `resolveLazy` stay.    |
-| `actions.ngrx`          | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `ngrx-dispatch` and `ngrx-restore` agent tools.                                                                                         |
-| `actions.http`          | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule`, `remove-http-rule`, `set-ssr-override` and `remove-ssr-override` agent tools and HTTP clearing in `clear-recordings`. |
-| `actions.analog`        | `true`  | The Analog request playground and clearing server calls. Drops the `analog-run-api` agent tool and Analog clearing in `clear-recordings`.                                                                                         |
-| `actions.components`    | `true`  | Editing component inputs, properties and writable signals from the **Components** tab, and **Restore** in the **Signals** value history. Drops the `set-component-property` and `set-signal` agent tools.                         |
-| `actions.tanstackQuery` | `true`  | Invalidating and refetching a query from the **Queries** tab. Drops the `tanstack-run-query` agent tool.                                                                                                                          |
-| `actions.plugins`       | `true`  | Every plugin's page actions, from the **Plugins** tab and from its tools. Drops the plugin tools that are not `read`.                                                                                                             |
-| `actions`               | `true`  | All of the above.                                                                                                                                                                                                                 |
+| Option                  | Default | What `false` blocks                                                                                                                                                                                                                              |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `actions.forms`         | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `run-form-action` and `fill-form`.                                                            |
+| `actions.router`        | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Drops the `navigate` and `probe-route` agent tools and router clearing in `clear-recordings`. `record-guards` and `list-routes` with `resolveLazy` stay.                   |
+| `actions.ngrx`          | `true`  | Restoring NgRx state from the change log, dispatching `@ngrx/store` actions and changing the Store DevTools history. Drops the `ngrx-dispatch`, `ngrx-restore` and `ngrx-store-devtools` agent tools.                                            |
+| `actions.http`          | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule`, `remove-http-rule`, `set-ssr-override` and `remove-ssr-override` agent tools and HTTP clearing in `clear-recordings`.                |
+| `actions.analog`        | `true`  | The Analog request playground, clearing server calls, running Nitro tasks and purging the Nitro cache. Drops the `analog-run-api`, `analog-run-nitro-task` and `analog-purge-nitro-cache` agent tools and Analog clearing in `clear-recordings`. |
+| `actions.components`    | `true`  | Editing component inputs, properties and writable signals from the **Components** tab, and **Restore** in the **Signals** value history. Drops the `set-component-property`, `set-signal` and `load-defer-block` agent tools.                    |
+| `actions.tanstackQuery` | `true`  | Invalidating and refetching a query from the **Queries** tab. Drops the `tanstack-run-query` agent tool.                                                                                                                                         |
+| `actions.plugins`       | `true`  | Every plugin's page actions, from the **Plugins** tab and from its tools. Drops the plugin tools that are not `read`.                                                                                                                            |
+| `actions`               | `true`  | All of the above.                                                                                                                                                                                                                                |
 
 Pass `actions: false` to block every action, or an object to block some. Keys you leave out of the object stay on.
 
@@ -174,12 +181,30 @@ The server refuses a blocked action, and with `actions.components` the page refu
 
 ### Redaction
 
-| Option                  | Default | What it does                                                                                                                                                |
-| ----------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `redaction.secretNames` | `[]`    | Extra field names to treat as secret, on top of the built-in list. They match by words, like the built-in list, so `passport` also covers `passportNumber`. |
-| `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__PANGULAR_FORMS__`.                                                 |
+| Option                  | Default | What it does                                                                                                                                                                                                                                        |
+| ----------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `redaction.secretNames` | `[]`    | Extra field names to treat as secret, on top of the built-in list. They match by words, like the built-in list, so `passport` also covers `passportNumber`.                                                                                         |
+| `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__PANGULAR_FORMS__`.                                                                                                                                         |
+| `redaction.entropy`     | `false` | Also mask high-entropy strings that no name or shape rule catches, such as an opaque token in a harmless-looking field. Hex values and ULIDs stay readable. `true` turns it on with the defaults; an object turns it on and sets the options below. |
 
-Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR & HTTP URLs and Capacitor plugin calls use the extra secret names. Each list keeps up to 100 names. The server sends both lists to a page only after the page is trusted, so they are not in `__connection.json`. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
+| `redaction.entropy` field | Default | What it sets                                                                                                                                    |
+| ------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minLength`               | `24`    | The shortest run that can be masked, a whole number from 16 to 512. Raise it if ids in your app are masked that shouldn't be.                   |
+| `threshold`               | `4.5`   | The most bits per character a run needs, from 2 to 6. Shorter runs need less (see [High-entropy strings](../security.md#high-entropy-strings)). |
+
+A field that is out of range takes its default, and the server reports the problem when it starts. To mask only longer runs:
+
+```ts
+// vite.config.ts
+import pangular from '@pangular-inspector/devtools/vite';
+import {defineConfig} from 'vite';
+
+export default defineConfig({
+  plugins: [pangular({redaction: {entropy: {minLength: 32}}})],
+});
+```
+
+Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR & HTTP URLs and Capacitor plugin calls use the extra secret names. Each list keeps up to 100 names. `redaction.entropy` applies to the same text, on the page and again on the devtools server; [High-entropy strings](../security.md#high-entropy-strings) says what it masks. The server sends the `redaction` options to a page only after the page is trusted, so they are not in `__connection.json`. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
 
 ### Limits
 
@@ -193,6 +218,7 @@ Values outside the bounds are clamped to the nearest one.
 | `limits.httpCalls`      | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                                                                                        |
 | `limits.changeLog`      | `200`   | 10 to 2000  | NgRx change log entries kept per page, and the actions kept per page for [other stores](../inspectors/ngrx-store.md#other-stores). |
 | `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                                                             |
+| `limits.cdSlowMs`       | `16`    | 1 to 1000   | A [change detection](../inspectors/components.md#change-detection) cycle longer than this, in ms, counts as slow.                  |
 | `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server.                                              |
 | `limits.idleAfterMs`    | `60000` | 0 to 600000 | How long pages keep sending after an agent's last call while no panel is open. `0` keeps them sending.                             |
 
@@ -280,6 +306,16 @@ const devtools = initPangularHub({extraDevframes: [acmeDevframe]});
 
 The extra devframes run behind the same origin check, request gate and one-time code as Pangular Inspector. An entry with the id `pangular` would replace Pangular Inspector, so it is dropped with a warning, and a value that is not an array is ignored with a warning.
 
+### LAN address
+
+`lanAddress` is an option of the Vite plugin only, and `--lan-address` the matching flag of `pangular dev`. Like `terminals`, it is not part of `PangularConfig`, so `createPangular()` and the CLI config file don't take it.
+
+| Option       | Default | What it does                                                                                                                                                                                                                                                                                                            |
+| ------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lanAddress` | `false` | `true` injects the dev server's devtools URL on this machine's first private IPv4 address, or its first network address when none is private, as `__PANGULAR_LAN_URL__`. An address such as `'192.168.1.20'` uses that one. Needs `allowLan` in effect. See [Inject the LAN address](./vite.md#inject-the-lan-address). |
+
+`false` keeps it off with no warning. `true` and a network IPv4 address turn it on. Any other value, such as a loopback address, `0.0.0.0` or a value that is not a boolean or an IPv4 address, prints a warning and keeps it off. The CLI flag only prints the URL and the define for your build. See [Inject the LAN address](./cli.md#inject-the-lan-address).
+
 ### Lint rules
 
 | Option              | Default | What it does                                                                                                                |
@@ -299,6 +335,36 @@ The extra devframes run behind the same origin check, request gate and one-time 
 
 A rule set to `false` is left out of the panel, the **Audit** tab, the agent tools (`scan-templates`, `scan-pipe-usage`, `explain-pipe`, `lint-routes`, `lint-forms`, `analog-lint` and `audit`) and the CI export (`pangular lint`). Use the rule name a finding shows. The template rules are listed under [scan-templates](../agents/tools.md#scan-templates).
 
+### Analog
+
+| Option                 | Default | What it does                                                                                                                                                                                                                   |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `analog.contentSchema` | none    | A JSON Schema file, relative to the Analog project root, that the frontmatter of every markdown file under `src/content` must match. The **Content** tab, `analog-scan-content` and `analog-lint` report the files that don't. |
+
+```json
+{
+  "analog": {
+    "contentSchema": "content.schema.json"
+  }
+}
+```
+
+A file outside the project, a missing file or a file that is not JSON gives one `content-schema-unreadable` lint warning, and the frontmatter is then only checked for syntax. See [Content](../inspectors/analog.md#content) for the keywords the check reads.
+
+### NgRx
+
+| Option       | Default | What it does                                                                                                                                                                                                                                                                                                           |
+| ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ngrx.trace` | `false` | `true` records where each [NgRx](../inspectors/ngrx-store.md#change-log) change log entry came from: up to 8 app frames of the dispatch, method call, `patchState` or event, without Angular, NgRx, RxJS, zone.js or devtools frames. Origins and query strings are removed, and secrets are masked like other values. |
+
+```json
+{
+  "ngrx": {"trace": true}
+}
+```
+
+Taking a stack on every write costs time, so `ngrx.trace` is off by default. The frames show in the entry detail on the **NgRx Store** tab, in `ngrx-history` and in [`ngrx-explain-change`](../agents/tools.md#ngrx-explain-change). In a bundled build without source maps, they point into the bundle.
+
 ## Check the active configuration
 
 The server checks the options when it starts. An unknown key, a value of the wrong type or a limit outside its bounds prints one `[pangular]` warning in the terminal that lists each problem and the value used instead. An unknown key names the closest known key:
@@ -313,19 +379,20 @@ A value that the server ignores falls back to its default, which is usually the 
 
 The [Dashboard](../inspectors/dashboard.md#configuration-block) has a **Configuration** block. It lists the options that differ from the defaults, or says **Defaults** when nothing is changed. The panel reads the `redaction` rows from the server once it is trusted, since `__connection.json` leaves them out. A static report has no server to ask, so it shows no **Extra secret names** or **Unmasked names** rows.
 
-| Row                             | Lists                                             |
-| ------------------------------- | ------------------------------------------------- |
-| **Inspectors off**              | Inspectors set to `false`.                        |
-| **Agent**                       | **Read-only** when `agent.readOnly` is `true`.    |
-| **Hidden from the agent**       | Inspectors whose agent tools are hidden.          |
-| **Blocked actions**             | Actions set to `false`.                           |
-| **Extra secret names**          | `redaction.secretNames`.                          |
-| **Unmasked names**              | `redaction.unmask`.                               |
-| **Limits**                      | Limits that differ from the defaults.             |
-| **Popup shortcut**              | `popup.hotkey`, or **Off** when it is `false`.    |
-| **Plugins off**                 | Plugins set to `false` in `plugins`.              |
-| **Plugin tools or actions off** | Plugins with `tools` or `actions` set to `false`. |
-| **Lint rules off**              | Rules set to `false` in `lint.rules`.             |
+| Row                             | Lists                                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| **Inspectors off**              | Inspectors set to `false`.                                                             |
+| **Agent**                       | **Read-only** when `agent.readOnly` is `true`.                                         |
+| **Hidden from the agent**       | Inspectors whose agent tools are hidden.                                               |
+| **Blocked actions**             | Actions set to `false`.                                                                |
+| **Extra secret names**          | `redaction.secretNames`.                                                               |
+| **Unmasked names**              | `redaction.unmask`.                                                                    |
+| **Entropy masking**             | **On** when `redaction.entropy` is on, with the options that differ from the defaults. |
+| **Limits**                      | Limits that differ from the defaults.                                                  |
+| **Popup shortcut**              | `popup.hotkey`, or **Off** when it is `false`.                                         |
+| **Plugins off**                 | Plugins set to `false` in `plugins`.                                                   |
+| **Plugin tools or actions off** | Plugins with `tools` or `actions` set to `false`.                                      |
+| **Lint rules off**              | Rules set to `false` in `lint.rules`.                                                  |
 
 ## Where to next
 

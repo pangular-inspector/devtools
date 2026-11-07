@@ -320,3 +320,38 @@ describe('App tab bar', () => {
     fixture.destroy();
   });
 });
+
+describe('App counts launcher setting', () => {
+  it('sends the stored counts launcher to the popup once the panel connects', async () => {
+    localStorage.setItem('pangular-pref:pill', 'true');
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+    const app = fixture.componentInstance;
+    const posted = vi.spyOn(app as unknown as { postToPopup(m: unknown): void }, 'postToPopup');
+    app.connected.set(true);
+    await settle(fixture);
+    expect(posted).toHaveBeenCalledWith({ type: 'pangular:popup-pill', pill: true });
+    localStorage.removeItem('pangular-pref:pill');
+    fixture.destroy();
+  });
+
+  it('saves the counts launcher and sends it to the popup on the page', async () => {
+    localStorage.removeItem('pangular-pref:pill');
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+    const app = fixture.componentInstance;
+    expect(app.pill()).toBe(false);
+    const sent = vi.spyOn(window.parent, 'postMessage');
+    app.setPill(true);
+    expect(app.pill()).toBe(true);
+    expect(localStorage.getItem('pangular-pref:pill')).toBe('true');
+    app.setPill(false);
+    expect(localStorage.getItem('pangular-pref:pill')).toBeNull();
+    // A top-level panel has no popup around it, so nothing is posted.
+    expect(sent).not.toHaveBeenCalled();
+    sent.mockRestore();
+    fixture.destroy();
+  });
+});

@@ -39,6 +39,8 @@ yarn add @pangular-inspector/devtools
 bun add @pangular-inspector/devtools
 ```
 
+To install the package and make the edits of the next two steps in one command, run `ng add @pangular-inspector/devtools`. See [Set up with ng add](./installation.md#set-up-with-ng-add). Then skip to [Open the panel](#open-the-panel).
+
 ## Mount the hub
 
 Open `src/server.ts`. Import `initPangularHub` and mount its middleware right after `const app = express()`, before the generated `express.static` and Angular handlers:

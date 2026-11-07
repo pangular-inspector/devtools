@@ -30,6 +30,7 @@
   "bin": {
     "pangular": "./bin.mjs"
   },
+  "schematics": "./dist/schematics/collection.json",
   "exports": {
     ".": "./src/entries/devframe.ts",
     "./devframe": "./src/entries/devframe.ts",
@@ -50,7 +51,9 @@
     "./ssr": "./src/ssr.ts",
     "./package.json": "./package.json",
     "./vite": "./src/entries/vite.ts",
-    "./internal/config": "./src/config.ts"
+    "./internal/config": "./src/config.ts",
+    "./internal/types": "./src/panel-types.ts",
+    "./internal/http-data": "./src/http-data.ts"
   },
   "publishConfig": {
     "main": "./dist/devframe.mjs",

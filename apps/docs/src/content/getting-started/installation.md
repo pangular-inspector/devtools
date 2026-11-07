@@ -122,6 +122,27 @@ bun add -D @pangular-inspector/devtools
 
 MCP agent support (`@devframes/agentic`) and Devframe itself are included. You don't install them separately.
 
+### Set up with ng add
+
+In an Angular CLI workspace, `ng add` installs the package and wires it in for you:
+
+```bash
+ng add @pangular-inspector/devtools
+```
+
+It looks at the project and picks the setup this page describes for it:
+
+| The project has                               | What `ng add` does                                                                                                                                                                             |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `vite.config.ts` (Analog)                   | Adds `pangular()` to the `plugins` of the [Vite plugin](./vite.md). The plugin loads the overlay, so `main.ts` stays as it is.                                                                 |
+| An Express `server.ts` (Angular SSR)          | Adds `initPangularHub({ws: false})` and `app.use(devtools.nodeMiddleware)` right after `const app = express()`, as in [Angular CLI and Express](./express.md). Loads the overlay in `main.ts`. |
+| Neither                                       | Loads the overlay in `main.ts`, and prints the steps to run the standalone CLI behind the `ng serve` proxy, as in [Client-only Angular CLI app](#client-only-angular-cli-app).                 |
+| A `server.ts` on another server, such as Hono | Loads the overlay in `main.ts`, leaves `server.ts` alone and points at [Hono, h3 and Fastify](./other-servers.md).                                                                             |
+
+The overlay goes after bootstrap, behind the `ngDevMode` check shown in [Browser part](#browser-part). Pass `--project <name>` in a workspace with several applications. Without it, `ng add` takes the only application, or the first one.
+
+`ng add` only inserts lines next to code it recognizes, such as `import express from 'express'` and `const app = express()`. When a file looks different, it leaves the file alone and prints the snippet to add by hand. It reads `angular.json` the way the Angular CLI does, with comments and trailing commas. When it can't read it, it changes nothing and prints the overlay snippet, and with `--project` it stops with an error that names `angular.json`. Running it again changes nothing: it skips files that already import the devtools. It saves the package as a dependency, which every setup works with. See [Dependency or dev dependency](#dependency-or-dev-dependency) to move it.
+
 ### Dependency or dev dependency
 
 | Setup                                      | Install it as                                                                                                                                                                                          |
@@ -133,26 +154,26 @@ MCP agent support (`@devframes/agentic`) and Devframe itself are included. You d
 
 ### Entry points
 
-| Import                                                | Use it for                                                                                                            |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `@pangular-inspector/devtools/hub`                    | `initPangularHub()`, the server middleware for an Express app.                                                        |
-| `@pangular-inspector/devtools/vite`                   | The Vite plugin for a Vite-based Angular app, such as an Analog app.                                                  |
-| `@pangular-inspector/devtools/overlay`                | The browser script that collects live data from your page.                                                            |
-| `@pangular-inspector/devtools/overlay-manual`         | The same script, started only when you call `initOverlay`. See [Set up Capacitor](../guides/capacitor.md).            |
-| `@pangular-inspector/devtools/capacitor-hook`         | Logs Capacitor plugin calls from app start. See [Capacitor](../inspectors/capacitor.md#web-calls).                    |
-| `@pangular-inspector/devtools/store-hook`             | Lets NGXS, Elf and MiniRx stores report from app start. See [Other stores](../inspectors/ngrx-store.md#other-stores). |
-| `@pangular-inspector/devtools/startup-hook`           | Times provider construction at startup. See [Injectors](../inspectors/injectors.md#startup-timing).                   |
-| `@pangular-inspector/devtools/plugin`                 | The plugin API for a library's own tab and agent tools. See [Write a plugin](../guides/write-a-plugin.md).            |
-| `@pangular-inspector/devtools/overlay-angular-native` | The overlay for an Angular Native app. See [Angular Native](./angular-native.md).                                     |
-| `@pangular-inspector/devtools/overlay-nativescript`   | The overlay for a NativeScript Angular app. See [NativeScript](./nativescript.md).                                    |
-| `@pangular-inspector/devtools/popup`                  | The floating button and panel on your page.                                                                           |
-| `@pangular-inspector/devtools/http`                   | The HTTP interceptor and hydration hooks for the SSR & HTTP tab.                                                      |
-| `@pangular-inspector/devtools/ssr`                    | SSR tracing for web-standard handlers, Fastify and Analog. See [Hono, h3 and Fastify](./other-servers.md).            |
-| `@pangular-inspector/devtools/config`                 | The `PangularConfig` type and its defaults. See [Configuration](./configuration.md).                                  |
-| `@pangular-inspector/devtools/devframe`               | The devframe definition and `initDevframe()`, for custom hosts.                                                       |
-| `@pangular-inspector/devtools`                        | The same as `@pangular-inspector/devtools/devframe`.                                                                  |
-| `@pangular-inspector/devtools/cd-data`                | The change detection recording types and checks the server and the panel share.                                       |
-| `@pangular-inspector/devtools/cli`                    | `createPangularCli()`, the `pangular` command line, to run it from your own script. See [Standalone CLI](./cli.md).   |
+| Import                                                | Use it for                                                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@pangular-inspector/devtools/hub`                    | `initPangularHub()`, the server middleware for an Express app.                                                                             |
+| `@pangular-inspector/devtools/vite`                   | The Vite plugin for a Vite-based Angular app, such as an Analog app.                                                                       |
+| `@pangular-inspector/devtools/overlay`                | The browser script that collects live data from your page.                                                                                 |
+| `@pangular-inspector/devtools/overlay-manual`         | The same script, started only when you call `initOverlay`. See [Set up Capacitor](../guides/capacitor.md).                                 |
+| `@pangular-inspector/devtools/capacitor-hook`         | Logs Capacitor plugin calls from app start. See [Capacitor](../inspectors/capacitor.md#web-calls).                                         |
+| `@pangular-inspector/devtools/store-hook`             | Lets NGXS, Elf and MiniRx stores report from app start. See [Other stores](../inspectors/ngrx-store.md#other-stores).                      |
+| `@pangular-inspector/devtools/startup-hook`           | Times provider construction at startup. See [Injectors](../inspectors/injectors.md#startup-timing).                                        |
+| `@pangular-inspector/devtools/plugin`                 | The plugin API for a library's own tab and agent tools. See [Write a plugin](../guides/write-a-plugin.md).                                 |
+| `@pangular-inspector/devtools/overlay-angular-native` | The overlay for an Angular Native app. See [Angular Native](./angular-native.md).                                                          |
+| `@pangular-inspector/devtools/overlay-nativescript`   | The overlay for a NativeScript Angular app. See [NativeScript](./nativescript.md).                                                         |
+| `@pangular-inspector/devtools/popup`                  | The floating button and panel on your page.                                                                                                |
+| `@pangular-inspector/devtools/http`                   | The HTTP interceptor and hydration hooks for the SSR & HTTP tab.                                                                           |
+| `@pangular-inspector/devtools/ssr`                    | SSR tracing for web-standard handlers, Fastify and Analog. See [Hono, h3 and Fastify](./other-servers.md).                                 |
+| `@pangular-inspector/devtools/config`                 | The `PangularConfig` type and its defaults. See [Configuration](./configuration.md).                                                       |
+| `@pangular-inspector/devtools/devframe`               | The devframe definition and `initDevframe()`, for custom hosts.                                                                            |
+| `@pangular-inspector/devtools`                        | The same as `@pangular-inspector/devtools/devframe`.                                                                                       |
+| `@pangular-inspector/devtools/cd-data`                | The change detection recording types and checks the server and the panel share.                                                            |
+| `@pangular-inspector/devtools/cli`                    | `createPangularCli()`, the `pangular` command line, and `buildReport()`, to run them from your own script. See [Standalone CLI](./cli.md). |
 
 ### The CLI binary
 

@@ -29,6 +29,7 @@ import {
   type ConsoleLevel,
   type ErrorsPage,
 } from './errors-types';
+import { SearchField } from '../ui/search-field';
 
 type View = 'errors' | 'console';
 
@@ -42,7 +43,7 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
 
 @Component({
   selector: 'app-errors-inspector',
-  imports: [Select, ErrorExplainView, ServerErrorsSection],
+  imports: [SearchField, Select, ErrorExplainView, ServerErrorsSection],
   template: `
     <app-server-errors-section [rpc]="rpc()" />
     @if (!loaded()) {
@@ -86,21 +87,13 @@ const LEVEL_TONE: Record<ConsoleLevel, string> = {
             Console <span class="badge">{{ entries().length }}</span>
           </button>
         </div>
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #search
-            type="search"
-            [attr.aria-label]="view() === 'errors' ? 'Filter errors' : 'Filter console calls'"
-            [placeholder]="view() === 'errors' ? 'Filter by message or code' : 'Filter by text'"
-            [value]="filter()"
-            (input)="filter.set($any($event.target).value)"
-            (keydown.escape)="filter.set('')"
-          />
-        </div>
+        <app-search-field
+          #search
+          class="search"
+          [placeholder]="view() === 'errors' ? 'Filter by message or code' : 'Filter by text'"
+          [saveKey]="'errors-' + view()"
+          [(value)]="filter"
+        />
         @if (view() === 'console') {
           <app-select
             class="level-select"

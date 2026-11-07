@@ -47,11 +47,16 @@ export interface SsrRequest {
   aborted?: boolean;
 }
 
+/** Server HttpClient calls a trace writes to `Server-Timing` one by one. */
+export const MAX_TIMED_FETCHES = 20;
+
 export interface ActiveRequest {
   /** The page path and query being rendered. */
   url?: string;
   fetches: number;
   fetchMs: number;
+  /** The first {@link MAX_TIMED_FETCHES} server calls, each as `METHOD /path` (masked) and its time. */
+  timedFetches?: { label: string; durationMs: number }[];
   navigations?: SsrNavigation[];
   overrides?: AppliedOverride[];
   /** When the trace began, in ms since the epoch, so a trace that never ends can expire. */
@@ -117,11 +122,19 @@ export function activeSsrRequest(id: string | null | undefined): string | undefi
   return id && ssrRegistry().active.has(id) ? id : undefined;
 }
 
-export function noteSsrFetch(id: string, durationMs: number) {
+/**
+ * Counts a server HttpClient call toward its trace. With `label` (method and
+ * masked path), the call also gets its own `Server-Timing` entry.
+ */
+export function noteSsrFetch(id: string, durationMs: number, label?: string) {
   const active = ssrRegistry().active.get(id);
   if (!active) return;
   active.fetches++;
   active.fetchMs += durationMs;
+  if (label !== undefined) {
+    const timed = (active.timedFetches ??= []);
+    if (timed.length < MAX_TIMED_FETCHES) timed.push({ label, durationMs });
+  }
   touchSsrRequest(active);
 }
 

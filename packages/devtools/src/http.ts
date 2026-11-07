@@ -23,9 +23,17 @@ import {
 import { Observable, throwError, timer, of } from 'rxjs';
 import type { Subscription } from 'rxjs';
 
+import { isFailingRuleStatus } from './config.ts';
 import { redactMessage } from './forms-privacy.ts';
+import { redactText } from './text-redact.ts';
+import { currentCallOrigin } from './http-origin.ts';
 import { transferCacheKeys } from './http-cache-key.ts';
 import { cacheSkipReason, requestSkipReason, type CacheSkip } from './http-cache-reason.ts';
+import {
+  PANGULAR_TRANSFER_CACHE,
+  transferCacheProviders,
+  type HttpTransferCacheOptions,
+} from './http-transfer-options.ts';
 import { isHydrationMessage } from './http-hydration.ts';
 import { captureHeaders, type HeaderSource } from './http-headers.ts';
 import { notePendingClientRequest, recordHttpCall } from './http-record.ts';
@@ -106,9 +114,15 @@ function transferWindowOpen(): boolean {
   return !stableApps.has(appRef);
 }
 
-/** True when Angular's transfer cache, with its default options, may answer this request. */
-export function transferCacheEligible(req: HttpRequest<unknown>): boolean {
-  return requestSkipReason(req) === undefined;
+/**
+ * True when Angular's transfer cache may answer this request, with `options`
+ * (from `withPangular({ transferCache })`) or its defaults.
+ */
+export function transferCacheEligible(
+  req: HttpRequest<unknown>,
+  options: HttpTransferCacheOptions = {},
+): boolean {
+  return requestSkipReason(req, options) === undefined;
 }
 
 function devMode(): boolean {
@@ -151,6 +165,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     pageUrl = location.pathname + location.search;
   }
   const url = req.urlWithParams;
+  const origin = currentCallOrigin();
   const registry = httpRegistry();
   const rules = side === 'client' ? clientRules() : registry.record && registry.rules;
   const rule = matchRule(url, req.method, rules, side);
@@ -164,8 +179,9 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     side,
     pageUrl,
     ...(requestId ? { requestId } : {}),
-    faulted: mocked && status >= 400,
-    ...(mocked && status < 400 ? { mocked: true } : {}),
+    ...(origin ? { origin } : {}),
+    faulted: mocked && isFailingRuleStatus(status),
+    ...(mocked && !isFailingRuleStatus(status) ? { mocked: true } : {}),
     ...(delay ? { delayMs: delay } : {}),
     ...(rule ? { ruleId: rule.id, rulePattern: rule.pattern } : {}),
   };
@@ -174,7 +190,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     responseHeaders?: HeaderSource | null,
   ) => {
     const durationMs = Date.now() - started;
-    if (requestId) noteSsrFetch(requestId, durationMs);
+    if (requestId) noteSsrFetch(requestId, durationMs, timingLabel(req.method, url));
     const call: HttpCall = {
       id: `${side[0]}${Date.now().toString(36)}${++seq}`,
       at: started,
@@ -188,7 +204,9 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   };
 
   let source: Observable<HttpEvent<unknown>>;
-  if (status !== undefined) {
+  if (status === 0) {
+    source = throwError(() => networkError(url));
+  } else if (status !== undefined) {
     const body = parseBody(rule?.body, req.responseType);
     const headers = new HttpHeaders({ 'content-type': mockContentType(req.responseType) });
     source =
@@ -215,8 +233,9 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   } else {
     source = next(analogTagged(req, side, () => currentAnalogRender(inject(Injector))));
   }
+  const cacheOptions = inject(PANGULAR_TRANSFER_CACHE, { optional: true }) ?? {};
   const cacheable = side === 'client' && !mocked && transferWindowOpen();
-  const claimable = cacheable && transferCacheEligible(req);
+  const claimable = cacheable && transferCacheEligible(req, cacheOptions);
   const transferState = side === 'server' ? inject(TransferState, { optional: true }) : null;
   const serverCache = (
     response: { ok: boolean; headers?: HttpHeaders } | null,
@@ -226,7 +245,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     const stored = transferCacheKeys(req).some((key) => transferState.hasKey(makeStateKey(key)));
     return stored
       ? { cacheStored: true }
-      : { cacheStored: false, cacheSkip: cacheSkipReason(req, response) };
+      : { cacheStored: false, cacheSkip: cacheSkipReason(req, response, cacheOptions) };
   };
   const observed = new Observable<HttpEvent<unknown>>((subscriber) => {
     // The transfer cache replays a hit synchronously, so a response that
@@ -305,6 +324,32 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   });
 };
 
+/**
+ * A server call as its `Server-Timing` description: the method and the path,
+ * masked, without the origin or the query, which can carry secrets.
+ */
+export function timingLabel(method: string, url: string): string {
+  let path: string;
+  try {
+    path = new URL(url, 'http://x').pathname;
+  } catch {
+    path = url.replace(/[?#].*$/, '');
+  }
+  return `${method} ${redactText(path, [], 'url')}`;
+}
+
+/**
+ * The error a request gets when the connection drops: status 0, statusText
+ * `Unknown Error` and a `ProgressEvent` as `error`, as Angular's backends report it.
+ */
+function networkError(url: string): HttpErrorResponse {
+  const error =
+    typeof ProgressEvent === 'function'
+      ? new ProgressEvent('error')
+      : new Error('Network error injected by Pangular Inspector');
+  return new HttpErrorResponse({ status: 0, statusText: 'Unknown Error', url, error });
+}
+
 function textOf(value: unknown): string {
   try {
     return value instanceof Error ? value.message : String(value);
@@ -330,9 +375,28 @@ function captureHydrationWarnings() {
   });
 }
 
-/** `provideHttpClient(withPangular())` registers the DevTools interceptor. */
-export function withPangular() {
-  return withInterceptors([pangularHttpInterceptor]);
+/** Options for `withPangular()`. */
+export interface PangularHttpOptions {
+  /**
+   * Options for Angular's HTTP transfer cache, the same as
+   * `withHttpTransferCacheOptions()` takes. They are passed to the cache that
+   * `provideClientHydration()` sets up, and the SSR & HTTP inspector uses them
+   * to explain why a request was or was not cached.
+   */
+  transferCache?: HttpTransferCacheOptions;
+}
+
+/**
+ * `provideHttpClient(withPangular())` registers the DevTools interceptor.
+ * `withPangular({ transferCache })` also configures Angular's transfer cache.
+ */
+export function withPangular(options: PangularHttpOptions = {}) {
+  const feature = withInterceptors([pangularHttpInterceptor]);
+  if (!options.transferCache) return feature;
+  return {
+    ...feature,
+    ɵproviders: [...feature.ɵproviders, ...transferCacheProviders(options.transferCache)],
+  };
 }
 
 function watchServerNavigations() {

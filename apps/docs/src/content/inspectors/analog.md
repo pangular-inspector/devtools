@@ -52,17 +52,19 @@ The pages that render the URL open in the browser show an **open** pill. A page 
 
 Type a URL into **Test a URL** and click **Explain** to see which files render it: the layout chain, the page and its params. A URL that matches nothing gets the closest candidates. The result names the URL it explains, so it stays correct while you type the next one. If the devtools server does not answer, the result says so.
 
+Click **Transform** on a page or layout to open its **Vite transform stack**. The dev server transforms the file again and the card lists each plugin that changed the code, in order, with its time and the code it returned. This shows the `.analog`/`.ag` compile and the server function id rewrite. Tick **Server build (SSR)** for the server transform. **Server function ids** says whether each `serverFn` id of the file is in the output, and **Code Vite serves** shows the final code. With `vite-plugin-inspect` installed, a link opens the file there. The stack needs the Vite plugin.
+
 ### Server
 
 Page renders (server rendered or client only), `load()` fetches, form actions, server functions and API calls, newest first. Each row shows the status, the time, who called it, and a redacted response preview.
 
-| Control                                 | What it does                                                                                                         |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Kind filter                             | Show one kind of call. Each choice counts the tab's calls of that kind, before the search and **Failed only**.       |
-| **Find a URL, path or function** search | Keeps calls whose URL, route path, server function name or file contains the text. `Escape` clears it.               |
-| **Failed only**                         | Keeps calls with a status of 400 or more, no status, or a form action that failed.                                   |
-| **All tabs (including untagged)**       | Shows the calls of every tab, and calls the dev server could not tie to a tab. Off by default.                       |
-| **Clear calls**                         | Empties the list on the dev server, for every tab. The tab says **Calls cleared.** or **Could not clear the calls.** |
+| Control                           | What it does                                                                                                         |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Kind filter                       | Show one kind of call. Each choice counts the tab's calls of that kind, before the search and **Failed only**.       |
+| **Filter** field                  | Keeps calls whose URL, route path, server function name or file contains the text. `Escape` clears it.               |
+| **Failed only**                   | Keeps calls with a status of 400 or more, no status, or a form action that failed.                                   |
+| **All tabs (including untagged)** | Shows the calls of every tab, and calls the dev server could not tie to a tab. Off by default.                       |
+| **Clear calls**                   | Empties the list on the dev server, for every tab. The tab says **Calls cleared.** or **Could not clear the calls.** |
 
 The list shows the calls of the tab the panel belongs to (with no page id, the tab that reported last). **All tabs (including untagged)** appears while a page reports. See [Which tab a call belongs to](#which-tab-a-call-belongs-to).
 
@@ -75,7 +77,19 @@ The list renders the newest 150 matching calls. If more match, a note says **Sho
 
 The tab flags a `load()` that runs during server rendering and again in the browser right after. It means TransferState did not serve the server result. It also flags a server function read seeded during server rendering and called again in the browser right after hydration.
 
-The **API routes** table lists your server routes. Click **Try** to open one in the **Request playground**, which sends real requests to your dev server. While a request runs, **Send** is off and the old response is cleared. For POST, PUT, PATCH and DELETE, **Send** stays off until you tick **This request can change data on the dev server**. The tick covers one request. It clears after you send, when you change the method or path, and when you click **Try** on another route.
+The **API routes** table lists your server routes. Click **Try**, or pick a route in **Route**, to open it in the **Request playground**, which sends real requests to your dev server.
+
+| Playground part                     | What it does                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Path                                | Write `:name` or `**` in it to get a field per param under **Path params**. Values are URL-encoded.          |
+| **Query**                           | Name and value pairs added to the URL.                                                                       |
+| **Headers**                         | Extra request headers. `host`, `content-length` and other headers the dev server or fetch owns are refused.  |
+| **Cookies**                         | Sent as one `cookie` header.                                                                                 |
+| **Copy as curl**, **Copy as fetch** | Copy the request as a command, with the dev server origin.                                                   |
+| Response                            | Status, total time, time to the headers, size, content type, the **Response headers** (masked) and the body. |
+| **History for** the route           | The last 10 requests of that route pattern while you stay on **Server**. **Load** puts one back in the form. |
+
+While a request runs, **Send** is off and the old response is cleared. For POST, PUT, PATCH and DELETE, **Send** stays off until you tick **This request can change data on the dev server**. The tick covers one request. It clears after you send, when you change the method or URL, and when you click **Try** on another route.
 
 The **Server functions** table lists every `serverFn` export in a `.server.ts` file under `src`, with its method, file and call count.
 
@@ -83,11 +97,52 @@ The **Server functions** table lists every `serverFn` export in a `.server.ts` f
 
 How each page is rendered: **SSR**, **Prerendered**, **Cached**, **Client only** or **Redirect**, with the rule that decides it. It reads the config, the build output and the last request to the page, dynamic and catch-all URLs included. It marks a page whose last request differs from its config.
 
+Click **Check** in the **Dev server check** column to request the page from the dev server with `Accept: text/html`. The tab compares `cache-control`, `x-nitro-prerender`, `x-analog-no-ssr` and the HTML with the configured mode, and says **fits the config** or **differs from config**. Dynamic segments get a sample value (`1`). The dev server renders prerendered pages per request, so a prerendered page that answers as SSR still fits.
+
 The **Prerender plan** compares `prerender.routes` and the `routeRules` with `prerender: true` with your pages and the build output. It lists static pages left out, dynamic pages that need explicit entries, and listed routes missing from `dist`.
+
+**Build analysis** reads the last client build in `dist/analog/public` after `analog build`: total JavaScript and CSS with gzip sizes, the entry chunk, and for each page its chunk, what it loads beyond the entry and the lazy chunks it can pull in. Pages are matched to chunks through the Vite manifest when `build.manifest` is on, and by chunk name otherwise. Pages that share a name, such as several `index.page.ts`, need the manifest. Click **Read again** after a new build.
 
 ### Content
 
-Markdown files under `src/content`, with title, URL, slug, date and file. The tab marks files with frontmatter errors.
+Markdown files under `src/content`, with title, URL, slug, date and file. The tab marks files with frontmatter errors and, with a content schema, files whose frontmatter does not match it.
+
+Below the table, **Schema** names the file set in [`analog.contentSchema`](../getting-started/configuration.md#analog) and **Read by** lists the `injectContentFiles`, `injectContent` and `contentFilesSource` calls under `src`. Click **Preview** on a file to see its frontmatter with YAML types, the schema problems and its markdown rendered as text (links keep their text only, HTML is dropped).
+
+The schema is a JSON Schema file inside the project. The check reads `type`, `required`, `properties`, `additionalProperties`, `enum`, `const`, `pattern`, `format` (`date`, `date-time`, `email`, `uri`), `minLength`, `maxLength`, `minimum`, `maximum`, `items`, `minItems` and `maxItems`. It lists other keywords, such as `$ref`, as skipped.
+
+```json
+{
+  "type": "object",
+  "required": ["title", "date"],
+  "properties": {
+    "title": {"type": "string"},
+    "date": {"type": "string", "format": "date"},
+    "tags": {"type": "array", "items": {"type": "string"}}
+  }
+}
+```
+
+### Data
+
+**load() data of the open page** shows the size, the keys and the 1000-character preview of what the page's `load()` returned. Click **Load the full value** to ask the page for the whole value, masked and up to 200 KB, as a tree you open key by key.
+
+**TransferState payload** lists the entries of the page's payload: the `load()` route or server function each one belongs to, its size, and whether the browser **reused** it or **fetched again** (the duplicate `load()` and repeated server function findings). It needs the SSR & HTTP inspector on.
+
+### Runtime
+
+| Section               | What it shows                                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `import.meta.env`     | The env Vite resolved for the app, or the `VITE_` and `ANALOG_` keys of the `.env` files without the Vite plugin.                    |
+| Nitro `runtimeConfig` | The keys in `nitro.runtimeConfig` of `vite.config`, nested keys joined with dots. A `NITRO_` env override wins and names its source. |
+| `analog()` options    | `ssr`, `static`, `apiPrefix`, `prerender.routes`, the number of route rules and the content schema.                                  |
+| Nitro                 | Server plugins, tasks, storage mounts, the routes cached by `isr`, `swr` or `cache` rules, and the cache entries on disk.            |
+
+Secret names, tokens and the names in `redaction.secretNames` are masked. Values `vite.config` computes show as **code**.
+
+Click **Run** on a task, optionally give a JSON payload, then **Run task** to run it on the dev server through Nitro's task route, which needs `nitro.experimental.tasks`. The task's answer shows below it, masked, and the run stops waiting after 30 seconds.
+
+Click **Purge** on a cache entry, or **Purge all**, then **Delete**, to delete cache entry files so the next request renders the route again. Running tasks and purging need `actions.analog`. Only `fs` cache storage is on disk: the tab looks in `.nitro/cache`, `node_modules/.nitro/cache`, `node_modules/.cache/nitro`, `dist/.nitro/cache`, `.data/cache` and the `base` of a `cache` mount with the `fs` or `fs-lite` driver.
 
 ### Lint
 
@@ -101,6 +156,7 @@ Checks grouped by rule, each with a fix. The count on the tab adds up errors and
 - Prerender entries that match nothing.
 - A `vite.config` the scan could not read in full (rule `config-partial`). See [Config the scan cannot read](#config-the-scan-cannot-read).
 - Frontmatter errors, duplicate slugs, and content that shadows a page.
+- Frontmatter that does not match the content schema (`content-schema`), and a schema file that can't be used (`content-schema-unreadable`).
 - From the live page: `load()` fetched twice, server function reads called again after hydration, hydration errors, API routes not found, and added pages that need a restart. To catch hydration errors from the first load, add `providePangularHttp()` (see [Set up Analog](../guides/analog.md#catch-hydration-errors-from-the-first-load)).
 
 ## Where the data comes from
@@ -200,21 +256,28 @@ If an option comes from a variable, a spread (`...`), a template string or a com
 
 ## Agent tools
 
-| Tool                                    | Inputs                                         | What it does                                                            |
-| --------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------- |
-| `pangular:analog-scan-routes`           | `filter`                                       | File routes in match order, with page, layout and server files.         |
-| `pangular:analog-scan-url`              | `url` (required)                               | Which files render a URL, or the closest candidates.                    |
-| `pangular:analog-inspect-page`          | `page`                                         | The open page: its files, `load()` data, rendering and hydration state. |
-| `pangular:analog-list-server-calls`     | `kind`, `route`, `limit`, `page`               | Recent server calls, with server function names and action outcomes.    |
-| `pangular:analog-scan-api-routes`       |                                                | Server routes with method, URL and file, plus middleware.               |
-| `pangular:analog-scan-server-functions` |                                                | Server functions with name, method, file, id and call counts.           |
-| `pangular:analog-run-api`               | `path` (required), `method`, `body`, `confirm` | Sends a real request to the dev server.                                 |
-| `pangular:analog-explain-render-modes`  |                                                | The render mode of each page, and what the last request did.            |
-| `pangular:analog-scan-prerender`        |                                                | The prerender plan.                                                     |
-| `pangular:analog-scan-content`          | `filter`                                       | Markdown files with slug, frontmatter, route and parse errors.          |
-| `pangular:analog-lint`                  | `page`                                         | The Analog checks.                                                      |
+| Tool                                    | Inputs                                                               | What it does                                                                                                       |
+| --------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `pangular:analog-scan-routes`           | `filter`                                                             | File routes in match order, with page, layout and server files.                                                    |
+| `pangular:analog-scan-url`              | `url` (required)                                                     | Which files render a URL, or the closest candidates.                                                               |
+| `pangular:analog-inspect-page`          | `page`, `data`                                                       | The open page: its files, `load()` data, rendering and hydration state. `data: true` adds the full `load()` value. |
+| `pangular:analog-list-server-calls`     | `kind`, `route`, `limit`, `page`                                     | Recent server calls, with server function names and action outcomes.                                               |
+| `pangular:analog-scan-api-routes`       |                                                                      | Server routes with method, URL and file, plus middleware.                                                          |
+| `pangular:analog-scan-server-functions` |                                                                      | Server functions with name, method, file, id and call counts.                                                      |
+| `pangular:analog-run-api`               | `path` (required), `method`, `body`, `confirm`, `headers`, `cookies` | Sends a real request to the dev server.                                                                            |
+| `pangular:analog-explain-render-modes`  |                                                                      | The render mode of each page, and what the last request did.                                                       |
+| `pangular:analog-scan-prerender`        |                                                                      | The prerender plan.                                                                                                |
+| `pangular:analog-scan-content`          | `filter`                                                             | Markdown files with slug, frontmatter, route and parse errors.                                                     |
+| `pangular:analog-lint`                  | `page`                                                               | The Analog checks.                                                                                                 |
+| `pangular:analog-scan-build`            |                                                                      | The build analysis: chunk sizes per page and lazy chunks.                                                          |
+| `pangular:analog-scan-nitro`            |                                                                      | Nitro plugins, tasks, storage mounts, cached routes and cache entries.                                             |
+| `pangular:analog-run-nitro-task`        | `name` (required), `confirm` (required), `payload`                   | Runs a Nitro task on the dev server. Needs `actions.analog`.                                                       |
+| `pangular:analog-purge-nitro-cache`     | `confirm` (required), `files`                                        | Deletes Nitro cache entry files. Needs `actions.analog`.                                                           |
+| `pangular:analog-scan-runtime-config`   |                                                                      | `import.meta.env`, Nitro `runtimeConfig` and the `analog()` options, masked.                                       |
+| `pangular:analog-inspect-transform`     | `file` (required), `ssr`                                             | The Vite transform stack of a page, layout or `.server.ts` file.                                                   |
+| `pangular:analog-inspect-render-mode`   | `path` (required)                                                    | Requests a page and compares its headers with the configured mode.                                                 |
 
-`analog-inspect-page` is the only place that shows the `load()` data a page received. See [Tools](../agents/tools.md).
+`analog-inspect-page` is the only tool that shows the `load()` data a page received. See [Tools](../agents/tools.md).
 
 ## Limits and gotchas
 

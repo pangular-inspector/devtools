@@ -2,13 +2,13 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ANALOG_RENDER_TIMING } from './analog-call-tags.ts';
 import { beginRender, bindRender, tagRequest } from './analog-call-pages.ts';
 import { runInAnalogRender } from './ssr-context.ts';
-import { redactCredentials } from './credential-redact.ts';
-import { isRedactedKey, redactJwt } from './forms-privacy.ts';
+import { redactHighEntropy } from './entropy-redact.ts';
+import { REDACTED, isRedactedKey, redactTokens } from './forms-privacy.ts';
 import { redactJsonText } from './json-text-redact.ts';
 import { maskEmails } from './text-redact.ts';
 
-const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
-const QUERY_PAIR = /([?&])([^=&#\s"'\\]*)=([^&#\s"'\\]*)/g;
+// A fragment (`#access_token=…`) and matrix params (`;sid=…`) carry pairs like a query.
+const QUERY_PAIR = /([?&#;])([^=&#;\s"'\\]*)=([^&#\s"'\\]*)/g;
 const SECRET_QUERY_KEY =
   /token|secret|password|key|code|session|^(sig|signature|auth|authorization|credentials?|jwt)$|^x-(amz|goog)-(signature|credential|security-token)$/i;
 
@@ -23,17 +23,17 @@ function queryKey(key: string): string {
 }
 
 export function redactMessage(text: string): string {
-  return redactJwt(redactCredentials(text, '[redacted]'))
-    .replace(BEARER, 'Bearer [redacted]')
-    .replace(QUERY_PAIR, (whole, sep: string, key: string) => {
-      const name = queryKey(key);
-      return SECRET_QUERY_KEY.test(name) || isRedactedKey(name) ? `${sep}${key}=[redacted]` : whole;
-    });
+  const out = redactTokens(text).replace(QUERY_PAIR, (whole, sep: string, key: string) => {
+    const name = queryKey(key);
+    return SECRET_QUERY_KEY.test(name) || isRedactedKey(name) ? `${sep}${key}=${REDACTED}` : whole;
+  });
+  // Opt-in (`redaction.entropy`), last, so a known shape keeps its prefix.
+  return redactHighEntropy(out, REDACTED);
 }
 
 function redactPairs(text: string): string {
   return text.replace(SECRET_PAIR, (whole, key: string, sep: string, quote: string) =>
-    isSecretJsonKey(key) ? `${key}${sep}${quote}[redacted]${quote}` : whole,
+    isSecretJsonKey(key) ? `${key}${sep}${quote}${REDACTED}${quote}` : whole,
   );
 }
 
@@ -149,7 +149,7 @@ function redactJson(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) return value.slice(0, 50).map((item) => redactJson(item, depth + 1));
   const out: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value as Record<string, unknown>).slice(0, 50)) {
-    out[key] = isSecretJsonKey(key) ? '[redacted]' : redactJson(item, depth + 1);
+    out[key] = isSecretJsonKey(key) ? REDACTED : redactJson(item, depth + 1);
   }
   return out;
 }
@@ -159,7 +159,9 @@ export function redactBody(body: string): string {
   try {
     text = JSON.stringify(redactJson(JSON.parse(body)));
   } catch {
-    text = redactPairs(redactJsonText(body, isSecretJsonKey));
+    // Credentials first, so a pair can't hide `ApiKey` in `Authorization: ApiKey <key>` and
+    // leave the key for the credential rule to miss.
+    text = redactPairs(redactJsonText(redactTokens(body), isSecretJsonKey));
   }
   return redactMessage(text);
 }

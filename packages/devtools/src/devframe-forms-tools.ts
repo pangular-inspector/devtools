@@ -1,3 +1,7 @@
+import { pipeMigrationsText } from './rpc/pipe-migrations.ts';
+import { pipePageFor } from './rpc/pipes-agent.ts';
+import { playwrightTestText } from './rpc/forms-playwright.ts';
+import type { FieldArgs } from './rpc/forms-explain.ts';
 import { lintPipesText } from './rpc/pipe-lint.ts';
 import {
   explainPipeOnPage,
@@ -56,6 +60,7 @@ export interface RegisterFormsAgentToolsEnv {
     request: PipeInstrumentRequest;
     pages: { pages: number };
   };
+  formPageUrl: (state: FormsState, args: FieldArgs) => string | undefined;
 }
 
 /** `wait-for` with `condition: "form"`, which the forms tools set up. */
@@ -77,6 +82,7 @@ export function registerFormsAgentTools(env: RegisterFormsAgentToolsEnv): {
     pipePages,
     requestFormAction,
     requestPipeRecording,
+    formPageUrl,
   } = env;
   const noForms = `No forms have been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser, on a page that renders a form. The stdio MCP server has no page, so there it always answers this.`;
   /**
@@ -358,6 +364,30 @@ export function registerFormsAgentTools(env: RegisterFormsAgentToolsEnv): {
   });
 
   agent.registerTool({
+    id: 'pangular:suggest-pipe-migrations',
+    title: 'Suggest pipe migrations',
+    description:
+      'Read-only suggestions for moving pipes to signals, with the file and line of each use: `| async` to toSignal(), impure or signal-reading custom pipes to computed(), and, while recording, churning or stale pipes. Changes no file.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Only this pipe, by the name used after `|`.' },
+        page: PAGE_ARGUMENT,
+      },
+    },
+    handler: async (args: { name?: string; page?: string }) => {
+      const picked = pipePageFor(pipePages, pageArgument(args));
+      if ('markdown' in picked) return picked;
+      return {
+        markdown: pipeMigrationsText(ctx.cwd, picked.pageId ? picked.state : undefined, {
+          name: args?.name || undefined,
+          rules: config.lint.rules,
+        }),
+      };
+    },
+  });
+
+  agent.registerTool({
     id: 'pangular:record-pipes',
     title: 'Record pipe calls',
     description:
@@ -409,16 +439,23 @@ export function registerFormsAgentTools(env: RegisterFormsAgentToolsEnv): {
     id: 'pangular:export-form',
     title: 'Export a form',
     description:
-      'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200) and notes what was cut.',
+      'Export a form as a JSON snapshot, a test fixture (setValue / signal model plus the expected status), or a Playwright test replaying its recorded history. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200).',
     inputSchema: {
       type: 'object',
       properties: {
         form: formProperty,
-        format: { type: 'string', enum: ['snapshot', 'fixture'] },
+        format: { type: 'string', enum: ['snapshot', 'fixture', 'playwright'] },
         page: formPageProperty,
       },
     },
-    handler: withForms(exportFormText),
+    handler: withForms((state, args: FieldArgs & { format?: string }) =>
+      args.format === 'playwright'
+        ? playwrightTestText(state, { ...args, url: formPageUrl(state, args) })
+        : exportFormText(state, {
+            ...args,
+            format: args.format === 'fixture' ? 'fixture' : 'snapshot',
+          }),
+    ),
   });
 
   // `wait-for` with `condition: "form"`: polls the forms state until the condition holds.
@@ -493,7 +530,7 @@ export function registerFormsAgentTools(env: RegisterFormsAgentToolsEnv): {
     id: 'pangular:run-form-action',
     title: 'Run a form action',
     description:
-      'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument. reset, submit and restore need `confirm: true`.',
+      'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument, try-webmcp (runs its WebMCP tool). reset, submit, restore, try-webmcp need confirm.',
     inputSchema: {
       type: 'object',
       required: ['action', 'form'],
@@ -518,11 +555,14 @@ export function registerFormsAgentTools(env: RegisterFormsAgentToolsEnv): {
             'snapshot',
             'restore',
             'instrument',
+            'try-webmcp',
           ],
         },
         form: { type: 'string', description: 'Full form id, e.g. Checkout.form@ab12.' },
         path: pathProperty,
-        value: { description: 'New value for set-value.' },
+        value: {
+          description: 'New value for set-value, or the input object for try-webmcp.',
+        },
         mode: { type: 'string', enum: ['code', 'user'] },
         confirm: { type: 'boolean' },
         force: { type: 'boolean' },

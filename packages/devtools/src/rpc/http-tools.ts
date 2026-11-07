@@ -1,3 +1,4 @@
+import { originText } from '../http-origin.ts';
 import { redactCall } from '../http-redact.ts';
 import type { HttpCall } from '../http-rules.ts';
 import { clip } from '../text.ts';
@@ -40,6 +41,7 @@ export function isFailedCall(call: HttpCall): boolean {
 function flags(call: HttpCall): string {
   const out: string[] = [];
   if (call.nativeFetch) out.push('native fetch');
+  if (call.origin) out.push(originText(call.origin));
   if (call.mocked) out.push('mocked');
   if (call.faulted) out.push('faulted');
   if (call.cancelled) out.push('cancelled');
