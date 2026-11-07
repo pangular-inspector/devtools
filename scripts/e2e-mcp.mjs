@@ -690,8 +690,8 @@ const READ_PLAN = [
   ['ngrx-inspect-store', '/destinations', () => ({})],
   ['ngrx-inspect-store', '/destinations', (ctx) => ({ store: ctx.storeId('TravelStore') })],
   ['ngrx-inspect-store', '/destinations', () => ({ store: 'TravelStore' })],
-  ['ngrx-explain-change', '/destinations', () => ({})],
-  ['ngrx-explain-change', '/destinations', () => ({ store: 'TravelStore' })],
+  ['ngrx-explain-change', '/destinations', () => ({ path: 'saved' })],
+  ['ngrx-explain-change', '/destinations', () => ({ path: 'saved', store: 'TravelStore' })],
   [
     'ngrx-history',
     '/destinations',
@@ -1081,6 +1081,15 @@ async function runReadPlan(client, app, state, ctx) {
     if (name === 'ngrx-import-session' && !record.isError) {
       ctx.sessionId = record.markdown.match(/`(s[\w-]+|[0-9a-f-]{6,})`/)?.[1];
       if (!ctx.sessionId) recordWarning(record, 'could not find the session id in the answer');
+    }
+    if (name === 'ngrx-explain-change' && args.path) {
+      // A real answer for the path: its newest changes, or that none is in the kept log.
+      check(
+        record.markdown.includes(`\`${args.path}\``) &&
+          /last changed in #\d+|No entry in the kept log/.test(record.markdown),
+        'http ngrx-explain-change',
+        `does not answer for path ${args.path}`,
+      );
     }
     if (name === 'list-pages') {
       check(
