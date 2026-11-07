@@ -66,6 +66,15 @@ export interface StaleFinding {
   detectedAt: number;
 }
 
+/** A pipe that ran at least `CHURN_STREAK` (20) times in a row and returned
+ * an equal result each time, while recording. */
+export interface ChurnFinding {
+  /** The longest run of calls in a row with an equal result. */
+  streak: number;
+  /** When an instance first reached the threshold. */
+  detectedAt: number;
+}
+
 export interface PipeUsageInfo {
   name: string;
   className: string;
@@ -76,6 +85,8 @@ export interface PipeUsageInfo {
   call?: PipeCallInfo;
   /** Present only once a stale-pure-pipe finding has fired for this pipe. Experimental. */
   stale?: StaleFinding;
+  /** Present once an instance returned an equal result 20 calls in a row while recording. */
+  churn?: ChurnFinding;
   /** The stale check could not read this pipe's template, e.g. in a minified
    * build, so it is off for this pipe while recording. */
   staleCheck?: 'unavailable';
@@ -213,6 +224,10 @@ function isPipeUsageInfo(value: unknown): value is PipeUsageInfo {
     (info.call === undefined || isPipeCallInfo(info.call)) &&
     (info.stale === undefined ||
       (isRecord(info.stale) && typeof info.stale.detectedAt === 'number')) &&
+    (info.churn === undefined ||
+      (isRecord(info.churn) &&
+        typeof info.churn.streak === 'number' &&
+        typeof info.churn.detectedAt === 'number')) &&
     (info.staleCheck === undefined || info.staleCheck === 'unavailable')
   );
 }
@@ -304,6 +319,9 @@ export function clampPipePageReport(report: PipePageReport): PipePageReport {
           : {}),
       },
       ...(pipe.stale ? { stale: { detectedAt: pipe.stale.detectedAt } } : {}),
+      ...(pipe.churn
+        ? { churn: { streak: pipe.churn.streak, detectedAt: pipe.churn.detectedAt } }
+        : {}),
     })),
     ...(asyncRows ? { async: asyncRows } : {}),
     ...(asyncRows && asyncCount > asyncRows.length ? { asyncTotal: asyncCount } : {}),
@@ -395,6 +413,14 @@ function aggregatePipes(all: (PipePageReport & { reportedAt: number })[]): PipeU
       if (existing.staleCheck && !pipe.staleCheck) delete existing.staleCheck;
       if (pipe.stale && (!existing.stale || pipe.stale.detectedAt > existing.stale.detectedAt)) {
         existing.stale = pipe.stale;
+      }
+      if (pipe.churn) {
+        existing.churn = existing.churn
+          ? {
+              streak: Math.max(existing.churn.streak, pipe.churn.streak),
+              detectedAt: Math.min(existing.churn.detectedAt, pipe.churn.detectedAt),
+            }
+          : { ...pipe.churn };
       }
     }
   }

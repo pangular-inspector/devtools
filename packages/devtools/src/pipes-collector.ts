@@ -12,6 +12,7 @@ import {
   stripBundlerPrefix,
   type NgDebugApi,
   type PipeCall,
+  type PipeClass,
   type PipeInstrumentation,
   type PipeUsage,
   type StaleCheck,
@@ -166,6 +167,64 @@ interface InstanceStats {
   lastResult: unknown;
   lastCaller?: string;
   lastAt: number;
+  /** Calls in a row, up to the latest, whose result equalled the one before. */
+  equalStreak: number;
+  /** The longest such run seen while recording. */
+  longestStreak: number;
+  /** When `equalStreak` first reached `CHURN_STREAK`. */
+  churnAt?: number;
+}
+
+/** Calls in a row with an equal result after which a pipe counts as churning
+ * (a maintainer decision, see #369). */
+export const CHURN_STREAK = 20;
+const MAX_EQUAL_DEPTH = 3;
+const MAX_EQUAL_ITEMS = 50;
+
+/** Structural equality, capped in depth and width: past the caps it answers
+ * false, so a result too big to compare cheaply never counts as churn. */
+function boundedEqual(a: unknown, b: unknown, depth = 0): boolean {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (depth >= MAX_EQUAL_DEPTH) return false;
+  return read(() => {
+    if (Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
+    if (a instanceof Date) return a.getTime() === (b as Date).getTime();
+    if (Array.isArray(a)) {
+      const other = b as unknown[];
+      if (a.length !== other.length || a.length > MAX_EQUAL_ITEMS) return false;
+      return a.every((item, i) => boundedEqual(item, other[i], depth + 1));
+    }
+    if (a instanceof Map || a instanceof Set) {
+      const other = b as Map<unknown, unknown> | Set<unknown>;
+      if (a.size !== other.size || a.size > MAX_EQUAL_ITEMS) return false;
+      const left = [...a.entries()];
+      const right = [...other.entries()];
+      return left.every(
+        ([k, v], i) => Object.is(k, right[i][0]) && boundedEqual(v, right[i][1], depth + 1),
+      );
+    }
+    const proto = Object.getPrototypeOf(a);
+    if (proto !== Object.prototype && proto !== null) return false;
+    const keys = Object.keys(a);
+    if (keys.length > MAX_EQUAL_ITEMS || keys.length !== Object.keys(b).length) return false;
+    return keys.every(
+      (k) =>
+        Object.hasOwn(b, k) && boundedEqual((a as AnyRecord)[k], (b as AnyRecord)[k], depth + 1),
+    );
+  }, false);
+}
+
+/**
+ * Whether a call that returned `next` after `prev` was wasted work: a pure
+ * pipe that ran (its input changed) but returned an equal result, or an impure
+ * pipe that returned an equal object or array as a new reference, which makes
+ * the bindings below it update for nothing. An impure pipe returning the same
+ * reference or primitive is how impure pipes normally run, so it never counts.
+ */
+function equalCall(prev: unknown, next: unknown, isPure: boolean | undefined): boolean {
+  if (isPure) return boundedEqual(prev, next);
+  return !Object.is(prev, next) && boundedEqual(prev, next);
 }
 
 const MAX_HASH_DEPTH = 2;
@@ -339,7 +398,9 @@ export function attachPipes<H extends object = Element>(
   let paused = false;
 
   let usages: PipeUsage[] = [];
+  let classes: PipeClass[] = [];
   let entries: Element[] = [];
+  let patchScheduled = false;
   let scansSinceFull = 0;
   let fullScanDue = true;
   let removed = false;
@@ -363,13 +424,16 @@ export function attachPipes<H extends object = Element>(
             textParents.clear();
             fullScanDue = true;
           }
+          if (instrumentation && (added.size || textParents.size || fullScanDue)) schedulePatch();
         })
       : null;
   observer?.observe(document.documentElement, { childList: true, subtree: true });
 
   function discover(ng: NgDebugApi): PipeUsage[] {
     if (tree) {
-      usages = scanPipeViews(ng, hostsOf(tree) as unknown as Element[]).usages;
+      const scan = scanPipeViews(ng, hostsOf(tree) as unknown as Element[]);
+      usages = scan.usages;
+      classes = scan.classes;
       return usages;
     }
     scansSinceFull++;
@@ -397,7 +461,35 @@ export function attachPipes<H extends object = Element>(
     const scan = scanPipeViews(ng, elements);
     usages = scan.usages;
     entries = scan.entries;
+    // Patching is for good, so the classes of views since removed may stay.
+    const known = new Set(classes.map((c) => c.type));
+    classes = [...classes, ...scan.classes.filter((c) => !known.has(c.type))];
     return usages;
+  }
+
+  /** Patches every pipe class and instance the last discovery found. */
+  function patchDiscovered() {
+    if (!instrumentation) return;
+    for (const pipe of classes) instrumentation.addPipeClass(pipe);
+    for (const usage of usages) instrumentation.addPipe(usage);
+  }
+
+  /**
+   * While recording, a view added to the page can bring a pipe class no
+   * template used before. Its first calls run before any report, so the class
+   * is patched as soon as the change is seen instead of on the next push.
+   */
+  function schedulePatch() {
+    if (patchScheduled || paused) return;
+    patchScheduled = true;
+    setTimeout(() => {
+      patchScheduled = false;
+      if (!instrumentation || paused) return;
+      const ng = read(() => getNg(), undefined);
+      if (!ng?.getComponent) return;
+      read(() => discover(ng), []);
+      patchDiscovered();
+    }, 0);
   }
 
   function targetOf(ng: NgDebugApi): (component: unknown) => PipeTarget | undefined {
@@ -431,8 +523,16 @@ export function attachPipes<H extends object = Element>(
         lastArgs: call.args,
         lastResult: call.result,
         lastAt: at,
+        equalStreak: 0,
+        longestStreak: 0,
       };
       stats.set(call.instance, s);
+    } else if (!call.error && equalCall(s.lastResult, call.result, call.isPure)) {
+      s.equalStreak++;
+      if (s.equalStreak > s.longestStreak) s.longestStreak = s.equalStreak;
+      if (s.equalStreak >= CHURN_STREAK && s.churnAt === undefined) s.churnAt = at;
+    } else {
+      s.equalStreak = 0;
     }
     s.callCount++;
     s.totalMs += ms;
@@ -498,8 +598,14 @@ export function attachPipes<H extends object = Element>(
       let lastFailed: InstanceStats | undefined;
       const called: { usage: PipeUsage; stats: InstanceStats }[] = [];
       let staleAt: number | undefined;
+      let churnStreak = 0;
+      let churnAt: number | undefined;
       for (const usage of group) {
         const s = stats.get(usage.instance);
+        if (s?.churnAt !== undefined) {
+          churnStreak = Math.max(churnStreak, s.longestStreak);
+          if (churnAt === undefined || s.churnAt < churnAt) churnAt = s.churnAt;
+        }
         if (s) {
           callCount += s.callCount;
           totalMs += s.totalMs;
@@ -558,6 +664,7 @@ export function attachPipes<H extends object = Element>(
               }
             : undefined,
         stale: staleAt !== undefined ? { detectedAt: staleAt } : undefined,
+        ...(churnAt !== undefined ? { churn: { streak: churnStreak, detectedAt: churnAt } } : {}),
         ...(staleUnavailable ? { staleCheck: 'unavailable' as const } : {}),
       });
     }
@@ -571,9 +678,7 @@ export function attachPipes<H extends object = Element>(
       if (!ng?.getComponent) return;
       const usages = discover(ng);
       for (const usage of usages) ownerNames.add(componentName(usage.component));
-      if (instrumentation) {
-        for (const usage of usages) instrumentation.addPipe(usage);
-      }
+      patchDiscovered();
       const targets = targetOf(ng);
       const asyncReport = asyncReportFor(usages, targets, asyncHistory);
       const report: PipePageReport = {
@@ -651,6 +756,7 @@ export function attachPipes<H extends object = Element>(
       instrumentation?.stop();
       instrumentation = null;
       instrumented = false;
+      classes = [];
     },
   };
 }

@@ -738,6 +738,114 @@ describe('pipes collector', () => {
     expect(second.call?.lastResult).toBe('$8.00');
   });
 
+  it('flags a pure pipe as churning after 20 calls in a row with an equal result', async () => {
+    class Churn {
+      items = writableSignal<string[]>(['a', 'b']);
+    }
+    Component({
+      ...STANDALONE,
+      selector: 'app-churn',
+      imports: [JoinPipe],
+      template: `<p>{{ items() | join }}</p>`,
+    })(Churn);
+    const fixture = await mount(Churn);
+    const h = harness();
+    h.handlers.get('instrument-pipes')!(true);
+    const rerun = (items: string[]) => {
+      fixture.componentInstance.items.set(items);
+      fixture.detectChanges();
+    };
+    // A new array each time, same contents: the pure pipe reruns for nothing.
+    for (let i = 0; i < 20; i++) rerun(['a', 'b']);
+    expect((await report(h)).pipes.find((p) => p.name === 'join')?.churn).toBeUndefined();
+    rerun(['a', 'b']);
+    const churn = (await report(h)).pipes.find((p) => p.name === 'join')?.churn;
+    expect(churn?.streak).toBe(20);
+    expect(typeof churn?.detectedAt).toBe('number');
+  });
+
+  it('does not flag a pure pipe whose result changes', async () => {
+    class Changing {
+      items = writableSignal<string[]>(['a']);
+    }
+    Component({
+      ...STANDALONE,
+      selector: 'app-changing',
+      imports: [JoinPipe],
+      template: `<p>{{ items() | join }}</p>`,
+    })(Changing);
+    const fixture = await mount(Changing);
+    const h = harness();
+    h.handlers.get('instrument-pipes')!(true);
+    for (let i = 0; i < 30; i++) {
+      fixture.componentInstance.items.set([String(i)]);
+      fixture.detectChanges();
+    }
+    const join = (await report(h)).pipes.find((p) => p.name === 'join')!;
+    expect(join.call?.callCount).toBe(30);
+    expect(join.churn).toBeUndefined();
+  });
+
+  it('flags an impure pipe that returns an equal new array, not one that returns the same value', async () => {
+    class FreshPipe implements PipeTransform {
+      transform(value: number): number[] {
+        return [value];
+      }
+    }
+    Pipe({ ...STANDALONE, name: 'fresh', pure: false })(FreshPipe);
+    class SamePipe implements PipeTransform {
+      transform(value: number): string {
+        return String(value);
+      }
+    }
+    Pipe({ ...STANDALONE, name: 'same', pure: false })(SamePipe);
+    class Impure {
+      n = 1;
+      cdr = injectHere(ChangeDetectorRef);
+    }
+    Component({
+      ...STANDALONE,
+      selector: 'app-impure-churn',
+      imports: [FreshPipe, SamePipe],
+      template: `<p>{{ (n | fresh).length }}</p><p>{{ n | same }}</p>`,
+    })(Impure);
+    const fixture = await mount(Impure);
+    const h = harness();
+    h.handlers.get('instrument-pipes')!(true);
+    for (let i = 0; i < 25; i++) await recheck(fixture, fixture.componentInstance.cdr);
+    const pipes = (await report(h)).pipes;
+    expect(pipes.find((p) => p.name === 'fresh')?.churn?.streak).toBeGreaterThanOrEqual(20);
+    expect(pipes.find((p) => p.name === 'same')?.call?.callCount).toBeGreaterThanOrEqual(25);
+    expect(pipes.find((p) => p.name === 'same')?.churn).toBeUndefined();
+  });
+
+  it('counts the first calls of a pipe whose template branch renders while recording', async () => {
+    class Later {
+      show = writableSignal(false);
+      items = ['x', 'y'];
+    }
+    Component({
+      ...STANDALONE,
+      selector: 'app-later',
+      imports: [JoinPipe, ...(controlFlow ? [] : [NgIf])],
+      template: controlFlow
+        ? `@if (show()) {<p>{{ items | join }}</p>}`
+        : `<p *ngIf="show()">{{ items | join }}</p>`,
+    })(Later);
+    const fixture = await mount(Later);
+    const h = harness();
+    h.handlers.get('instrument-pipes')!(true);
+    expect((await report(h)).pipes.find((p) => p.name === 'join')).toBeUndefined();
+    // No report runs between the branch rendering and the pipe's first call.
+    fixture.componentInstance.show.set(true);
+    fixture.detectChanges();
+    // Lets the MutationObserver see the new view, so the report finds the instance.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const join = (await report(h)).pipes.find((p) => p.name === 'join');
+    expect(join?.call?.callCount).toBe(1);
+    expect(join?.call?.lastResult).toBe('x,y');
+  });
+
   it('starts each recording with a fresh stale baseline', async () => {
     class ListView {
       items = writableSignal<string[]>(['a', 'b']);
