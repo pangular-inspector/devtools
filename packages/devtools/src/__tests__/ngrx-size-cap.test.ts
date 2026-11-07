@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NgrxPageReport } from '../ngrx-shared.ts';
 import {
+  NGRX_NOT_SERIALIZABLE,
   NGRX_STATE_MAX_BYTES,
   NGRX_TOO_LARGE_FIELD,
   capNgrxFields,
@@ -69,6 +70,21 @@ describe('NgRx state size cap', () => {
     const capped = capNgrxState(many);
     expect(capped).toMatch(/^\[too large: \d+ KB\]$/);
     expect(capNgrxFields(many)).toEqual({ [NGRX_TOO_LARGE_FIELD]: capped });
+  });
+
+  it('marks a state or slice that JSON cannot write, never storing it', () => {
+    expect(capNgrxState(10n)).toBe(NGRX_NOT_SERIALIZABLE);
+    const loop: Record<string, unknown> = { name: 'loop' };
+    loop['self'] = loop;
+    expect(capNgrxState(loop)).toEqual({ name: 'loop', self: NGRX_NOT_SERIALIZABLE });
+    const capped = capNgrxState({ count: 2n, user: { name: 'Ada' }, nested: { loop } });
+    expect(capped).toEqual({
+      count: NGRX_NOT_SERIALIZABLE,
+      user: { name: 'Ada' },
+      nested: NGRX_NOT_SERIALIZABLE,
+    });
+    expect(() => JSON.stringify(capped)).not.toThrow();
+    expect(capNgrxFields({ id: 1n })).toEqual({ id: NGRX_NOT_SERIALIZABLE });
   });
 
   it('caps the fields of a signal store as one state', () => {
