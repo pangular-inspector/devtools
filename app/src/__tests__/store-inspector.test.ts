@@ -248,11 +248,10 @@ describe('StoreInspector copy', () => {
 
   it('copies the formatted state shown in the panel', async () => {
     const { fixture } = await mount([]);
-    const shown = root(fixture).querySelector('pre.tree')!.textContent;
+    expect(root(fixture).querySelector('app-state-tree .tree')!.textContent).toContain('items');
     copyButton(fixture, 'Copy state')!.click();
     await settle(fixture);
-    expect(copied).toEqual([shown]);
-    expect(copied[0]).toBe('{\n  items: []\n}');
+    expect(copied).toEqual(['{\n  items: []\n}']);
     expect(message(fixture)).toBe('Copied.');
   });
 

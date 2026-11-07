@@ -173,7 +173,7 @@ describe('StoreInspector restore focus', () => {
   it('focuses the state when restoring the newest action does not pause the store', async () => {
     const host = await restoreNewest({ ok: true, paused: false, message: 'Jumped.' });
     expect(host.querySelector('.paused')).toBeNull();
-    expect(document.activeElement).toBe(host.querySelector('pre.tree'));
+    expect(document.activeElement).toBe(host.querySelector('app-state-tree .tree'));
   });
 
   it('focuses "Back to latest" when the restore pauses the store', async () => {
