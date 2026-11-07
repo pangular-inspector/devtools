@@ -1,8 +1,9 @@
 import { NgOptimizedImage } from '@angular/common';
-import { Component, input } from '@angular/core';
+import { Component, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { LoadResult, RouteMeta } from '@analogjs/router';
 import { injectContentFiles } from '@analogjs/content';
+import { FeatureFlags } from '../shared/feature-flags';
 import { ProductCard } from '../shared/product-card';
 import type { load } from './index.server';
 
@@ -19,6 +20,9 @@ export const routeMeta: RouteMeta = {
 @Component({
   imports: [ProductCard, RouterLink, NgOptimizedImage],
   template: `
+    @if (flags.enabled('promo-banner')) {
+      <p class="promo">Free shipping on every order this week.</p>
+    }
     <section class="hero">
       <img
         class="hero-logo"
@@ -42,19 +46,22 @@ export const routeMeta: RouteMeta = {
         <app-product-card [product]="product" />
       }
     </div>
-    <h2>From the blog</h2>
-    <ul class="list">
-      @for (post of posts; track post.slug) {
-        <li>
-          <a [routerLink]="['/blog', post.slug]">{{ post.attributes.title }}</a>
-          <span class="muted">{{ post.attributes.date }}</span>
-        </li>
-      }
-    </ul>
+    @if (flags.enabled('blog-teaser')) {
+      <h2>From the blog</h2>
+      <ul class="list">
+        @for (post of posts; track post.slug) {
+          <li>
+            <a [routerLink]="['/blog', post.slug]">{{ post.attributes.title }}</a>
+            <span class="muted">{{ post.attributes.date }}</span>
+          </li>
+        }
+      </ul>
+    }
   `,
 })
 export default class Home {
   readonly load = input.required<LoadResult<typeof load>>();
+  protected readonly flags = inject(FeatureFlags);
   protected readonly posts = injectContentFiles<PostAttributes>((file) =>
     file.filename.includes('content/blog/'),
   )
