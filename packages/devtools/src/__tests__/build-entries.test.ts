@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -129,6 +129,39 @@ describe('the real build', () => {
     expect(nodeImportsFromEntries(chunks, Object.keys(BROWSER_ENTRIES))).toEqual([]);
     // No chunk of the browser build is one the Node build writes.
     expect(chunks.some((chunk) => chunk.fileName.startsWith('devframe'))).toBe(false);
+  }, 60_000);
+
+  it('ignore-lists the console tap in the browser source maps, and nothing of ours besides', async () => {
+    const { outDir } = await buildInto(browserConfig, 'browser-maps');
+    const maps = readdirSync(outDir)
+      .filter((file) => file.endsWith('.mjs.map'))
+      .map((file) => ({
+        file,
+        map: JSON.parse(readFileSync(join(outDir, file), 'utf8')) as {
+          sources: string[];
+          x_google_ignoreList?: number[];
+        },
+      }));
+    // Each chunk points to the map written next to it.
+    for (const { file } of maps) {
+      const chunk = file.slice(0, -'.map'.length);
+      expect(readFileSync(join(outDir, chunk), 'utf8'), chunk).toContain(
+        `//# sourceMappingURL=${file}`,
+      );
+    }
+    const ignored = maps.flatMap(({ map }) =>
+      (map.x_google_ignoreList ?? []).map((index) => map.sources[index]!),
+    );
+    const tap = maps.filter(({ map }) => map.sources.some((s) => s.endsWith('/console-tap.ts')));
+    expect(tap.length).toBeGreaterThan(0);
+    for (const { map } of tap) {
+      const index = map.sources.findIndex((s) => s.endsWith('/console-tap.ts'));
+      expect(map.x_google_ignoreList).toContain(index);
+    }
+    // The overlay's own frames stay visible.
+    expect(ignored.filter((s) => !s.includes('node_modules'))).toEqual(
+      tap.map(({ map }) => map.sources.find((s) => s.endsWith('/console-tap.ts'))),
+    );
   }, 60_000);
 
   it('fails the browser build when an entry imports a Node builtin', async () => {

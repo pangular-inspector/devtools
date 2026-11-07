@@ -18,6 +18,14 @@ const shared = {
   outExtensions: () => ({ js: '.mjs', dts: '.d.mts' }),
 } satisfies UserConfig;
 
+/**
+ * Sources the browser source maps put in their ignore list, so DevTools skips
+ * their frames in stack traces and console call sites. The console tap wraps
+ * `console.*`, and without this every `console.log` in the app names the
+ * wrapper as its caller (#369). `node_modules` is Rolldown's default.
+ */
+export const IGNORED_SOURCES = /node_modules|[\\/]console-tap\.ts$/;
+
 const nodeExternal = [/^@angular\/(?!compiler$)/, /^@nativescript\//, /^rxjs/];
 
 /**
@@ -29,6 +37,10 @@ export const browserConfig = {
   name: 'browser',
   entry: BROWSER_ENTRIES,
   platform: 'browser',
+  // Source maps ship with the browser entries, so the browser, or the app's
+  // bundler, reads the ignore list.
+  sourcemap: true,
+  outputOptions: { sourcemapIgnoreList: IGNORED_SOURCES },
   hooks: {
     'build:done': ({ chunks }) => assertBrowserSafe(chunks),
   },
