@@ -306,7 +306,9 @@ describe('agent tool and RPC registration', () => {
     const { tools, actionTools } = await boot();
     expect(actionTools.sort()).toEqual(
       [
+        'analog-purge-nitro-cache',
         'analog-run-api',
+        'analog-run-nitro-task',
         'audit',
         'clear-recordings',
         'ngrx-dispatch',
@@ -363,6 +365,8 @@ describe('agent tool and RPC registration', () => {
       'record-pipes',
       'clear-recordings',
       'analog-run-api',
+      'analog-purge-nitro-cache',
+      'analog-run-nitro-task',
       'run-form-action',
     ]) {
       expect(tools).not.toContain(dropped);
@@ -434,7 +438,9 @@ describe('agent tool and RPC registration', () => {
     const forms = await boot({ actions: { forms: false } });
     expect(forms.actionTools.sort()).toEqual(
       [
+        'analog-purge-nitro-cache',
         'analog-run-api',
+        'analog-run-nitro-task',
         'audit',
         'clear-recordings',
         'ngrx-dispatch',
@@ -465,6 +471,8 @@ describe('agent tool and RPC registration', () => {
     expect(router.tools).toContain('list-routes');
     const analog = await boot({ actions: { analog: false } });
     expect(analog.actionTools).not.toContain('analog-run-api');
+    expect(analog.actionTools).not.toContain('analog-purge-nitro-cache');
+    expect(analog.actionTools).not.toContain('analog-run-nitro-task');
     expect(analog.tools).toContain('analog-lint');
     const ngrx = await boot({ actions: { ngrx: false } });
     expect(ngrx.actionTools).not.toContain('ngrx-dispatch');

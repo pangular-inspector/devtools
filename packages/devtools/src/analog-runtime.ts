@@ -6,6 +6,8 @@ import { createHydrationScanner } from './http-overlay.ts';
 import { httpRegistry } from './http-rules.ts';
 import { tapConsole } from './console-tap.ts';
 import { setTimeoutOutside } from './outside-angular.ts';
+import { serialize } from './serialize.ts';
+import type { PageFunction } from './overlay-link.ts';
 import {
   findRouters,
   outletOf,
@@ -313,7 +315,40 @@ export function collectAnalog(
 }
 
 interface Rpc {
-  rpc: { call(name: string, ...args: unknown[]): Promise<unknown> };
+  rpc: {
+    call(name: string, ...args: unknown[]): Promise<unknown>;
+    register?(definition: PageFunction): void;
+  };
+}
+
+/** Page event the server broadcasts to ask for the open page's full load() value. */
+export const LOAD_DATA_EVENT = 'analog-load-data-request';
+/** Server action the page answers with. */
+export const LOAD_DATA_RESULT = 'analog-load-data-result';
+
+/** Limits for the full value: deeper and larger than the 1000-character preview. */
+const LOAD_DATA_LIMITS = { depth: 12, keys: 200, items: 200, text: 5000, budget: 200_000 };
+
+/**
+ * The open page's load() value, serialized with the redaction rules (secret
+ * names, JWTs and bearer tokens masked), or `undefined` when the page has none.
+ */
+export function loadDataOf(ng: AnyRecord | undefined): {
+  found: boolean;
+  value?: unknown;
+  bytes?: number;
+} {
+  const router = routerOf(ng);
+  if (!router) return { found: false };
+  const root = read(() => router['routerState']['snapshot']['root'] as AnyRecord, null);
+  const { data } = chainOf(root);
+  if (data === undefined) return { found: false };
+  const secrets = new Set(read(() => secretParamsOf(root), [] as string[]));
+  return {
+    found: true,
+    value: serialize(data, { ...LOAD_DATA_LIMITS, ...(secrets.size ? { secrets } : {}) }),
+    bytes: read(() => (JSON.stringify(data) ?? '').length, 0),
+  };
 }
 
 export function attachAnalog(
@@ -376,6 +411,20 @@ export function attachAnalog(
       null,
     );
   };
+
+  // The panel's "Load the full value": answered on request only, never pushed.
+  my.rpc.register?.({
+    name: LOAD_DATA_EVENT,
+    type: 'event',
+    jsonSerializable: true,
+    handler: (message: { requestId?: unknown; pageId?: unknown } | null) => {
+      if (!message || typeof message.requestId !== 'string' || message.pageId !== pageId) return;
+      const answer = read(() => loadDataOf(getNg()), { found: false });
+      void my.rpc
+        .call(LOAD_DATA_RESULT, { requestId: message.requestId, pageId, ...answer })
+        .catch(() => {});
+    },
+  });
 
   const tick = () => {
     watch();
