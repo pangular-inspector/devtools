@@ -250,6 +250,24 @@ export interface PangularConfig {
     /** Rule status by rule name. `false` turns the rule off; `true` or omitted keeps it on. */
     rules?: Record<string, boolean>;
   };
+  analog?: {
+    /**
+     * A JSON Schema file, relative to the Analog project root, that the
+     * frontmatter of every markdown file under `src/content` must match, such
+     * as `content.schema.json`. The Content tab and `analog-lint` report the
+     * files that don't. Left out, the frontmatter is only checked for syntax.
+     */
+    contentSchema?: string;
+  };
+  ngrx?: {
+    /**
+     * Record where each NgRx change log entry came from: the app frames of the
+     * dispatch, method call or `patchState`, with origins and query strings
+     * removed and secrets masked. Off by default, since taking a stack on every
+     * write costs time.
+     */
+    trace?: boolean;
+  };
 }
 
 /** What a `plugins` entry can turn off; each is on when left out. */
@@ -287,6 +305,9 @@ export interface ResolvedPangularConfig {
   lint: {
     rules: Record<string, boolean>;
   };
+  /** `contentSchema` is left out when it is not set. */
+  analog: { contentSchema?: string };
+  ngrx: { trace: boolean };
 }
 
 /** The switches of one plugin under `config`, whether or not it has a `plugins` entry. */
@@ -441,6 +462,7 @@ export function enabledPanelTabs(config: ResolvedPangularConfig): (typeof PANEL_
 export const PANEL_LINK_ITEMS: Partial<Record<PanelTab, string>> = {
   components: 'a component instance, by its id in the component tree',
   injectors: "a component's element injector, by the component's id",
+  signals: "a component's signal graph, by the component's id",
   forms: 'a form, by its id',
 };
 
@@ -673,7 +695,18 @@ export function resolvePangularConfig(config?: unknown): ResolvedPangularConfig 
     popup: { hotkey: popupHotkey(record(input['popup'])['hotkey']) },
     plugins: pluginEntries(input['plugins']),
     lint: { rules: lintRules(input['lint']) },
+    analog: analogOptions(input['analog']),
+    ngrx: { trace: flag(record(input['ngrx'])['trace'], false) },
   };
+}
+
+const MAX_SCHEMA_PATH = 500;
+
+function analogOptions(value: unknown): { contentSchema?: string } {
+  const schema = record(value)['contentSchema'];
+  return typeof schema === 'string' && schema.trim() && schema.length <= MAX_SCHEMA_PATH
+    ? { contentSchema: schema.trim() }
+    : {};
 }
 
 const MAX_LINT_RULE_ENTRIES = 200;
@@ -766,6 +799,8 @@ const CONFIG_KEYS = [
   'popup',
   'plugins',
   'lint',
+  'analog',
+  'ngrx',
 ] as const;
 
 /**
@@ -902,6 +937,20 @@ export function pangularConfigProblems(config: unknown): string[] {
       }
     }
   }
+  const analog = object('analog', input['analog'], ['contentSchema']);
+  const contentSchema = analog['contentSchema'];
+  if (
+    contentSchema !== undefined &&
+    (typeof contentSchema !== 'string' ||
+      !contentSchema.trim() ||
+      contentSchema.length > MAX_SCHEMA_PATH)
+  ) {
+    problems.push(
+      `\`analog.contentSchema\` should be the path of a JSON Schema file, got ${describe(contentSchema)}. It was ignored.`,
+    );
+  }
+  const ngrx = object('ngrx', input['ngrx'], ['trace']);
+  boolean('ngrx.trace', ngrx['trace'], 'off');
   return problems;
 }
 
@@ -936,8 +985,23 @@ export function configFromConnection(
 export function pickPangularConfig<T extends PangularConfig>(
   options: T,
 ): { config: PangularConfig; rest: Omit<T, keyof PangularConfig> } {
-  const { inspectors, agent, actions, redaction, limits, popup, plugins, lint, ...rest } = options;
-  return { config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint }, rest };
+  const {
+    inspectors,
+    agent,
+    actions,
+    redaction,
+    limits,
+    popup,
+    plugins,
+    lint,
+    analog,
+    ngrx,
+    ...rest
+  } = options;
+  return {
+    config: { inspectors, agent, actions, redaction, limits, popup, plugins, lint, analog, ngrx },
+    rest,
+  };
 }
 
 /** Form actions that work without a `formId`: they act on the page, not on one form. */
@@ -963,6 +1027,7 @@ export const FORM_WRITE_ACTIONS: readonly string[] = [
   'disable',
   'submit',
   'restore',
+  'try-webmcp',
 ];
 
 /** Router actions that start, stop, repeat or probe a navigation. */
@@ -1038,6 +1103,13 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'inspect-component': { kind: 'tool', inspectors: ['components'], page: true },
   'list-components': { kind: 'tool', inspectors: ['components'], page: true },
   'defer-blocks': { kind: 'tool', inspectors: ['components'], page: true },
+  'load-defer-block': {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    actions: ['components'],
+    page: true,
+  },
   'for-blocks': { kind: 'tool', inspectors: ['components'], page: true },
   hydration: { kind: 'tool', inspectors: ['components'], page: true },
   'change-detection': { kind: 'tool', inspectors: ['components'], page: true },
@@ -1109,6 +1181,16 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
     actions: ['ngrx'],
     page: true,
   },
+  // Toggle, jump, commit, reset and pause in the Store DevTools history.
+  // Destructive: commit and reset erase the history they act on.
+  'ngrx-store-devtools': {
+    kind: 'tool',
+    inspectors: ['ngrx'],
+    safety: 'destructive',
+    actions: ['ngrx'],
+    page: true,
+  },
+  'ngrx-explain-change': { kind: 'tool', inspectors: ['ngrx'], page: true },
   'redux-inspect-stores': { kind: 'tool', inspectors: ['ngrx'], page: true },
 
   // tanstackQuery
@@ -1243,6 +1325,27 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'analog-scan-prerender': { kind: 'tool', inspectors: ['analog'] },
   'analog-scan-content': { kind: 'tool', inspectors: ['analog'] },
   'analog-lint': { kind: 'tool', inspectors: ['analog'] },
+  'analog-scan-build': { kind: 'tool', inspectors: ['analog'] },
+  'analog-scan-nitro': { kind: 'tool', inspectors: ['analog'] },
+  // Deletes Nitro cache entry files on disk.
+  'analog-purge-nitro-cache': {
+    kind: 'tool',
+    inspectors: ['analog'],
+    safety: 'destructive',
+    actions: ['analog'],
+  },
+  'analog-scan-runtime-config': { kind: 'tool', inspectors: ['analog'] },
+  // Runs a project task on the dev server; it can change data.
+  'analog-run-nitro-task': {
+    kind: 'tool',
+    inspectors: ['analog'],
+    safety: 'action',
+    actions: ['analog'],
+    page: true,
+  },
+  // Both ask the running Vite dev server.
+  'analog-inspect-transform': { kind: 'tool', inspectors: ['analog'], page: true },
+  'analog-inspect-render-mode': { kind: 'tool', inspectors: ['analog'], page: true },
 
   // http, router and analog: erases what the three inspectors record.
   'clear-recordings': {
@@ -1331,9 +1434,10 @@ export function actionBlockedMessage(action: PangularAction): string {
   const what = {
     forms: 'Writing to forms',
     router: 'Navigating and clearing navigations',
-    ngrx: 'Restoring NgRx state and dispatching actions',
+    ngrx: 'Restoring NgRx state, dispatching actions and changing the Store DevTools history',
     http: 'Changing HTTP mock rules and SSR overrides, and clearing HTTP calls',
-    analog: 'Calling API routes and clearing server calls',
+    analog:
+      'Calling API routes, clearing server calls, running Nitro tasks and purging the Nitro cache',
     components: 'Editing component properties and signals',
     tanstackQuery: 'Invalidating and refetching TanStack queries',
     plugins: 'Running plugin actions',
@@ -1412,11 +1516,13 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'select-component': 'components',
   'request-component-pick': 'components',
   'cancel-component-pick': 'components',
+  'request-component-pick-move': 'components',
   'component-pick-result': 'components',
   'request-page-highlight': 'components',
   'component-screenshot-result': 'components',
   'request-component-edit': 'components',
   'component-edit-result': 'components',
+  'defer-load-result': 'components',
   'request-hydration-overlay': 'components',
   'request-component-value': 'components',
   'component-value-result': 'components',
@@ -1447,6 +1553,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'request-ngrx-history': 'ngrx',
   'import-ngrx-session': 'ngrx',
   'request-provider-value': 'injectors',
+  'request-injector-refresh': 'injectors',
   'provider-value-result': 'injectors',
   'push-redux-stores': 'ngrx',
   'forget-redux-stores-page': 'ngrx',
@@ -1501,6 +1608,16 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'analog-render': 'analog',
   'analog-text': 'analog',
   'analog-call-api': 'analog',
+  'analog-content-preview': 'analog',
+  'analog-transform': 'analog',
+  'analog-build': 'analog',
+  'analog-nitro': 'analog',
+  'analog-nitro-purge': 'analog',
+  'analog-run-nitro-task': 'analog',
+  'analog-runtime-config': 'analog',
+  'analog-render-check': 'analog',
+  'analog-load-data': 'analog',
+  'analog-load-data-result': 'analog',
   'push-plugins': 'plugins',
   'forget-plugins-page': 'plugins',
   'request-plugin-action': 'plugins',
@@ -1788,7 +1905,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
 const ACTION_LABEL: Record<PangularAction, string> = {
   forms: 'Form writes',
   router: 'Navigation',
-  ngrx: 'NgRx restore and dispatch',
+  ngrx: 'NgRx restore, dispatch and Store DevTools',
   http: 'HTTP mocking',
   analog: 'Analog API calls',
   components: 'Component edits',
@@ -2326,6 +2443,22 @@ export interface DeferNoteBlock {
   triggers: string[];
   /** Page clock, ms since epoch, when the state or hydration state last changed. */
   since: number;
+  /** Page clock, ms since epoch, when the overlay saw the block hydrate. */
+  hydratedAt?: number;
+}
+
+/**
+ * The hydration state of a block as the panel and the defer-blocks tool word
+ * it. A block that is `hydrated` without a `hydratedAt` hydrated before the
+ * overlay attached, so no one saw it happen.
+ */
+export function deferHydrationLabel(
+  block: Pick<DeferNoteBlock, 'hydration' | 'hydratedAt'>,
+): string {
+  if (block.hydration === 'hydrated' && block.hydratedAt === undefined) {
+    return 'hydrated before inspection';
+  }
+  return block.hydration;
 }
 
 export interface DeferNote {

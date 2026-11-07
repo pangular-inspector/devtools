@@ -204,10 +204,13 @@ describe('open-in-panel', () => {
   });
 
   it('gives the hash when the panel address is unknown', () => {
-    const result = openInPanel({ tab: 'signals', id: '3' }, { config, pages: [] });
-    expect(result.link).toEqual({ tab: 'signals' });
-    expect(result.markdown).toContain('Panel hash: `#tab=signals`');
+    const result = openInPanel({ tab: 'pipes', id: '3' }, { config, pages: [] });
+    expect(result.link).toEqual({ tab: 'pipes' });
+    expect(result.markdown).toContain('Panel hash: `#tab=pipes`');
     expect(result.markdown).toContain('has no item selection');
+    const signals = openInPanel({ tab: 'signals', id: 'c3' }, { config, pages: [] });
+    expect(signals.link).toEqual({ tab: 'signals', id: 'c3' });
+    expect(signals.markdown).toContain("It selects a component's signal graph");
   });
 
   it('refuses an unknown tab or one whose inspector is off', () => {

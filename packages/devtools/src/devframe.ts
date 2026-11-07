@@ -34,7 +34,7 @@ import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
 import { TOKEN_ID_ARGUMENT } from './rpc/token-match.ts';
 import { registerInjectionExplain } from './rpc/injection-explain.ts';
-import { sanitizeInjectorTree } from './rpc/injector-report.ts';
+import { INJECTOR_TREE_LIMITS, sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
@@ -69,6 +69,7 @@ import { injectorMatches, isEnvironmentRequest, signalOwner } from './signal-gra
 import { scanNgrxStore } from './rpc/get-ngrx-store.ts';
 import { createNgrxHistory } from './rpc/ngrx-session-tools.ts';
 import { createProviderValues } from './rpc/provider-values.ts';
+import { requestInjectorRefresh } from './rpc/injector-refresh.ts';
 import {
   dispatchResultText,
   expireNgrxPages,
@@ -86,6 +87,7 @@ import {
   storeIdNamed,
   withUntrustedPreamble,
 } from './rpc/ngrx-live-tools.ts';
+import { createNgrxDevtoolsTools } from './rpc/ngrx-devtools-tools.ts';
 import {
   dispatchProblem,
   type NgrxRequest,
@@ -116,6 +118,8 @@ import {
 } from './rpc/component-tools.ts';
 import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import { inspectComponentText } from './rpc/component-detail-text.ts';
+import { createDeferLoads } from './rpc/defer-loads.ts';
+import { PICK_KEYS } from './component-pick.ts';
 import { createComponentEdits } from './rpc/component-edits.ts';
 import { createSignalRestores } from './rpc/signal-restores.ts';
 import { createComponentValues, valueResultText } from './rpc/component-values.ts';
@@ -127,6 +131,7 @@ import {
   expirePages,
   inspectFormsText,
   isPageReport,
+  matchForms,
   mergePageReport,
   type PageReport,
   type FormsState,
@@ -134,12 +139,14 @@ import {
   UNTRUSTED,
   untrusted,
 } from './rpc/forms-tools.ts';
+import { playwrightTestText } from './rpc/forms-playwright.ts';
 import {
   explainCustomControlText,
   explainFieldText,
   explainSubmitText,
   fieldOwner,
   exportFormText,
+  type FieldArgs,
   formDiffText,
   formHistoryText,
   formPayloadText,
@@ -2133,6 +2140,8 @@ const pangular = defineDevframe({
             return formPayloadText(state, target);
           case 'fixture':
             return exportFormText(state, { ...target, format: 'fixture' });
+          case 'playwright':
+            return playwrightTestText(state, { ...target, url: formPageUrl(state, target) });
           default:
             return explainFieldText(state, target);
         }
@@ -2355,6 +2364,29 @@ const pangular = defineDevframe({
     });
     for (const tool of componentEdits.tools) agent.registerTool(tool);
 
+    // Loads one @defer block when an agent asks: same gate and owner check as the writes above.
+    const deferLoads = createDeferLoads({
+      config,
+      pages: () => componentPages.values(),
+      broadcast: (method, message) => {
+        const pageId = (message as { pageId?: unknown } | null)?.pageId;
+        void (my.rpc.broadcast as (options: OwnerBroadcast) => Promise<void>)({
+          method,
+          args: [message],
+          optional: true,
+          filter: owners.deliversTo(typeof pageId === 'string' ? pageId : undefined),
+        });
+      },
+      answersFor,
+    });
+    register({
+      name: 'defer-load-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: deferLoads.answer,
+    });
+    agent.registerTool(deferLoads.tool);
+
     // Nested levels of component values: the panel opens them, inspect-component reads them.
     const componentValues = createComponentValues({
       pages: () => componentPages.values(),
@@ -2441,6 +2473,44 @@ const pangular = defineDevframe({
           void my.rpc.broadcast({
             method: 'component-pick',
             args: [{ requestId, pageId }],
+            optional: true,
+          });
+        });
+      },
+    });
+
+    // A keyboard move of the running pick: the panel sends the key, the page
+    // answers with the component it shows now on the pick's result channel.
+    register({
+      name: 'request-component-pick-move',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (target: { pageId?: unknown; key?: unknown } | null) => {
+        const key = PICK_KEYS.find((k) => k === target?.key);
+        if (!key) return { moved: false, error: 'Unknown key.' };
+        const asked = typeof target?.pageId === 'string' ? target.pageId : undefined;
+        const pageId = asked ?? latestComponentPage(componentPages.values())?.pageId;
+        if (!pageId || !componentPages.has(pageId)) {
+          return { moved: false, error: 'No page is connected. Open the app in a browser first.' };
+        }
+        return new Promise<Record<string, unknown>>((resolve) => {
+          const requestId = `pick${++pickSeq}`;
+          const timer = setTimeout(() => {
+            pendingPicks.delete(requestId);
+            resolve({ moved: false, error: 'The page did not answer.' });
+          }, 5_000);
+          timer.unref?.();
+          pendingPicks.set(requestId, {
+            pageId,
+            settle: (result) => {
+              clearTimeout(timer);
+              pendingPicks.delete(requestId);
+              resolve(result);
+            },
+          });
+          void my.rpc.broadcast({
+            method: 'component-pick',
+            args: [{ requestId, pageId, move: key }],
             optional: true,
           });
         });
@@ -2653,7 +2723,9 @@ const pangular = defineDevframe({
           pageId,
           roots: tree.roots,
           environment: tree.environment,
-          ...(report?.truncated === true || tree.truncated ? { truncated: true } : {}),
+          ...(report?.truncated === true || tree.truncated
+            ? { truncated: true, limits: INJECTOR_TREE_LIMITS }
+            : {}),
           ...(zone ? { zone } : {}),
           reportedAt: Date.now(),
         };
@@ -2712,6 +2784,20 @@ const pangular = defineDevframe({
         providerValues.request(message?.pageId, message?.request),
     });
 
+    // The panel asks the page to read an element injector again (the one it
+    // selected), or every injector (Refresh). The page pushes a fresh tree.
+    register({
+      name: 'request-injector-refresh',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; injectorId?: unknown } | null) =>
+        requestInjectorRefresh(
+          message,
+          injectorPages.keys(),
+          (method, args) => void my.rpc.broadcast({ method, args: [args], optional: true }),
+        ),
+    });
+
     register({
       name: 'push-ngrx-state',
       type: 'action',
@@ -2745,6 +2831,12 @@ const pangular = defineDevframe({
         http: httpPages.values(),
         components: componentPages.values(),
       });
+    /** The address of the page a form is on, for the Playwright test export. */
+    function formPageUrl(state: FormsState, args: FieldArgs): string | undefined {
+      const forms = matchForms(state.forms, args.form, args.page);
+      const pageId = (forms[0]?.id ?? '').split('@')[1] ?? args.page;
+      return pageId ? livePageDetails().get(pageId)?.url : undefined;
+    }
     const withPageUrls = <T extends { pageId: string; reportedAt: number }>(pages: T[]) => {
       const details = livePageDetails();
       return pages.map((page) => {
@@ -3663,7 +3755,14 @@ const pangular = defineDevframe({
         }
         const matches = (g: PageGraph) =>
           !bySelector &&
-          ([g.componentSelector, g.component?.name, g.component?.id].includes(wanted) ||
+          ([
+            g.componentSelector,
+            g.component?.name,
+            g.component?.id,
+            g.element?.id,
+            g.element?.injectorId,
+          ].includes(wanted) ||
+            (!!g.element && g.element.directives.includes(wanted)) ||
             (!!g.injector && injectorMatches(g.injector, wanted)));
         const latestMatch = () =>
           byRecency(
@@ -3750,7 +3849,7 @@ const pangular = defineDevframe({
       id: 'pangular:inspect-providers',
       title: 'Inspect injectors and providers',
       description:
-        'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected.',
+        'DI injectors on the page: without arguments the injector tree with providers; `injector` narrows to one injector (component, Root, Platform, Route: x); `token` finds where a token is provided and injected. `inactive: true` marks a lazy route injector off the rendered path.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -4302,6 +4401,13 @@ const pangular = defineDevframe({
     });
 
     for (const tool of ngrxHistory.tools) agent.registerTool(tool);
+    // Store DevTools history operations and the explain-change read (rpc/ngrx-devtools-tools.ts).
+    for (const tool of createNgrxDevtoolsTools({
+      ask: (page, request) => requestNgrxAction(page, request),
+      pages: () => ngrxPages,
+    })) {
+      agent.registerTool(tool);
+    }
 
     const noForms = `No forms have been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser, on a page that renders a form. The stdio MCP server has no page, so there it always answers this.`;
     /**
@@ -4659,16 +4765,23 @@ const pangular = defineDevframe({
       id: 'pangular:export-form',
       title: 'Export a form',
       description:
-        'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200) and notes what was cut.',
+        'Export a form as a JSON snapshot, a test fixture (setValue / signal model plus the expected status), or a Playwright test replaying its recorded history. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200).',
       inputSchema: {
         type: 'object',
         properties: {
           form: formProperty,
-          format: { type: 'string', enum: ['snapshot', 'fixture'] },
+          format: { type: 'string', enum: ['snapshot', 'fixture', 'playwright'] },
           page: formPageProperty,
         },
       },
-      handler: withForms(exportFormText),
+      handler: withForms((state, args: FieldArgs & { format?: string }) =>
+        args.format === 'playwright'
+          ? playwrightTestText(state, { ...args, url: formPageUrl(state, args) })
+          : exportFormText(state, {
+              ...args,
+              format: args.format === 'fixture' ? 'fixture' : 'snapshot',
+            }),
+      ),
     });
 
     // `wait-for` with `condition: "form"`: polls the forms state until the condition holds.
@@ -4743,7 +4856,7 @@ const pangular = defineDevframe({
       id: 'pangular:run-form-action',
       title: 'Run a form action',
       description:
-        'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument. reset, submit and restore need `confirm: true`.',
+        'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument, try-webmcp (runs its WebMCP tool). reset, submit, restore, try-webmcp need confirm.',
       inputSchema: {
         type: 'object',
         required: ['action', 'form'],
@@ -4768,11 +4881,14 @@ const pangular = defineDevframe({
               'snapshot',
               'restore',
               'instrument',
+              'try-webmcp',
             ],
           },
           form: { type: 'string', description: 'Full form id, e.g. Checkout.form@ab12.' },
           path: pathProperty,
-          value: { description: 'New value for set-value.' },
+          value: {
+            description: 'New value for set-value, or the input object for try-webmcp.',
+          },
           mode: { type: 'string', enum: ['code', 'user'] },
           confirm: { type: 'boolean' },
           force: { type: 'boolean' },
@@ -5018,6 +5134,7 @@ const pangular = defineDevframe({
         ttl: liveTtl,
         owners,
         rules: config.lint.rules,
+        contentSchema: config.analog.contentSchema,
       });
     }
     feed.attachDocks(

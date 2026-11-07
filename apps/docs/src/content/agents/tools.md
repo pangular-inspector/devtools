@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  One hundred and three tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  One hundred and thirteen tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -59,7 +59,7 @@ Some calls name their page another way:
 | `highlight`, `inspect-component` given `component`       | Every tab is searched for the instance, default page first              |
 | `defer-blocks`, `for-blocks`, `hydration`                | Every tab is listed                                                     |
 
-Tools that change app state never pick one of several tabs on their own: `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `set-signal` and `set-component-property` refuse and list the tabs when more than one could take the call. The tables below leave `page` out.
+Tools that change app state never pick one of several tabs on their own: `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `ngrx-store-devtools`, `tanstack-run-query`, `set-signal` and `set-component-property` refuse and list the tabs when more than one could take the call. The tables below leave `page` out.
 
 If `page` names a tab that doesn't report that data, the tool answers `No page <id> is reporting ...` and lists the tabs that do. It never falls back to another tab. A `page` that is not a string, such as a number, is refused the same way, and an empty string counts as left out. `page` is the only page argument: a call that sends `pageId` is refused.
 
@@ -131,11 +131,11 @@ Each section is also cut at 4,000 characters. When the answer reaches `maxChars`
 
 Gives the user a link that opens the panel on one tab with one item selected, and switches the panels that are open to it. Reads: page. Use it to point the user at what you found.
 
-| Argument | Required | What it is                                                                                                                                                                                                                          |
-| -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `audit`, `components`, `routes`, `signals`, `injectors`, `store`, `queries`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog`, `capacitor` or `plugins`. Only tabs that are on count. |
-| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, a form id on `forms`. Other tabs ignore it.                                                              |
-| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                                    |
+| Argument | Required | What it is                                                                                                                                                                                                                              |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `audit`, `components`, `routes`, `signals`, `injectors`, `store`, `queries`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog`, `capacitor` or `plugins`. Only tabs that are on count.     |
+| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, the id of the component whose signal graph to show on `signals`, a form id on `forms`. Other tabs ignore it. |
+| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                                        |
 
 The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
@@ -170,14 +170,14 @@ Without `url`, `navigation` holds as soon as no navigation is in progress, which
 
 Every tool has one of three safety tiers. The server sends the tier to your client as the tool's read-only and destructive hints.
 
-| Tier          | What the tool can do                                                                                                                 | Tools                                                                                                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                           | Every other tool, and every resource                                                                                                                                                                                                                                                                                                                    |
-| `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records. A reload or the next call undoes it. | `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `run-form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection` and `audit` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                                         | `clear-recordings` and `analog-run-api`                                                                                                                                                                                                                                                                                                                 |
+| Tier          | What the tool can do                                                                                                                                                                                          | Tools                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                                                                                                    | Every other tool, and every resource                                                                                                                                                                                                                                                                                                                                                                 |
+| `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records, or runs a Nitro task. A reload or the next call undoes most of it, but a Nitro task can change data for good. | `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `run-form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `load-defer-block`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection`, `analog-run-nitro-task` and `audit` |
+| `destructive` | Can lose data: it erases recordings or Store DevTools history, deletes the Nitro cache, or sends writes to your own API routes.                                                                               | `clear-recordings`, `analog-run-api`, `analog-purge-nitro-cache` and `ngrx-store-devtools`                                                                                                                                                                                                                                                                                                           |
 
 <ngmd-alert severity="important">
-  The twenty-one <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The twenty-five <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `record-change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `audit` only when it runs axe. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
@@ -195,7 +195,7 @@ These seven tools read your source and answer compact JSON. Every tool that read
 | `scan-routes`     | Angular routes from your route files, with full URL path (parents and `loadChildren` prefixes included), kind (page, group, redirect or wildcard), guards, resolvers, and file and line.                                       | None                        |
 | `scan-components` | Components and directives from `@Component` and `@Directive` classes, with class name, selector, kind, inputs, outputs, change detection (components only), and file and line.                                                 | `filter`, `offset`, `limit` |
 | `scan-signals`    | `signal()`, `computed()`, `linkedSignal()`, `effect()`, `toSignal()` and resource declarations (`resource`, `httpResource`, `rxResource`), plus signal inputs, models and queries.                                             | `filter`, `offset`, `limit` |
-| `scan-providers`  | DI providers: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays, with token, file and where each one is provided.                                                                        | None                        |
+| `scan-providers`  | DI providers: `@Injectable` services, `inject()` calls, constructor parameters and `providers` arrays, with token, file and where each one is provided. Other `provide*()` calls have `type: "helper"`.                        | None                        |
 | `ngrx-scan`       | NgRx declarations: `@ngrx/store` actions (with their type strings in `types`), reducers, effects, selectors, features and store setup, and `@ngrx/signals` `signalStore` (with its members), `signalState` and `signalMethod`. | None                        |
 | `scan-pipes`      | Custom `@Pipe` classes, and built-in pipes from `@angular/common` in use in templates, with purity, standalone status, and where each is declared or used.                                                                     | None                        |
 | `scan-build`      | The project name, the Angular and TypeScript versions, SSR status, the Analog version in Analog apps, and a `builtAt` timestamp.                                                                                               | None                        |
@@ -263,7 +263,29 @@ It takes only `page`.
 
 Without a development build, the page has no util to read defer blocks, and the answer says so.
 
+A block that hydrated before the devtools attached to the page shows `hydrated before inspection` in the **Hydration** column, because the page never saw it hydrate.
+
 Each page lists at most 50 blocks in the table and 50 under **Needs attention**, with a note on how many more are not shown. The whole answer stops at 20,000 characters. If several tabs report, pass `page` to read one. The **Defer blocks** list on the [Components](../inspectors/components.md#defer-blocks) page has every block the page reported. A page reports its first 500 blocks. When it has more, the answer says so.
+
+### load-defer-block <ngmd-badge variant="action">Action</ngmd-badge>
+
+Makes one `@defer` block fetch its dependencies and show its main content now, as if its trigger fired, in development only. Use it to check deferred content without scrolling, hovering or waiting. Reads: page.
+
+| Argument | Required | Value                                                                      |
+| -------- | -------- | -------------------------------------------------------------------------- |
+| `block`  | Yes      | A block id from [`defer-blocks`](#defer-blocks), such as `d3`.             |
+| `page`   | No       | The page id. Required when more than one tab reports a block with that id. |
+
+The page loads the block the way `DeferBlockFixture.render` does in Angular's testing package, then runs change detection with `ng.applyChanges`. When the dependencies fail to load, the block shows its `@error` block and the answer says so. A block without an `@error` block is left on its placeholder. The block's own triggers do not fire, so a load does not prove they work.
+
+It refuses, and loads nothing, when:
+
+- the block already shows its main content
+- the block is server HTML waiting for [incremental hydration](https://angular.dev/guide/incremental-hydration) (`dehydrated` or `hydrate never`), since a load would skip its hydrate trigger
+- the page's Angular does not export the internals a load needs (`ɵgetDeferBlocks`, `ɵtriggerResourceLoading` and `ɵrenderDeferBlockState`)
+- no page reports a block with that id, or several tabs do and `page` is missing
+
+A reload of the page undoes it. Set [`actions.components`](../getting-started/configuration.md#actions) to `false` to drop the tool.
 
 ### for-blocks
 
@@ -339,7 +361,7 @@ Starts, stops or clears a change detection recording, and turns the live views o
 | `track`            | no       | `true` writes each component check, lifecycle hook and output listener to a **Pangular** track in the Chrome Performance panel. `false` turns it off.         |
 | `angularProfiling` | no       | `true` calls `ng.enableProfiling()` for Angular's own Performance panel track. It stays on until the page reloads, so `false` is refused.                     |
 
-Pass `record`, a view or both. Without `page`, `record` goes to every connected page (`stop` only to the pages that record). `record` waits up to 3 seconds for each page to confirm and names the pages that did; when none does, or no page is connected, it refuses with `isError`. A page that answers a start with no recording says why: its Angular version lacks the profiler, with the version it runs, or it has the profiler but the recording could not attach yet. Call it with `record: "start"`, use the app, then call `change-detection`.
+Pass `record`, a view or both. A recording keeps running when the tab reloads, until `stop`; the cycles from before the reload are gone. Without `page`, `record` goes to every connected page (`stop` only to the pages that record). `record` waits up to 3 seconds for each page to confirm and names the pages that did; when none does, or no page is connected, it refuses with `isError`. A page that answers a start with no recording says why: its Angular version lacks the profiler, with the version it runs, or it has the profiler but the recording could not attach yet. Call it with `record: "start"`, use the app, then call `change-detection`.
 
 `flash`, `track` and `angularProfiling` go to the page in `page`, or to every connected page. An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../getting-started/nativescript.md) app has no live views. The tool says there is no DOM when `page` names such an app, or when `page` is left out and every page that reports is one. `record` works on these apps as on a browser page. They are the **Live views** toggles of the panel; see [Watch checks live](../inspectors/components.md#watch-checks-live). With `agent.readOnly` the tool is not registered, so start the recording from the panel.
 
@@ -446,28 +468,31 @@ An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../g
 
 The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`, `effect`), dependency edges (`{ consumer, producer }`, where `consumer` reads `producer`, both node ids), the component or injector they belong to, and recent value history per node. Reads: page.
 
-| Argument    | Required | Value                                                                                                                                                        |
-| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `component` | one of   | Host tag, class name or instance id of the component, like `app-root`. Or `root`, or a route path like `/admin` or `Route: admin`.                           |
-| `selector`  | one of   | A CSS selector for a component host, like `app-card.featured`. The first match is read. At most 500 characters.                                              |
-| `node`      | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history. |
-| `history`   | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                    |
-| `framework` | no       | `false` leaves out the nodes Angular itself created (`framework: true`). Defaults to `true`.                                                                 |
+| Argument    | Required | Value                                                                                                                                                                                                                                                                                                      |
+| ----------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `component` | one of   | Host tag, class name or instance id of the component, like `app-root`. Also accepts `root`, a route path like `/admin` or `Route: admin`, an element injector id like `inj-12` from `inspect-providers`, or a directive class name. A host that has directives but no component reads as a directive host. |
+| `selector`  | one of   | A CSS selector for a component host, like `app-card.featured`. The first match is read. At most 500 characters.                                                                                                                                                                                            |
+| `node`      | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history.                                                                                                                                               |
+| `history`   | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                                                                                                                                                                  |
+| `framework` | no       | `false` leaves out the nodes Angular itself created (`framework: true`). Defaults to `true`.                                                                                                                                                                                                               |
 
 Pass `component` or `selector`, not both. When the graph the page last reported belongs to another component or injector, the tool asks the page for the one you named, once, and the Signals page keeps showing what it showed. A `component` the component tree knows is read by its first instance. A `component` it doesn't know answers with the graph the page reported and says what that graph covers. A `selector` that matches no component host is refused.
 
 The answer also holds:
 
-| Field            | Value                                                                                                                                    |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `resources`      | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`.            |
-| `environments`   | The root and route injectors the page can report, with `id` and `name`.                                                                  |
-| `changes`        | On a node or resource, every change since the page first saw it. The history keeps the last 50.                                          |
-| `nodeCount`      | Set when Angular reported more than the 400 nodes the page keeps.                                                                        |
-| `unnamedSignals` | Set when signals, computeds or linkedSignals in the graph have no `debugName`. Their history holds sampled values only.                  |
-| `framework`      | `true` on a node that Angular's router, forms or HTTP code created. See [Framework signals](../inspectors/signals.md#framework-signals). |
-| `watch`          | The node ids the page watches (`ids`) and whether write stacks are on (`stacks`). Set only while one of them is on.                      |
-| `stack`          | On a `write` history entry while write stacks are on: the first 3 app frames of the code that set the signal.                            |
+| Field                        | Value                                                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `resources`                  | One entry per `resource()`, `httpResource()` or `rxResource()`: `status`, `isLoading`, `params`, `value`, `error`, `nodeIds`.                                                        |
+| `environments`               | The root and route injectors the page can report, with `id` and `name`.                                                                                                              |
+| `changes`                    | On a node or resource, every change since the page first saw it. The history keeps the last 50.                                                                                      |
+| `nodeCount`                  | Set when Angular reported more than the 400 nodes the page keeps.                                                                                                                    |
+| `unnamedSignals`             | Set when signals, computeds or linkedSignals in the graph have no `debugName`. Their history holds sampled values only.                                                              |
+| `framework`                  | `true` on a node that Angular's router, forms or HTTP code created. See [Framework signals](../inspectors/signals.md#framework-signals).                                             |
+| `watch`                      | The node ids the page watches (`ids`) and whether write stacks are on (`stacks`). Set only while one of them is on.                                                                  |
+| `stack`                      | On a `write` history entry while write stacks are on: the first 3 app frames of the code that set the signal.                                                                        |
+| `element`                    | The element injector the graph was read from: `id`, `tag`, `directives`, and `injectorId` when you passed an element injector id. Without `component`, the host has directives only. |
+| `locator`                    | On a writable node the page can restore: `id` and `key` of the component field, or `owner: "service"` with the injector id and the service class in `service`.                       |
+| `runs`, `runMs`, `lastRunMs` | On an effect, where Angular's profiler reports effect runs: how many times it ran, and its total and last run time in ms. See [Effect runs](../inspectors/signals.md#effect-runs).   |
 
 The answer is cut at 20,000 characters. A graph that is too long first keeps fewer history entries per node, then keeps the first nodes that fit. A note under the JSON says how many history entries and nodes it left out. Pass `node` or `history: false` to see the rest.
 
@@ -503,7 +528,7 @@ The injectors a page reported. Element injectors list what each component inject
 
 An `injector` that names an element injector returns it with its lookup path resolved to names and provided tokens. One that names an environment injector, in any case, returns that injector's providers, what the services it already created inject, and its parent injectors. When nothing matches, the answer lists the tags and environment injector names on the page to retry with.
 
-An element injector that belongs to a component carries `componentId`, the instance id that `inspect-component`, `list-components` and the `component-tree` resource use. `framework: true` marks the injectors and providers that come from the installed `@angular/*` packages; see [Framework injectors](../inspectors/injectors.md#framework-injectors).
+An element injector that belongs to a component carries `componentId`, the instance id that `inspect-component`, `list-components` and the `component-tree` resource use. `framework: true` marks the injectors and providers that come from the installed `@angular/*` packages; see [Framework injectors](../inspectors/injectors.md#framework-injectors). `inactive: true` marks the injector of a lazy route the router loaded that no rendered element uses, such as a route the app left; see [View switch](../inspectors/injectors.md#view-switch).
 
 Without `injector` or `token`, the answer is the whole tree and says which change detection mode the page runs. The answer stays within 20,000 characters and its JSON always parses. A larger tree shows element injectors as an outline (id, name, type, component, and provider and dependency counts), and when that is still too long it leaves out the deepest injectors and says how many. The environment injectors are always there, as an outline when they are large, and without their deepest injectors when even that outline is too long. An `injector` or `token` answer that is too long cuts each injector's `providers` and `dependencies` lists, with `providersTotal` and `dependenciesTotal` giving the full counts, so a large injector such as `Root` still shows. An `@ngrx/signals` store that an environment injector created carries the name the NgRx tools use, such as `TravelStore`, in `token`, and its class name `SignalStore` in `tokenClass`; `token` finds it by either name, and so do `read-provider-value` and `explain-injection`. `injector` and `token` take at most 500 characters each.
 
@@ -567,7 +592,7 @@ With `store`, the full state of one store: state, computed values, `withEntities
 
 ### ngrx-history
 
-The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (method calls and `patchState` writes, each with a per-key diff), classic `@ngrx/store` actions, and `@ngrx/signals/events` dispatched events. A method-call entry carries a duration in milliseconds. With `watchState` registered, it is the time from the start of the method to that patch; without it, the time the whole call took. A signal-store entry carries the event that caused it when the change happened while that event was being dispatched. Each entry lists up to 50 changes; when there were more, it ends with how many were left out, such as `12 more changes not shown`.
+The change log for a page's stores, oldest first: `@ngrx/signals` state diffs (method calls and `patchState` writes, each with a per-key diff), classic `@ngrx/store` actions, and `@ngrx/signals/events` dispatched events. A method-call entry carries a duration in milliseconds. With `watchState` registered, it is the time from the start of the method to that patch; without it, the time the whole call took. A signal-store entry carries the event that caused it when the change happened while that event was being dispatched. Each entry lists up to 50 changes; when there were more, it ends with how many were left out, such as `12 more changes not shown`. With [`ngrx.trace`](../getting-started/configuration.md#ngrx) on, an entry names the closest app frame it came from.
 
 | Argument | Required | Value                                                                                                                                                            |
 | -------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -615,6 +640,17 @@ A Vitest spec that replays a range of entries: the state before the range, the r
 | `to`      | no       | The last entry number to replay.                     |
 | `page`    | no       | The tab to read.                                     |
 | `session` | no       | An imported session id, to generate from it instead. |
+
+### ngrx-explain-change
+
+Why a state value changed. With `path`, the newest entries in the kept log (up to 5) whose diff wrote that path, a path inside it or one around it, newest first. Each lists what ran (the action, the method, a `patchState` outside a method, or an event), its arguments or action, its origin, the event that caused it, its duration, the changes to that path, and, with [`ngrx.trace`](../getting-started/configuration.md#ngrx) on, the app frames it was called from. With `seq`, that one entry with its whole diff. Without call sites, the answer says how to turn `ngrx.trace` on. It reads the newest page that matches; a change older than the kept log ([`limits.changeLog`](../getting-started/configuration.md#limits)) is not found.
+
+| Argument | Required     | Value                                                                                                                                                                   |
+| -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`   | without seq  | A state path as the diff writes it, from the state root (`cart.items`, `items[0].done`) or a signal store field (`filter`). **Copy path** in the state tree copies one. |
+| `seq`    | without path | An entry number, to explain that entry instead.                                                                                                                         |
+| `store`  | no           | Only entries of that store, by id or name. `store` is the `@ngrx/store` Store.                                                                                          |
+| `page`   | no           | The tab to read. Defaults to the newest page that reports NgRx.                                                                                                         |
 
 ### redux-inspect-stores
 
@@ -726,6 +762,20 @@ Without `page`, the tool uses the one page that has an `@ngrx/store` Store. If m
 
 Without `page`, the tool uses the one page that reports NgRx state. With several, it restores nothing and lists them. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool.
 
+### Change the Store DevTools history <ngmd-badge variant="destructive">Destructive</ngmd-badge>
+
+`ngrx-store-devtools` runs an operation on the `@ngrx/store` Store DevTools history of the running app, in development only, like the **Store DevTools history** controls on the [NgRx Store](../inspectors/ngrx-store.md#store-devtools-history) page. It needs `provideStoreDevtools()`. Every operation but `pause` adds an entry to the log: `jump` with `seq` adds `Restore #N`, as `ngrx-restore` does, and the others add `Store DevTools: …`. Reads: page.
+
+| `op`     | What it does                                                                                                                          | Other arguments                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `toggle` | Skips the action of an entry, so the state is computed without it, or includes a skipped one again.                                   | `seq`: the entry of an `@ngrx/store` action.                    |
+| `jump`   | Shows the state after an entry, like `ngrx-restore`, or a Store DevTools state by its index. The store stays on it until you go back. | `seq`, or `index`: 0 is the committed state.                    |
+| `commit` | Makes the current state the new starting point. Earlier entries can no longer be restored.                                            | none                                                            |
+| `reset`  | Puts the store back on its initial state and empties the history. Earlier entries can no longer be restored.                          | none                                                            |
+| `pause`  | Stops recording new actions, which still change the state but cannot be restored, or starts recording again.                          | `paused`: `true` stops, `false` starts. Without it, it toggles. |
+
+Without `page`, the tool uses the one page that has an `@ngrx/store` Store. With several, it changes nothing and lists them. Set [`actions.ngrx`](../getting-started/configuration.md#actions) to `false` to drop the tool.
+
 ## TanStack Query
 
 These tools read the `QueryClient` the app provides, through the page. See [TanStack Query](../inspectors/tanstack-query.md). Reads: page.
@@ -780,7 +830,7 @@ Answers about large forms are cut to keep an agent's context small. Each cut end
 | `inspect-forms`         | As many fields per form as fit in 20,000 characters, at most 200, taken level by level from the start of the tree. A group that lost fields carries `notShown` with the count. Values, error messages and metadata over 300 characters are cut. If not even one field fits, each form shows only its status and `notShown`. | `path`, `form` or `onlyInvalid`                       |
 | `explain-invalid-forms` | 100 problems per form, then `… and N more not shown`.                                                                                                                                                                                                                                                                       | `path`                                                |
 | `inspect-form-payload`  | 8,000 characters per value.                                                                                                                                                                                                                                                                                                 | `path`                                                |
-| `export-form`           | The same field cap as `inspect-forms` for a snapshot. A fixture, header included, fits in 20,000 characters, and its header lists at most 20 failing fields.                                                                                                                                                                | `inspect-forms` or `inspect-form-payload` with `path` |
+| `export-form`           | The same field cap as `inspect-forms` for a snapshot. A fixture or a Playwright test, header included, fits in 20,000 characters. A fixture header lists at most 20 failing fields, and a Playwright test replays at most the last 200 steps.                                                                               | `inspect-forms` or `inspect-form-payload` with `path` |
 | `lint-forms`            | 100 findings.                                                                                                                                                                                                                                                                                                               | `form`                                                |
 | `explain-form-changes`  | 100 changed fields.                                                                                                                                                                                                                                                                                                         | `form` or a later `after` marker                      |
 
@@ -794,7 +844,7 @@ The page itself reads at most 100 fields per group or array, and 8 levels deep. 
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `list-form-changes`    | A timeline of changes, each tagged with its origin (`user`, `code`, `devtools`, `binding`, `agent`). Writes from these MCP tools and the panel are `devtools`; `agent` marks a write through a WebMCP form tool. Returns the current marker. | `form`, `path`, `type`, `origin`, `after`, `limit` (default 50, at most 200) |
 | `explain-form-changes` | The net change since a marker: each field whose value or status ended up different.                                                                                                                                                          | `form`, `after`                                                              |
-| `export-form`          | A JSON snapshot, or a test fixture with the expected status. Secret values stay redacted.                                                                                                                                                    | `form`, `format` (`snapshot` or `fixture`)                                   |
+| `export-form`          | A JSON snapshot, a test fixture with the expected status, or a Playwright test that replays the form's history. Secret values stay redacted.                                                                                                 | `form`, `format` (`snapshot`, `fixture` or `playwright`)                     |
 | `lint-forms`           | Form bugs, NG01xxx setup errors and model-aware accessibility checks, like a missing label or error text that is not linked.                                                                                                                 | `form`                                                                       |
 
 A `submit` event has an outcome: `ran`, `blocked` (the Signal Forms action did not run), `rejected` (the action returned errors) or `threw`. Its detail names the fields and the validator kinds that blocked it, or the fields and messages the action rejected. See [Submit view](../inspectors/forms.md#submit-view).
@@ -814,7 +864,9 @@ Both tools are action tools and need a development build. They don't write secre
 
 When a write goes through a native `<select>` (`mode: user`, the default for `fill-form`, or any write to a template-driven form), the value must equal the value of one of its options (`[ngValue]` or `value`). A multiple select takes an array. If no option matches, the field is not written and the result says `has no option with the value ...`. A `mode: code` write to a reactive form or Signal Form sets the model directly and does not check the options.
 
-`run-form-action` accepts these actions: `set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore` and `instrument`.
+`run-form-action` accepts these actions: `set-value`, `mark-touched`, `mark-untouched`, `mark-dirty`, `mark-pristine`, `touch-all`, `revalidate`, `reset`, `enable`, `disable`, `submit`, `focus`, `focus-first-invalid`, `store-as-global`, `snapshot`, `restore`, `instrument` and `try-webmcp`.
+
+`try-webmcp` runs the WebMCP tool linked to a Signal Form, with `value` as the tool's input object. The tool fills the form and submits it, so it needs `confirm: true`, and it is refused when `actions.forms` is `false`. `inspect-forms` with `form` returns the tool's input schema under `webMcp.schema`. The answer is the tool's own result text.
 
 `run-form-action` and `fill-form` always act on the form `form` names. `store-as-global` does not overwrite a `$form` or `$control` that the page defined itself, unless you pass `force`.
 
@@ -1007,27 +1059,32 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ### Routes and files
 
-| Tool                           | What it answers                                                                                                                                                                                               | Arguments        |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `analog-scan-routes`           | File routes in match order: URL pattern, page or layout file, route groups, params, the sibling `.server.ts`, and route meta.                                                                                 | `filter`         |
-| `analog-scan-url`              | Which files render a URL (layouts, page, `.server.ts` load), the params, or why nothing matches.                                                                                                              | `url` (required) |
-| `analog-scan-api-routes`       | Server routes under `src/server/routes` with method, URL and file, plus server middleware.                                                                                                                    | none             |
-| `analog-scan-server-functions` | Server functions (`serverFn` exports in any `.server.ts` under `src`) with name, method, file and id, how often each ran over HTTP and during server rendering, and reads called again right after hydration. | none             |
-| `analog-scan-content`          | Markdown content files with slug, frontmatter, the route that serves them and parse errors.                                                                                                                   | `filter`         |
+| Tool                           | What it answers                                                                                                                                                                                                                                  | Arguments        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
+| `analog-scan-routes`           | File routes in match order: URL pattern, page or layout file, route groups, params, the sibling `.server.ts`, and route meta.                                                                                                                    | `filter`         |
+| `analog-scan-url`              | Which files render a URL (layouts, page, `.server.ts` load), the params, or why nothing matches.                                                                                                                                                 | `url` (required) |
+| `analog-scan-api-routes`       | Server routes under `src/server/routes` with method, URL and file, plus server middleware.                                                                                                                                                       | none             |
+| `analog-scan-server-functions` | Server functions (`serverFn` exports in any `.server.ts` under `src`) with name, method, file and id, how often each ran over HTTP and during server rendering, and reads called again right after hydration.                                    | none             |
+| `analog-scan-content`          | Markdown content files with slug, frontmatter, the route that serves them and parse errors, plus mismatches with the [`analog.contentSchema`](../getting-started/configuration.md#analog) file and where the app reads content files.            | `filter`         |
+| `analog-scan-build`            | The last client build in `dist/analog/public`: JS and CSS totals with gzip, the entry chunk, each page's chunk with what it loads beyond the entry, its lazy chunks, and the largest files. Says to run `analog build` first when there is none. | none             |
+| `analog-scan-nitro`            | Nitro server plugins, tasks, storage mounts in `vite.config`, the routes cached by `isr`, `swr` or `cache` rules, and the cache entries on disk.                                                                                                 | none             |
+| `analog-scan-runtime-config`   | The `import.meta.env` keys, Nitro `runtimeConfig` from `vite.config` with `NITRO_` env overrides, and the resolved `analog()` options. Secret names and tokens are masked.                                                                       | none             |
 
 ### The running page
 
-| Tool                       | What it answers                                                                                                                                                                                                                                                                      | Reads       | Arguments                                                                                                                                               |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `analog-inspect-page`      | The open page: its files (layouts first, then pages in named outlets with the outlet name), the `load()` data it received, server rendering and hydration state, and hydration errors.                                                                                               | page        | none                                                                                                                                                    |
-| `analog-list-server-calls` | Recent page renders, `load()` fetches, form actions (with their outcome), server functions by name and API calls, with status, time and size. Flags a `load()` fetched twice and a seeded server function read called again. Each call names its tab when the dev server could tell. | Vite plugin | `kind` (`page`, `load`, `action`, `fn` or `api`), `route`, `limit`, `page` (only that tab's calls; leave it out for every call, untagged ones included) |
+| Tool                       | What it answers                                                                                                                                                                                                                                                                                                                                                                                        | Reads       | Arguments                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `analog-inspect-page`      | The open page: its files (layouts first, then pages in named outlets with the outlet name), the `load()` data it received, server rendering and hydration state, and hydration errors. With `data: true` it asks the page for the full `load()` value, masked, up to 200 KB, and shows the first 20,000 characters of its JSON. A longer value is marked truncated, and the Data view shows all of it. | page        | `page`, `data`                                                                                                                                          |
+| `analog-inspect-transform` | Transforms a page, layout or `.server.ts` file again on the dev server and lists each plugin that changed it, in order, with the final code and whether each server function id is in it.                                                                                                                                                                                                              | Vite plugin | `file` (required, as `analog-scan-routes` lists it), `ssr`                                                                                              |
+| `analog-list-server-calls` | Recent page renders, `load()` fetches, form actions (with their outcome), server functions by name and API calls, with status, time and size. Flags a `load()` fetched twice and a seeded server function read called again. Each call names its tab when the dev server could tell.                                                                                                                   | Vite plugin | `kind` (`page`, `load`, `action`, `fn` or `api`), `route`, `limit`, `page` (only that tab's calls; leave it out for every call, untagged ones included) |
 
 ### Rendering
 
-| Tool                          | What it answers                                                                                                                                                                                                      | Arguments |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `analog-explain-render-modes` | For each page: server rendered, prerendered, cached, redirected or client only, the route rule or config that decides it, and what the last request actually did. Says when `vite.config` could not be read in full. | none      |
-| `analog-scan-prerender`       | `prerender.routes` and `routeRules` with `prerender: true`, compared with the page files and the build output. Says when `vite.config` could not be read in full.                                                    | none      |
+| Tool                          | What it answers                                                                                                                                                                                                                         | Arguments                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `analog-explain-render-modes` | For each page: server rendered, prerendered, cached, redirected or client only, the route rule or config that decides it, and what the last request actually did. Says when `vite.config` could not be read in full.                    | none                            |
+| `analog-scan-prerender`       | `prerender.routes` and `routeRules` with `prerender: true`, compared with the page files and the build output. Says when `vite.config` could not be read in full.                                                                       | none                            |
+| `analog-inspect-render-mode`  | Requests a page route from the dev server with `Accept: text/html` and compares `cache-control`, `x-nitro-prerender`, `x-analog-no-ssr` and the HTML with the configured mode. Dynamic segments get a sample value. Reads: Vite plugin. | `path` (required, a page route) |
 
 ### Call a server route <ngmd-badge variant="destructive">Destructive</ngmd-badge>
 
@@ -1035,16 +1092,37 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 `path` must be an API route (under the API prefix, or any route in `src/server/routes`), an `/_analog` URL or a page of the app. The tool refuses Vite internals such as `/@fs/` and `/@id/`, Vite query flags such as `?raw`, `?url` and `?import`, `.` and `..` segments, and any path that names a file or folder in the project, so it can't read your source or files outside the app.
 
-| Argument  | Required | Value                                                         |
-| --------- | -------- | ------------------------------------------------------------- |
-| `path`    | yes      | An API route, an `/_analog` URL or a page path.               |
-| `method`  | no       | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` or `OPTIONS`. |
-| `body`    | no       | A JSON body.                                                  |
-| `confirm` | no       | Required for methods other than `GET`, `HEAD` and `OPTIONS`.  |
+| Argument  | Required | Value                                                                                                               |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `path`    | yes      | An API route, an `/_analog` URL or a page path.                                                                     |
+| `method`  | no       | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` or `OPTIONS`.                                                       |
+| `body`    | no       | A JSON body.                                                                                                        |
+| `confirm` | no       | Required for methods other than `GET`, `HEAD` and `OPTIONS`.                                                        |
+| `headers` | no       | Extra request headers by name. `host`, `content-length` and other headers fetch or the dev server owns are refused. |
+| `cookies` | no       | Cookies by name, sent as one `cookie` header.                                                                       |
+
+### Run a Nitro task <ngmd-badge variant="action">Action</ngmd-badge>
+
+`analog-run-nitro-task` runs a task from `src/server/tasks` on the dev server through Nitro's dev task route (`POST /_nitro/tasks/<name>`) and returns its answer, masked and clipped to 4000 characters. The route answers only with `nitro.experimental.tasks` on; without it the tool says so. Tasks can change data, so the tool needs `confirm: true` and [`actions.analog`](../getting-started/configuration.md#actions). It stops waiting after 30 seconds. Reads: Vite plugin.
+
+| Argument  | Required | Value                                                             |
+| --------- | -------- | ----------------------------------------------------------------- |
+| `name`    | yes      | The task name as `analog-scan-nitro` lists it, like `db:migrate`. |
+| `payload` | no       | An object the task receives as its payload.                       |
+| `confirm` | yes      | Must be `true`.                                                   |
+
+### Purge the Nitro cache <ngmd-badge variant="destructive">Destructive</ngmd-badge>
+
+`analog-purge-nitro-cache` deletes Nitro cache entry files from disk, so the routes cached by `isr`, `swr` or `cache` rules render again on the next request. It needs `confirm: true` and [`actions.analog`](../getting-started/configuration.md#actions). It deletes only the `.json` entries `analog-scan-nitro` lists, in a Nitro cache folder inside the project.
+
+| Argument  | Required | Value                                                                |
+| --------- | -------- | -------------------------------------------------------------------- |
+| `confirm` | yes      | Must be `true`.                                                      |
+| `files`   | no       | Entry paths as `analog-scan-nitro` lists them. Leave it out for all. |
 
 ### Lint
 
-`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, frontmatter errors, and a `vite.config` it could not read in full (`config-partial`). It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the default page. If no page with that id sends Analog data, the answer says so and lists the pages that do.
+`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, frontmatter errors, frontmatter that does not match the content schema (`content-schema`), and a `vite.config` it could not read in full (`config-partial`). It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the default page. If no page with that id sends Analog data, the answer says so and lists the pages that do.
 
 <ngmd-alert severity="helpful">
   <code>analog-list-server-calls</code> and <code>analog-run-api</code> need the <a href="../getting-started/vite.md">Vite plugin</a>. The plugin records the calls and knows the dev server address.

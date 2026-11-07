@@ -51,6 +51,7 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
     { component: 'Card', property: 'count', value: 1 },
     { component: 'Card', property: 'count', value: 1, page: 'gone' },
   ],
+  'load-defer-block': [{ block: 'd1' }, { block: 'd1', page: 'gone' }, { block: '' }],
   'track-subscriptions': [
     { action: 'start' },
     { action: 'stop' },
@@ -59,6 +60,11 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
   'watch-signal': [{ node: 'count' }, { node: 'count', page: 'gone' }],
   'ngrx-dispatch': [{ type: '[Cart] Add' }, { type: '[Cart] Add', page: 'gone' }],
   'ngrx-restore': [{ seq: 1 }, { latest: true }, { seq: 1, page: 'gone' }],
+  'ngrx-store-devtools': [
+    { op: 'commit' },
+    { op: 'toggle', seq: 1 },
+    { op: 'commit', page: 'gone' },
+  ],
   'tanstack-run-query': [
     { action: 'refetch', id: 'q1' },
     { action: 'refetch', id: 'q1', page: 'gone' },
@@ -79,6 +85,8 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
   'set-ssr-override': [{ kind: 'nope', pattern: '/x' }],
   'remove-ssr-override': [{ id: 'nope' }],
   'analog-run-api': [{ path: '/api/x', method: 'POST' }],
+  'analog-run-nitro-task': [{ name: 'db:migrate' }, { name: 'missing', confirm: true }],
+  'analog-purge-nitro-cache': [{}, { confirm: true }, { confirm: true, files: ['/package.json'] }],
   'clear-recordings': [{ target: 'nothing' }],
 };
 

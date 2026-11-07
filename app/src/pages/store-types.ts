@@ -62,6 +62,8 @@ export interface NgrxSignalStoreInfo {
   }[];
   references: string[];
   writable: boolean;
+  /** The store uses `withDevtools()`, so the page only watches it: method calls are not counted. */
+  watchOnly?: true;
 }
 
 export interface NgrxClassicStoreInfo {
@@ -69,6 +71,25 @@ export interface NgrxClassicStoreInfo {
   devtools: boolean;
   scope: string;
   paused?: boolean;
+  /** Store DevTools recording is paused. */
+  recordingPaused?: true;
+  /** Log entries whose actions Store DevTools skips. */
+  skipped?: number[];
+}
+
+/** Per-type counts since the page loaded (`NgrxActionStat` in the package). */
+export interface NgrxActionStat {
+  source: NgrxLogEntry['source'];
+  storeId: string;
+  type: string;
+  count: number;
+  timed?: number;
+  avgMs?: number;
+  maxMs?: number;
+  effects?: number;
+  lastAt: number;
+  burst: number;
+  loop?: true;
 }
 
 export interface NgrxDiffEntry {
@@ -109,6 +130,16 @@ export interface NgrxLogEntry {
    * The page counts up to {@link DIFF_MORE_CAP}, so at the cap it is a lower bound.
    */
   diffTruncated?: number;
+  /** With `ngrx.trace` on: the app frames of the call, as `name (file:line:column)`. */
+  trace?: string[];
+}
+
+/** A trace frame split into its function, file and line, for a source link. */
+export function traceFrame(frame: string): { name: string; file?: string; line?: number } {
+  const match =
+    /^(.*?)\s*\((.+?):(\d+)(?::\d+)?\)$/.exec(frame) ?? /^()(.+?):(\d+)(?::\d+)?$/.exec(frame);
+  if (!match) return { name: frame };
+  return { name: match[1], file: match[2], line: Number(match[3]) };
 }
 
 /** The most changes the page counts past a full diff (`NGRX_DIFF_MORE_CAP` in the package). */
@@ -137,6 +168,7 @@ export interface NgrxPage {
   classic: NgrxClassicStoreInfo | null;
   log: NgrxLogEntry[];
   dropped?: number;
+  stats?: NgrxActionStat[];
   reportedAt: number;
 }
 

@@ -132,17 +132,19 @@ interface PangularConfig {
   popup?: {hotkey?: string | false};
   plugins?: Record<string, boolean | {enabled?: boolean; tools?: boolean; actions?: boolean}>;
   lint?: {rules?: Record<string, boolean>};
+  analog?: {contentSchema?: string};
+  ngrx?: {trace?: boolean};
 }
 ```
 
 ### Inspectors and agent tools
 
-| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops every `action` and `destructive` tool in the [tier table](../agents/tools.md#action-tools): `run-form-action`, `fill-form`, `navigate`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection`, `probe-route`, `record-guards`, `analog-run-api` and `clear-recordings`. `audit` stays without its `axe` argument. |
-| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `agent.browserTools` | `false` | `true` registers the `read` agent tools on the page for [browser agents](../agents/browser-agents.md) (WebMCP and Chrome DevTools for agents). Off by default, because any script on the development page could then call them. This is where the **Browser agent tools** switch in [Settings](./settings.md#browser-agents) starts. The switch changes it for every page until the dev server restarts.                                                                                                                                                                                                                             |
+| Option               | Default | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `inspectors.<name>`  | `true`  | `false` removes the inspector: no tab or dock, no page collector, no RPC functions, and no agent tools or resources. Its actions are blocked too.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops every `action` and `destructive` tool in the [tier table](../agents/tools.md#action-tools): `run-form-action`, `fill-form`, `navigate`, `ngrx-dispatch`, `ngrx-restore`, `ngrx-store-devtools`, `tanstack-run-query`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `load-defer-block`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection`, `probe-route`, `record-guards`, `analog-run-api`, `analog-run-nitro-task`, `analog-purge-nitro-cache` and `clear-recordings`. `audit` stays without its `axe` argument. |
+| `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `agent.browserTools` | `false` | `true` registers the `read` agent tools on the page for [browser agents](../agents/browser-agents.md) (WebMCP and Chrome DevTools for agents). Off by default, because any script on the development page could then call them. This is where the **Browser agent tools** switch in [Settings](./settings.md#browser-agents) starts. The switch changes it for every page until the dev server restarts.                                                                                                                                                                                                                                                                                                                             |
 
 `agent.tools` has the same keys as `inspectors`. An inspector that is off has no agent tools, whatever `agent.tools` says.
 
@@ -152,17 +154,17 @@ If you open a tab that is turned off, the panel says so, shows the option that t
 
 Actions are the writes that the panel and agents make to your app or the server.
 
-| Option                  | Default | What `false` blocks                                                                                                                                                                                                               |
-| ----------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `actions.forms`         | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `run-form-action` and `fill-form`.                                             |
-| `actions.router`        | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Drops the `navigate` and `probe-route` agent tools and router clearing in `clear-recordings`. `record-guards` and `list-routes` with `resolveLazy` stay.    |
-| `actions.ngrx`          | `true`  | Restoring NgRx state from the change log and dispatching `@ngrx/store` actions. Drops the `ngrx-dispatch` and `ngrx-restore` agent tools.                                                                                         |
-| `actions.http`          | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule`, `remove-http-rule`, `set-ssr-override` and `remove-ssr-override` agent tools and HTTP clearing in `clear-recordings`. |
-| `actions.analog`        | `true`  | The Analog request playground and clearing server calls. Drops the `analog-run-api` agent tool and Analog clearing in `clear-recordings`.                                                                                         |
-| `actions.components`    | `true`  | Editing component inputs, properties and writable signals from the **Components** tab, and **Restore** in the **Signals** value history. Drops the `set-component-property` and `set-signal` agent tools.                         |
-| `actions.tanstackQuery` | `true`  | Invalidating and refetching a query from the **Queries** tab. Drops the `tanstack-run-query` agent tool.                                                                                                                          |
-| `actions.plugins`       | `true`  | Every plugin's page actions, from the **Plugins** tab and from its tools. Drops the plugin tools that are not `read`.                                                                                                             |
-| `actions`               | `true`  | All of the above.                                                                                                                                                                                                                 |
+| Option                  | Default | What `false` blocks                                                                                                                                                                                                                              |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `actions.forms`         | `true`  | Form writes: set value, fill, mark touched, untouched, dirty or pristine, touch all, revalidate, reset, enable, disable, submit and restore. Drops `run-form-action` and `fill-form`.                                                            |
+| `actions.router`        | `true`  | Navigate, abort, replay and probe, and clearing the navigations list. Drops the `navigate` and `probe-route` agent tools and router clearing in `clear-recordings`. `record-guards` and `list-routes` with `resolveLazy` stay.                   |
+| `actions.ngrx`          | `true`  | Restoring NgRx state from the change log, dispatching `@ngrx/store` actions and changing the Store DevTools history. Drops the `ngrx-dispatch`, `ngrx-restore` and `ngrx-store-devtools` agent tools.                                            |
+| `actions.http`          | `true`  | Editing fault injection rules and SSR overrides, and clearing the HTTP timeline. Drops the `set-http-rule`, `remove-http-rule`, `set-ssr-override` and `remove-ssr-override` agent tools and HTTP clearing in `clear-recordings`.                |
+| `actions.analog`        | `true`  | The Analog request playground, clearing server calls, running Nitro tasks and purging the Nitro cache. Drops the `analog-run-api`, `analog-run-nitro-task` and `analog-purge-nitro-cache` agent tools and Analog clearing in `clear-recordings`. |
+| `actions.components`    | `true`  | Editing component inputs, properties and writable signals from the **Components** tab, and **Restore** in the **Signals** value history. Drops the `set-component-property`, `set-signal` and `load-defer-block` agent tools.                    |
+| `actions.tanstackQuery` | `true`  | Invalidating and refetching a query from the **Queries** tab. Drops the `tanstack-run-query` agent tool.                                                                                                                                         |
+| `actions.plugins`       | `true`  | Every plugin's page actions, from the **Plugins** tab and from its tools. Drops the plugin tools that are not `read`.                                                                                                                            |
+| `actions`               | `true`  | All of the above.                                                                                                                                                                                                                                |
 
 Pass `actions: false` to block every action, or an object to block some. Keys you leave out of the object stay on.
 
@@ -283,6 +285,36 @@ It is off by default because it starts processes on your machine. A value other 
 ```
 
 A rule set to `false` is left out of the panel, the **Audit** tab, the agent tools (`scan-templates`, `scan-pipe-usage`, `explain-pipe`, `lint-routes`, `lint-forms`, `analog-lint` and `audit`) and the CI export (`pangular lint`). Use the rule name a finding shows. The template rules are listed under [scan-templates](../agents/tools.md#scan-templates).
+
+### Analog
+
+| Option                 | Default | What it does                                                                                                                                                                                                                   |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `analog.contentSchema` | none    | A JSON Schema file, relative to the Analog project root, that the frontmatter of every markdown file under `src/content` must match. The **Content** tab, `analog-scan-content` and `analog-lint` report the files that don't. |
+
+```json
+{
+  "analog": {
+    "contentSchema": "content.schema.json"
+  }
+}
+```
+
+A file outside the project, a missing file or a file that is not JSON gives one `content-schema-unreadable` lint warning, and the frontmatter is then only checked for syntax. See [Content](../inspectors/analog.md#content) for the keywords the check reads.
+
+### NgRx
+
+| Option       | Default | What it does                                                                                                                                                                                                                                                                                                           |
+| ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ngrx.trace` | `false` | `true` records where each [NgRx](../inspectors/ngrx-store.md#change-log) change log entry came from: up to 8 app frames of the dispatch, method call, `patchState` or event, without Angular, NgRx, RxJS, zone.js or devtools frames. Origins and query strings are removed, and secrets are masked like other values. |
+
+```json
+{
+  "ngrx": {"trace": true}
+}
+```
+
+Taking a stack on every write costs time, so `ngrx.trace` is off by default. The frames show in the entry detail on the **NgRx Store** tab, in `ngrx-history` and in [`ngrx-explain-change`](../agents/tools.md#ngrx-explain-change). In a bundled build without source maps, they point into the bundle.
 
 ## Check the active configuration
 

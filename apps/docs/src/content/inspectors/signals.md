@@ -29,6 +29,8 @@ The **Graph of** picker at the top selects whose graph you see. It appears when 
 - **Root services** shows the effects registered on the root injector, such as an `effect()` in a `providedIn: 'root'` service, and the signals they read.
 - **Route: path** entries show the effects registered on the injector of a route with `providers`, on the active route chain. A route with an empty `path` is named by the path of its parent routes, such as **Route: review**, or **Route: /** at the top. Other environment injectors on that chain, such as the one of a lazy `loadChildren`, show as **Environment**.
 - Pick any live component to pin the graph to it. The picker numbers duplicates, for example `#2`.
+- **Show in Signals** in the [Components tab](./components.md#detail-header) pins the graph to the selected instance the same way. From a signal property, it also selects that signal's node. A `#tab=signals&id=<component id>&page=<pageId>` [deep link](../getting-started/popup-and-hub.md#link-to-an-item) does the same.
+- A host with directives but no component, such as `<button tooltip>`, is listed with a **directive** hint. Its graph holds the effects its directives created, and the line under the picker says **directives, no component**.
 - Without a routed component, the tab shows the first component that has signals, among the first 50 on the page.
 
 A line under the picker names the component, its host path, and why it was chosen: **picked**, **rendered by the router** or **first component with signals**. For an injector, it names the injector.
@@ -71,10 +73,12 @@ Expand a card to see:
 - **Dependencies (producers)**: the nodes it reads.
 - **Consumers**: the nodes and effects that read it.
 - **Value history**: recent values, newest first, each with a time and a source tag.
+- **Source**: where your code declares the node, from the source scan. The match is by name and kind, narrowed to the shown component's selector when it declares one. When several declarations still match, the card lists up to 5 of them instead of picking one.
+- **Runs**, on an effect: how many times it ran, its total time and its last run time. It shows only where Angular's profiler reports effect runs, see [Effect runs](#effect-runs).
 
 A `signal`, `computed` or `linkedSignal` card also has a **Watch** button. See [Watched signals](#watched-signals).
 
-When a signal or linkedSignal has no exact **set** entries, the card says why: the signal has no name, or every change was sampled because another live signal shares its name and value.
+When a signal or linkedSignal has no exact **set** entries, the card says why: the signal has no name, or every change was sampled because another live signal shares its name and value. From Angular 20.1 the compiler names a signal that initializes a field or variable, so an unnamed one likely comes from a factory or helper.
 
 Click an entry under **Dependencies (producers)** or **Consumers** to open that node's card and move focus to it. If the name or kind filter hides the node, the tab clears both filters and says so. An internal signal of a resource opens the resource card. Unnamed nodes show their id, so this is the way to reach them.
 
@@ -107,17 +111,26 @@ While write stacks are on, a **set** entry also lists the code that wrote it. Se
 
 When values change faster than the overlay reads the page, an entry says how many earlier values were not captured. Only `signal`, `computed` and `linkedSignal` nodes, and resource statuses, have a history.
 
+An entry whose value and the one before it are both objects or arrays has a **Changes from the entry before** disclosure. It lists each path that was **added**, **removed** or **changed**, such as `items[1]`, with the old and new values. It lists up to 50 paths and counts the rest.
+
 The line above the list counts the changes, for example **3 changes recorded, newest first.** The list keeps the last 50 entries. Past that, the line says **showing the last 50**, and the count keeps growing.
 
 ### Restore a past value
 
-Each entry but the newest has a **Restore** button when the signal is a `signal()`, `linkedSignal()` or `model()` field of the shown component. The page ties a graph node to a field only when the field's own reactive node is that node, and checks it again on every read, so a service signal with the same name and value as a field never gets the field's button. Click it to set the signal back to that entry's value with `.set()`, the same write `pangular:set-signal` makes. A line above the list says what was restored, or why the page refused.
+Each entry but the newest has a **Restore** button if the signal is one of these:
+
+- A `signal()`, `linkedSignal()` or `model()` field of the shown component.
+- In a root or route graph, a field of a service that injector already created.
+
+The page ties a graph node to a field only when the field's own reactive node is that node. It checks this again on every read. A service signal with the same name and value as a field never gets the field's button. Click **Restore** to set the signal back to that entry's value with `.set()`, the same write `pangular:set-signal` makes. A line above the list says what was restored, or why the page refused.
 
 The page writes the value it kept when it recorded the entry, not the copy the panel shows. A value the history cut to fit, or showed with masked secrets, comes back whole, and the value never leaves the page.
 
 | Case                                                                   | What happens                                                     |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `computed()`, a signal input, or a signal of a service                 | No **Restore** button.                                           |
+| `computed()` or a signal input                                         | No **Restore** button.                                           |
+| A signal of a service, in a component's graph                          | No **Restore** button. Pick the injector's graph to restore it.  |
+| A field of a directive on a host without a component                   | No **Restore** button.                                           |
 | A field that neither the template nor an effect of the component reads | No **Restore** button: the graph doesn't hold the field.         |
 | Entry past the last 50, or the page reloaded                           | The page refuses: the entry is no longer in its history.         |
 | The app changed the value in place after it was recorded               | The page refuses, because the value no longer matches the entry. |
@@ -244,13 +257,13 @@ The `pangular:highlight` tool also switches the graph to the component it highli
 
 ## Agent tools
 
-| Tool or resource           | Kind     | What it does                                                                                                                                                  |
-| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pangular:scan-signals`    | tool     | Signal declarations from source, with signal inputs, models and queries. Pages through a large project with `filter` and `offset`.                            |
-| `pangular:inspect-signals` | tool     | The graph of a component or injector, with edges, resources and history. Takes a host tag, class name, instance id, `root`, a route path or a CSS `selector`. |
-| `pangular:watch-signal`    | tool     | Watches a signal and turns write stacks on or off on a page.                                                                                                  |
-| `pangular:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                                                                                  |
-| `pangular:signal-graph`    | resource | The live graph per page.                                                                                                                                      |
+| Tool or resource           | Kind     | What it does                                                                                                                                                                          |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pangular:scan-signals`    | tool     | Signal declarations from source, with signal inputs, models and queries. Pages through a large project with `filter` and `offset`.                                                    |
+| `pangular:inspect-signals` | tool     | The graph of a component or injector, with edges, resources and history. Takes a host tag, class name, instance id, `root`, a route path, an element injector id or a CSS `selector`. |
+| `pangular:watch-signal`    | tool     | Watches a signal and turns write stacks on or off on a page.                                                                                                                          |
+| `pangular:highlight`       | tool     | Highlights a component and makes it the target of the graph.                                                                                                                          |
+| `pangular:signal-graph`    | resource | The live graph per page.                                                                                                                                                              |
 
 `inspect-signals` reads the graph of the component or injector you name, without switching the Signals page. Call `highlight` to switch the page itself. See [Tools](../agents/tools.md).
 
@@ -275,6 +288,10 @@ A Signal Forms field keeps its value in a signal with no name, which the graph s
 ### Injector graphs hold effects only
 
 The root and route graphs start from the effects registered on that injector. A signal in a root service that no effect reads doesn't appear there. It appears in the graph of a component whose template reads it.
+
+### Effect runs
+
+Effect run counts and times come from Angular's profiler. The overlay listens for profiler events that carry an effect, and turns the **Runs** line on once it sees one. No Angular version up to 22.1 reports effect runs to the profiler, so there the line never shows. The profiler is used only on Angular 20 or later, like the other profiler features. An effect's runs are shown only when its name is unique on the page.
 
 ### Picked component is gone
 

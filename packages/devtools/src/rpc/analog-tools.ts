@@ -496,7 +496,7 @@ function isCaching(value: string): boolean {
   return /max-?age=\d*[1-9]/i.test(value) && !/no-store|no-cache|private/i.test(value);
 }
 
-function modeOf(project: AnalogProject, path: string): { mode: RenderMode; reason: string } {
+export function modeOf(project: AnalogProject, path: string): { mode: RenderMode; reason: string } {
   const rules = routeRulesFor(project, path);
   const redirect = ruleValue(rules, 'redirect');
   if (redirect)
@@ -666,9 +666,33 @@ export function analogContentText(project: AnalogProject, filter?: string): stri
       .slice(0, 6)
       .map(([k, v]) => `${k}: ${v}`)
       .join('; ');
-    return `- ${code(f.file)} slug ${code(f.slug)}${route ? `, served at ${code(route.fullPath)}` : ''}${attrs ? ` (${attrs})` : ''}${f.error ? ` ERROR: ${f.error}` : ''}`;
+    const schema = f.schemaErrors?.length ? ` SCHEMA: ${f.schemaErrors.join(' ')}` : '';
+    return `- ${code(f.file)} slug ${code(f.slug)}${route ? `, served at ${code(route.fullPath)}` : ''}${attrs ? ` (${attrs})` : ''}${f.error ? ` ERROR: ${f.error}` : ''}${schema}`;
   });
-  return `${UNTRUSTED}\n\n${lines.join('\n')}`;
+  return `${UNTRUSTED}\n\n${lines.join('\n')}${contentNotes(project)}`;
+}
+
+function contentNotes(project: AnalogProject): string {
+  const notes: string[] = [];
+  const schema = project.contentSchema;
+  if (schema?.error) notes.push(`Content schema: ${schema.error}`);
+  else if (schema) {
+    notes.push(
+      `Frontmatter checked against ${code(schema.file)}${schema.unsupported?.length ? ` (skipped keywords: ${schema.unsupported.join(', ')})` : ''}.`,
+    );
+  } else notes.push('No analog.contentSchema set, so frontmatter is checked for syntax only.');
+  const usage = project.contentUsage ?? [];
+  if (usage.length) {
+    notes.push(
+      `Read by: ${usage
+        .slice(0, 10)
+        .map((u) => `${u.api} in ${code(`${u.file}:${u.line}`)}`)
+        .join(', ')}.`,
+    );
+  } else if (project.content.length) {
+    notes.push('No injectContentFiles, injectContent or contentFilesSource call found under src.');
+  }
+  return `\n\n${notes.join('\n')}`;
 }
 
 function hasHandler(project: AnalogProject, call: AnalogCall): boolean {
