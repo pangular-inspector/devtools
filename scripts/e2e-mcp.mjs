@@ -741,6 +741,8 @@ const READ_PLAN = [
 
   ['explain-pipe', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
   ['explain-pipe', '/examples/pipes', () => ({ name: 'date' })],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({})],
+  ['suggest-pipe-migrations', '/examples/pipes', () => ({ name: 'appTimeAgo' })],
 
   ['list-ssr-requests', '/examples/http', () => ({ limit: 5 })],
   [
