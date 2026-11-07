@@ -38,9 +38,12 @@ import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
 import { lintPipes, lintPipesText } from './rpc/pipe-lint.ts';
 import { cachedPipeLint } from './rpc/pipe-lint-cache.ts';
+import { pipeMigrationsText } from './rpc/pipe-migrations.ts';
+import { scanPipes } from './rpc/get-pipes.ts';
 import { templateLintTool } from './rpc/template-lint-tool.ts';
 import {
   explainPipeOnPage,
+  pipePageFor,
   pipeRecordRequest,
   pipeRecordTargets,
   pipeRecordText,
@@ -203,6 +206,7 @@ import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import { httpWaterfallText } from './rpc/http-waterfall.ts';
+import { lintHttpText } from './rpc/http-lint.ts';
 import {
   httpRulesText,
   removeHttpRule,
@@ -1620,6 +1624,17 @@ const pangular = defineDevframe({
     });
 
     agent.registerTool({
+      id: 'pangular:lint-http',
+      title: 'Lint HTTP calls',
+      description:
+        "Checks a page's recorded HttpClient calls for duplicate GETs, waterfalls (calls run one after another that could start together) and server calls the browser repeated. Each finding lists call ids and a fix. Masked.",
+      inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
+      handler: async (args: { page?: string }) => ({
+        markdown: lintHttpText(httpSnapshot(), { page: pageArgument(args) }),
+      }),
+    });
+
+    agent.registerTool({
       id: 'pangular:capacitor-list-calls',
       title: 'List Capacitor plugin calls',
       description:
@@ -1669,9 +1684,14 @@ const pangular = defineDevframe({
       status: {
         type: 'integer',
         description:
-          'Status to answer with: 400 or more fails the request, below 400 returns `body`.',
+          'Status to answer with: 400 or more fails the request, 0 fails it as a network error, others return `body`.',
       },
       delayMs: { type: 'integer', description: `Hold the request back (0-${MAX_DELAY_MS} ms).` },
+      chance: {
+        type: 'integer',
+        description:
+          'Apply to this percent of matching requests (1-99), rolled per request; the rest go on to the next rule. Every request when left out.',
+      },
       body: { description: 'Mock response body: JSON text or a JSON value. Alone it answers 200.' },
       enabled: { type: 'boolean', description: 'Default true.' },
     };
@@ -2816,6 +2836,24 @@ const pangular = defineDevframe({
         'The active route tree (params, data, guards, resolvers) and recent navigations of each connected page. The JSON starts with an `_untrusted` notice. Empty when no page is connected.',
       mimeType: 'application/json',
       read: () => ({ text: routerResourceText(routerState.value() as RouterState) }),
+    });
+
+    agent.registerResource({
+      id: 'pangular:pipe-usages',
+      name: 'Angular Pipe Usages',
+      description:
+        'Pipes as JSON: `source` has each pipe with purity and template uses; `pipes`/`async` the live page usage, with churn and stale findings while recording. ' +
+        LIVE_RESOURCE_NOTE,
+      mimeType: 'application/json',
+      read: () => {
+        const live = currentPipes(pipePages);
+        return {
+          text: liveResourceText(
+            { source: scanPipes(ctx.cwd), ...live },
+            'pangular:scan-pipes and pangular:explain-pipe',
+          ),
+        };
+      },
     });
 
     // The same states one page at a time, for the MCP resource templates (`agent-mcp.ts`).
@@ -4356,6 +4394,30 @@ const pangular = defineDevframe({
         if (!args?.name) return { markdown: 'Pass a pipe `name`.' };
         return {
           markdown: explainPipeOnPage(args.name, ctx.cwd, pipePages, pageArgument(args), {
+            rules: config.lint.rules,
+          }),
+        };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:suggest-pipe-migrations',
+      title: 'Suggest pipe migrations',
+      description:
+        'Read-only suggestions for moving pipes to signals, with the file and line of each use: `| async` to toSignal(), impure or signal-reading custom pipes to computed(), and, while recording, churning or stale pipes. Changes no file.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Only this pipe, by the name used after `|`.' },
+          page: PAGE_ARGUMENT,
+        },
+      },
+      handler: async (args: { name?: string; page?: string }) => {
+        const picked = pipePageFor(pipePages, pageArgument(args));
+        if ('markdown' in picked) return picked;
+        return {
+          markdown: pipeMigrationsText(ctx.cwd, picked.pageId ? picked.state : undefined, {
+            name: args?.name || undefined,
             rules: config.lint.rules,
           }),
         };

@@ -132,6 +132,13 @@ function runtimeText(
       'The stale-argument check is off for this pipe: it could not read the compiled template, which happens in minified or production builds.',
     );
   }
+  if (runtime.churn) {
+    parts.push(
+      runtime.isPure
+        ? `**Churning:** an instance ran ${runtime.churn.streak} times in a row and returned an equal result each time. Its input changes reference on every check while its contents stay the same, so the pipe redoes the same work. Keep the input stable (store it in a field, a \`computed()\` or a signal with an \`equal\` function).`
+        : `**Churning:** an instance returned an equal object or array as a new reference ${runtime.churn.streak} times in a row. As an impure pipe it runs on every check, and each new reference makes the bindings that read it update again. Return the previous result when it is equal, or move the logic to a \`computed()\`.`,
+    );
+  }
   if (runtime.stale) {
     parts.push(
       '**Experimental:** this pure pipe was fed an argument that changed contents without changing reference — it may be showing a stale value.',

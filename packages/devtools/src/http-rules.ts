@@ -1,6 +1,7 @@
-import { CACHE_SKIP_TEXT, isHttpRuleStatus, type CacheSkip } from './config.ts';
+import { CACHE_SKIP_TEXT, HTTP_RULE_CHANCE, isHttpRuleStatus, type CacheSkip } from './config.ts';
 import { sanitizeHeaders, type HeaderRecord } from './http-headers.ts';
-import { urlGlobMatch } from './url-glob.ts';
+import { ruleScopeMatches } from './http-data.ts';
+import { sanitizeOrigin, type CallOrigin } from './http-origin.ts';
 
 export type HttpSide = 'client' | 'server';
 
@@ -11,9 +12,17 @@ export interface HttpRule {
   method?: string;
   enabled: boolean;
   target: HttpSide | 'both';
-  /** A status >= 400 fails the request; below that it returns `body`. A body alone returns 200. */
+  /**
+   * A status >= 400 fails the request, and 0 fails it as a network error;
+   * other statuses return `body`. A body alone returns 200.
+   */
   status?: number;
   delayMs?: number;
+  /**
+   * Applies to this share of matching requests, in percent (1 to 99), rolled
+   * per request; the others go on to the next rule. Every request when left out.
+   */
+  chance?: number;
   /** JSON text, returned as the response body. */
   body?: string;
 }
@@ -26,7 +35,7 @@ export interface HttpCall {
   durationMs: number;
   side: HttpSide;
   cacheHit: boolean;
-  /** A rule failed the request with a status >= 400. */
+  /** A rule failed the request with a status >= 400, or 0 as a network error. */
   faulted: boolean;
   /** A rule answered with a status below 400. */
   mocked?: boolean;
@@ -41,6 +50,8 @@ export interface HttpCall {
   pageUrl?: string;
   /** The SSR request this server call belongs to, set when `ssrMiddleware` traced the render. */
   requestId?: string;
+  /** The Angular API that likely started the call, read from the stack (`http-origin.ts`). */
+  origin?: CallOrigin;
   /** Server calls only: the transfer cache stored the response for hydration. */
   cacheStored?: boolean;
   /** Server calls only: why the transfer cache did not store it. */
@@ -129,21 +140,31 @@ export function ruleHasEffect(rule: HttpRule): boolean {
   return ruleStatus(rule) !== undefined || !!rule.delayMs;
 }
 
+/**
+ * The first enabled rule that applies to the request. A rule with `chance`
+ * applies only when `roll()` (0 up to 1) lands under it, else the next rule is tried.
+ */
 export function matchRule(
   url: string,
   method: string,
   rules: readonly HttpRule[] | undefined,
   side: HttpSide,
+  roll: () => number = Math.random,
 ): HttpRule | undefined {
   return rules?.find(
     (rule) =>
       rule.enabled &&
-      !!rule.pattern &&
       ruleHasEffect(rule) &&
-      (rule.target === 'both' || rule.target === side) &&
-      (!rule.method || rule.method.toUpperCase() === method.toUpperCase()) &&
-      urlGlobMatch(url, rule.pattern),
+      ruleScopeMatches(rule, { url, method, side }) &&
+      (rule.chance === undefined || roll() * 100 < rule.chance),
   );
+}
+
+/** A whole percent from 1 to 99, or undefined for every request. */
+export function sanitizeChance(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const chance = Math.round(value);
+  return chance >= HTTP_RULE_CHANCE.min && chance <= HTTP_RULE_CHANCE.max ? chance : undefined;
 }
 
 const str = (value: unknown, max: number) =>
@@ -189,6 +210,7 @@ export function sanitizeCalls(input: unknown, max = MAX_CALLS): HttpCall[] {
       rulePattern: str(c.rulePattern, 500),
       pageUrl: str(c.pageUrl, 2000),
       ...(str(c.requestId, 40) ? { requestId: str(c.requestId, 40) } : {}),
+      ...(sanitizeOrigin(c.origin) ? { origin: sanitizeOrigin(c.origin) } : {}),
       ...(typeof c.cacheStored === 'boolean' ? { cacheStored: c.cacheStored } : {}),
       ...(typeof c.cacheSkip === 'string' && Object.hasOwn(CACHE_SKIP_TEXT, c.cacheSkip)
         ? { cacheSkip: c.cacheSkip as CacheSkip }
@@ -219,6 +241,7 @@ export function sanitizeRules(input: unknown): HttpRule[] {
         : undefined;
     const method = str(r.method, 10)?.trim().toUpperCase();
     const body = str(r.body, 100_000)?.trim() || undefined;
+    const chance = sanitizeChance(r.chance);
     const rule: HttpRule = {
       id: str(r.id, 40) || `r${rules.length + 1}`,
       pattern,
@@ -228,6 +251,7 @@ export function sanitizeRules(input: unknown): HttpRule[] {
       status: status ?? (body !== undefined ? 200 : undefined),
       delayMs: delayMs || undefined,
       body,
+      ...(chance !== undefined ? { chance } : {}),
     };
     if (ruleHasEffect(rule)) rules.push(rule);
   }

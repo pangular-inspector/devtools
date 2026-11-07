@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Ninety-eight tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  One hundred tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -818,7 +818,7 @@ It finds impure pipes used inside `@for`, `| json` left in templates, pure pipes
 
 ### Explain a pipe
 
-`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the time spent in `transform` and the errors it threw, the last input and output, a stale-value warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
+`explain-pipe` explains one pipe: where it is declared or used, whether it is pure, live instance and call counts, the time spent in `transform` and the errors it threw, the last input and output, a stale-value warning, a churn warning, `| async` usages that resubscribe on every check or subscribe to the same source as another usage, and lint findings. Reads: source, plus the page for live counts.
 
 | Argument | Required | Value                                           |
 | -------- | -------- | ----------------------------------------------- |
@@ -836,6 +836,27 @@ The **Live** line tells these cases apart:
 | Pipe in use, recording off          | Instance count and components, plus a hint to start recording.     |
 | Pipe in use, recording on, no calls | Instance count and components, and that no calls are recorded yet. |
 
+A pipe is churning when one of its instances returned an equal result 20 calls in a row while recording: a pure pipe whose input changes reference on every check while its contents stay the same, or an impure pipe that returns an equal object or array as a new reference. An impure pipe that returns the same reference or primitive is how impure pipes run, so it never counts.
+
+### Suggest pipe migrations
+
+`suggest-pipe-migrations` suggests how to move pipes to signals, with the file, line and template text of each use. Reads: source, plus the page for churn and stale findings. It changes no file: apply the suggestions by hand.
+
+| Argument | Required | Value                                                             |
+| -------- | -------- | ----------------------------------------------------------------- |
+| `name`   | no       | Only this pipe, by the name used after `\|`.                      |
+| `page`   | no       | The tab to read live findings from. Defaults to the default page. |
+
+| Suggestion                          | When                                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `\| async` to `toSignal()`          | A template uses `\| async`. If a use pipes a method call, the answer names it and tells you to move the Observable to a field first. |
+| Impure pipe to `computed()`         | A custom pipe is `pure: false`.                                                                                                      |
+| Signal-reading pipe to `computed()` | The `signal-read-in-pure-pipe` lint rule fires for a pure pipe.                                                                      |
+| Churning pipe                       | While recording, the pipe churned (see [Explain a pipe](#explain-a-pipe)).                                                           |
+| Stale pipe                          | While recording, the experimental stale check fired.                                                                                 |
+
+Built-in formatting pipes such as `date` and `currency` are pure and cheap, so it suggests nothing for them. A lint rule set to `false` in `lint.rules` drops its suggestion too.
+
 ### Record pipe calls <ngmd-badge variant="action">Action</ngmd-badge>
 
 `record-pipes` starts or stops call recording on a page, the same switch as **Record calls** in the panel. Reads: page.
@@ -851,15 +872,18 @@ The **Live** line tells these cases apart:
 
 These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` or `withPangularSsr()` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
 
-| Tool                  | What it answers                                                                                                                                                                                                                                                                                                                                                                  | Arguments                                              |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                                                                                                                                                           | `limit`                                                |
-| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again.                                                                                                                                           | `id`, `url`                                            |
-| `list-http-calls`     | The HttpClient calls of one tab and the server render that served it, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, redirected, transfer cache hit and the matched rule. With `preview`, the masked response body, for failed calls too. With `view: "waterfall"`, the tab's client calls as a waterfall instead. | `url`, `failed`, `limit`, `preview`, `headers`, `view` |
+| Tool                  | What it answers                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Arguments                                              |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                                                                                                                                                                                                                                                                   | `limit`                                                |
+| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again.                                                                                                                                                                                                                                                   | `id`, `url`                                            |
+| `list-http-calls`     | The HttpClient calls of one tab and the server render that served it, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, redirected, transfer cache hit, the matched rule and the Angular API that likely started it (`likely httpResource()`, `likely resource()`, `likely @defer`). With `preview`, the masked response body, for failed calls too. With `view: "waterfall"`, the tab's client calls as a waterfall instead. | `url`, `failed`, `limit`, `preview`, `headers`, `view` |
+| `lint-http`           | Checks one tab's recorded client calls for duplicate GETs, waterfalls (calls that ran one after another and could start together) and server calls the browser made again. Each finding lists the call ids and what to try.                                                                                                                                                                                                                                                              | `page`                                                 |
 
 `explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one.
 
 `list-http-calls` lists one tab and the server calls of the SSR request that served it: the tab `page` names, or the default page. With no tab connected, it lists the server calls. `url` keeps calls whose URL contains the text. `failed` keeps calls with a status of 400 or more, no response, an error, or a cancel. `limit` defaults to 30 (at most 200). `preview` adds each call's response preview, including the body a failed call got back, such as a validation message or `problem+json`. `headers` adds each call's request and response headers. Secrets in URLs, errors, previews and headers are masked, and `url` matches the masked URL.
+
+`lint-http` reads the tab `page` names, or the default page, and the server calls of the SSR request that served it. It leaves out transfer cache hits, mocked and cancelled calls, and reports three kinds of findings: a GET to the same URL again within 2000 ms on the same page URL, 3 or more calls where each started within 50 ms after the previous one ended, and a server call whose method, path and query the browser requested again. Each finding names the calls by the ids `list-http-calls` uses, the time it costs where that can be told, and a fix. URLs are masked.
 
 `list-http-calls` with `view: "waterfall"` reads the tab `page` names, or the default page, and groups its client calls by navigation, newest first: each call's start offset in its navigation, duration, status and a text bar. A new navigation starts each time the page URL a call was made on changes. `limit` then sets how many navigations it shows, 5 by default (at most 50). `url`, `failed` and `preview` apply to the list only, and are refused with `view: "waterfall"`. `headers` adds each call's headers. `Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` are always masked, as are names that look secret or match `redaction.secretNames`, and JWTs and bearer tokens in any value.
 
@@ -867,13 +891,13 @@ These tools read the HttpClient calls that `withPangular()` recorded and the SSR
 
 These tools read and change the rules of [Fault injection](../inspectors/ssr-http.md#fault-injection), the same rules the panel shows. Rules live on the devtools server and apply to every connected tab, so the tools take no `page`. Reads: page.
 
-| Tool               | What it does                                                                                                                                          | Arguments                                                                              |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `list-http-rules`  | Lists the rules in match order: id, on or off, method, URL pattern, where it applies (client, SSR or both) and its effect (status, delay, mock body). | none                                                                                   |
-| `set-http-rule`    | Adds a rule, or replaces the rule with `id`, and returns the saved rules.                                                                             | `pattern` (required), `id`, `method`, `target`, `status`, `delayMs`, `body`, `enabled` |
-| `remove-http-rule` | Removes the rule with `id` and returns the rules left.                                                                                                | `id` (required)                                                                        |
+| Tool               | What it does                                                                                                                                          | Arguments                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `list-http-rules`  | Lists the rules in match order: id, on or off, method, URL pattern, where it applies (client, SSR or both) and its effect (status, delay, mock body). | none                                                                                             |
+| `set-http-rule`    | Adds a rule, or replaces the rule with `id`, and returns the saved rules.                                                                             | `pattern` (required), `id`, `method`, `target`, `status`, `delayMs`, `body`, `chance`, `enabled` |
+| `remove-http-rule` | Removes the rule with `id` and returns the rules left.                                                                                                | `id` (required)                                                                                  |
 
-`set-http-rule` checks its input the way the panel's form does. `pattern` is a substring or a glob where `*` matches anything, up to 500 characters. A leading `^` anchors it at the start of the URL path. `target` is `client`, `server` or `both` (the default). `status` is one of the statuses the panel lists. `delayMs` runs from 0 to 10000. `body` is JSON text or a JSON value, up to 100,000 characters. A rule needs a `status`, a `delayMs` or a `body`, and there can be at most 50 rules. A rule that breaks one of these is refused with the reason, and nothing changes. A rule that applies to SSR takes effect on the next page load. Patterns and bodies in the answers are masked like recorded calls.
+`set-http-rule` checks its input the way the panel's form does. `pattern` is a substring or a glob where `*` matches anything, up to 500 characters. A leading `^` anchors it at the start of the URL path. `target` is `client`, `server` or `both` (the default). `status` is one of the statuses the panel lists, or `0` to fail the request as a network error. `delayMs` runs from 0 to 10000. `chance` is a whole percent from 1 to 99: the rule then applies to that share of matching requests, rolled per request, and the others go on to the next rule. `body` is JSON text or a JSON value, up to 100,000 characters. A rule needs a `status`, a `delayMs` or a `body`, and there can be at most 50 rules. A rule that breaks one of these is refused with the reason, and nothing changes. A rule that applies to SSR takes effect on the next page load. Patterns and bodies in the answers are masked like recorded calls. The panel's presets are plain rules, so an agent sets the same ones: Offline is `pattern: "*", target: "client", status: 0`, Slow 3G is `delayMs: 2000` and Flaky is `status: 503, chance: 30`.
 
 With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-http-rule` and `remove-http-rule` are dropped, and `list-http-rules` says that no rule applies.
 
@@ -898,7 +922,7 @@ These tools read the [TransferState payload](../inspectors/ssr-http.md#transfers
 
 `set-ssr-override` checks its input the way the panel's form does. `pattern` matches the page path and query like a fault rule's, up to 500 characters. `message` is up to 300 characters. `key` is up to 200 characters, with no spaces at either end, and a key with a masked part is refused because it can never match. `value` is JSON text or a JSON value, up to 100,000 characters. There can be at most 20 overrides. An override applies from the next full page load. Patterns, messages and values in the answers are masked like recorded calls.
 
-`inspect-transfer-state` reads the default page among those that reported a payload unless `page` names another. `search` keeps keys and cached URLs that contain the text, and `limit` defaults to 50 (at most 500). The values are the masked and clipped copy the panel shows, so read them to find a key, and type the full value for `state-edit`. An HttpClient entry holds `b` (body), `s` (status), `st` (status text), `u` (URL) and `rt` (response type).
+`inspect-transfer-state` reads the default page among those that reported a payload unless `page` names another. `search` keeps keys and cached URLs that contain the text, and `limit` defaults to 50 (at most 500). The values are the masked and clipped copy the panel shows, so read them to find a key, and type the full value for `state-edit`. An HttpClient entry holds `b` (body), `s` (status), `st` (status text), `u` (URL) and `rt` (response type). Above the key list, it warns when the payload is over 100 KB, with its three largest entries, and names any URL the transfer cache stored under more than one key.
 
 With [`actions.http`](../getting-started/configuration.md#actions) set to `false`, `set-ssr-override` and `remove-ssr-override` are dropped, and `list-ssr-overrides` says that no override applies.
 
