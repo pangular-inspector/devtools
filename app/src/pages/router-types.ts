@@ -61,6 +61,20 @@ export interface NavigationRecord {
   routes?: MatchedRoute[];
   /** The target came from a query param of the URL: a possible open redirect. */
   queryRedirect?: { param: string; by: string };
+  /** The browser Navigation API event it came with. */
+  platform?: { type: string; userInitiated?: boolean };
+}
+
+/** A browser Navigation API `navigate` event the page recorded. */
+export interface PlatformNavigation {
+  at: number;
+  type: string;
+  url: string;
+  userInitiated?: boolean;
+  hashChange?: boolean;
+  navigationId?: number;
+  result?: 'succeeded' | 'failed';
+  error?: string;
 }
 
 export interface LoopHop {
@@ -192,6 +206,7 @@ export interface RouterPage {
   preloads?: { path: string; startedAt: number; ms?: number; failed?: boolean }[];
   instrumented?: boolean;
   loops?: NavigationLoop[];
+  platformNavigations?: PlatformNavigation[];
 }
 
 export interface LintFinding {

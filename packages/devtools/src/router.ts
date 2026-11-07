@@ -94,6 +94,8 @@ export interface NavigationRecord {
   routes?: MatchedRoute[];
   /** Its target came from a query param: a possible open redirect (`router-open-redirect.ts`). */
   queryRedirect?: QueryRedirect;
+  /** The browser Navigation API event it came with (`router-platform-nav.ts`). */
+  platform?: { type: string; userInitiated?: boolean };
 }
 
 export interface RouterDebugApi {

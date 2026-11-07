@@ -72,4 +72,19 @@ describe('RouteTimeline extras', () => {
       .click();
     expect(asked).toEqual([1]);
   });
+
+  it('shows the Navigation API event of a navigation and history changes outside the router', async () => {
+    const fixture = mount({
+      navigations: [nav({ platform: { type: 'traverse', userInitiated: true } })],
+      platformNavigations: [
+        { at: 1, type: 'traverse', url: '/orders/7', navigationId: 1 },
+        { at: 2, type: 'replace', url: '/orders/7#notes', hashChange: true },
+      ],
+    });
+    await settle(fixture);
+    expect(text(fixture)).toContain('Navigation API traverse (started by the user)');
+    expect(text(fixture)).toContain('History changes outside the router');
+    expect(text(fixture)).toContain('replace to /orders/7#notes');
+    expect(text(fixture)).not.toContain('traverse to /orders/7 ');
+  });
 });

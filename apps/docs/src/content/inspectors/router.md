@@ -34,12 +34,17 @@ Every navigation as one story:
 - A phase bar: recognize, guards, resolve, activate.
 - Guards and resolvers, lazy loads, reused components, HTTP requests, scroll, and the title afterwards.
 - Router warnings, and the cancel or error reason. The tab explains NG04xxx errors.
-- When the navigation error handler redirects, the navigation names the error handler as the cause and keeps the error that triggered it, with its error code.
+- What the `withNavigationErrorHandler()` handler did with a failed navigation: redirected (with the target), returned nothing or a value, or threw (with its message). When it redirects, the navigation names the error handler as the cause and keeps the error that triggered it, with its error code.
+- **Navigation API**: the browser Navigation API event (`push`, `replace`, `reload` or `traverse`) the navigation came with, and whether the user started it.
 - An **open redirect risk** badge when the target came from a query param. See [Open redirect check](#open-redirect-check).
 
 Filter by URL, or check **Only problems** to keep the navigations that did not succeed and the ones in a loop. **Only problems** leaves out the navigations that **Probe in app** cancels, the way the problem count on the **Navigations** tab does. Each row has **Replay**, **Compare** (opens the [Compare view](#compare) with this navigation as the later one) and **Copy repro** (a markdown repro). **Replay** is off for a navigation whose URL is redacted or not relative, and a note under the row says why. **Export JSON** saves the list.
 
 **Clear** empties the list and its loop warnings for the page you are looking at, so you can test a flow from a clean list without reloading the app. Other tabs keep their navigations. A navigation still running stays in the list. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, **Clear** is off.
+
+### History changes outside the router
+
+The page listens to the browser's Navigation API (`window.navigation`) and records its `navigate` events, without intercepting them. An event that comes while a router navigation runs, or right before one starts (back, forward), belongs to that navigation. The others are history changes the router did not make, such as `history.pushState`, `location.hash` or a hash link. The last five show in a **History changes outside the router** section above the list, with failed ones marked. They explain a browser URL that differs from the router's on **Current**. Browsers without the Navigation API record none.
 
 ### Open redirect check
 

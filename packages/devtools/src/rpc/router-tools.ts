@@ -4,6 +4,7 @@ import type { RouteNode } from '../router-config.ts';
 import type { RouterSetup } from '../router-setup.ts';
 import type { LinkInfo, OutletInfo } from '../router-links.ts';
 import type { PreloadRecord } from '../router-actions.ts';
+import type { PlatformNavigation } from '../router-platform-nav.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { callerPage } from './page-scope.ts';
@@ -41,6 +42,8 @@ export interface RouterReport {
   linksUnchecked?: number;
   preloads?: PreloadRecord[];
   instrumented?: boolean;
+  /** The browser Navigation API's `navigate` events, newest last. */
+  platformNavigations?: PlatformNavigation[];
 }
 
 export interface RouterPage extends RouterReport {
@@ -238,6 +241,21 @@ function isMatchedRoute(value: unknown): boolean {
   );
 }
 
+function isPlatformNavigation(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    isNumber(entry['at']) &&
+    isText(entry['type'], 21) &&
+    isText(entry['url'], 2001) &&
+    optional(entry['userInitiated'], isBool) &&
+    optional(entry['hashChange'], isBool) &&
+    optional(entry['navigationId'], isNumber) &&
+    optional(entry['result'], (v) => v === 'succeeded' || v === 'failed') &&
+    optional(entry['error'], (v) => isText(v, 301))
+  );
+}
+
 function isNavigation(value: unknown): boolean {
   if (!isRecord(value)) return false;
   const nav: Partial<NavigationRecord> = value;
@@ -294,6 +312,13 @@ function isNavigation(value: unknown): boolean {
         isRecord(v) &&
         isText((v as { param?: unknown }).param, 101) &&
         isText((v as { by?: unknown }).by, 201),
+    ) &&
+    optional(
+      nav.platform,
+      (v) =>
+        isRecord(v) &&
+        isText((v as { type?: unknown }).type, 21) &&
+        optional((v as { userInitiated?: unknown }).userInitiated, isBool),
     ) &&
     optional(nav.routes, (v) => Array.isArray(v) && v.length <= 30 && v.every(isMatchedRoute)) &&
     optional(
@@ -379,7 +404,11 @@ export function isRouterReport(
       report.preloads,
       (v) => Array.isArray(v) && v.length <= 50 && isPlain(v, { n: 500 }),
     ) &&
-    optional(report.instrumented, isBool)
+    optional(report.instrumented, isBool) &&
+    optional(
+      report.platformNavigations,
+      (v) => Array.isArray(v) && v.length <= 30 && v.every(isPlatformNavigation),
+    )
   );
 }
 
@@ -392,7 +421,7 @@ function stateOf(pages: Pages): RouterState {
 }
 
 function contentOf(report: RouterReport): string {
-  return JSON.stringify([report.snapshot, report.navigations]);
+  return JSON.stringify([report.snapshot, report.navigations, report.platformNavigations]);
 }
 
 export function currentRouter(pages: Pages): RouterState {
@@ -432,6 +461,7 @@ export function clearRouterNavigations(pages: Pages, pageId: string, now = Date.
   const navigations = page.navigations.filter((nav) => nav.outcome === 'pending');
   const next: RouterPage = { ...page, navigations, changedAt: now };
   delete next.dropped;
+  delete next.platformNavigations;
   next.loops = detectLoops(navigations, next.config);
   pages.set(pageId, next);
   return true;
@@ -595,6 +625,22 @@ function findOutlet(outlets: OutletInfo[] | undefined, needle: string): OutletIn
   return undefined;
 }
 
+/**
+ * The browser Navigation API events no router navigation came with: history
+ * changes made outside the router, such as `history.pushState` or
+ * `location.hash`, which explain a browser URL that differs from the router's.
+ */
+export function outsideRouterLines(page: RouterReport, max = 5): string[] {
+  const outside = (page.platformNavigations ?? []).filter((e) => e.navigationId === undefined);
+  return outside
+    .slice(-max)
+    .reverse()
+    .map(
+      (e) =>
+        `- ${code(e.type)} to ${code(e.url)}${e.userInitiated ? ' (started by the user)' : ''}${e.hashChange ? ' (hash change)' : ''}${e.result === 'failed' ? `, failed${e.error ? `: ${code(e.error)}` : ''}` : ''}`,
+    );
+}
+
 export function inspectRouteText(
   state: RouterState,
   args: { page?: string; component?: string },
@@ -633,6 +679,13 @@ export function inspectRouteText(
   if (snapshot.urlDrift && snapshot.browserUrl) {
     lines.push(
       `**Browser URL differs** ${code(snapshot.browserUrl)} (skipLocationChange, browserUrl, a failed navigation or code that changed history directly)`,
+    );
+  }
+  const outside = outsideRouterLines(page);
+  if (outside.length) {
+    lines.push(
+      '**History changes outside the router** (browser Navigation API events no router navigation came with, newest first)',
+      ...outside,
     );
   }
   if (Object.keys(snapshot.queryParams).length) {
@@ -726,6 +779,11 @@ export function describeNavigation(nav: NavigationRecord, page?: RouterPage): st
   ];
   if (nav.from) lines.push(`  - from ${code(nav.from)}`);
   if (nav.caller) lines.push(`  - started by ${code(nav.caller)}`);
+  if (nav.platform) {
+    lines.push(
+      `  - browser Navigation API: ${code(nav.platform.type)}${nav.platform.userInitiated ? ' (started by the user)' : ''}`,
+    );
+  }
   if (nav.extras?.length) lines.push(`  - extras: ${list(nav.extras)}`);
   if (nav.earlier) {
     lines.push(
@@ -803,7 +861,7 @@ export function describeNavigation(nav: NavigationRecord, page?: RouterPage): st
     const meaning = ERROR_CATALOG[nav.errorCode];
     lines.push(`  - error ${code(nav.errorCode)}${meaning ? `: ${meaning}` : ''}`);
   }
-  if (nav.errorHandler) lines.push(`  - ${nav.errorHandler}`);
+  if (nav.errorHandler) lines.push(`  - withNavigationErrorHandler: ${nav.errorHandler}`);
   if (
     nav.generation !== undefined &&
     page?.generation !== undefined &&
@@ -872,8 +930,12 @@ export function explainNavigationText(
   const recent = matching.slice(-limit).reverse();
   const loops = loopsOf(page).filter((loop) => recent.some((nav) => loop.ids.includes(nav.id)));
   const header = `Most recent ${recent.length} of ${matching.length} navigation(s), newest first. Guards lists the candidates: canDeactivate guards of the page being left (marked "leaving") and canActivate/canActivateChild guards of the target; without per-guard instrumentation the router reports one result for all of them. ${page.instrumented ? 'Instrumentation is on, so each guard and resolver run is listed with its verdict.' : 'Instrumentation is off: turn it on (navigate tool, action "instrument") to see each guard\'s verdict.'}`;
+  const outside = outsideRouterLines(page);
+  const outsideText = outside.length
+    ? `**History changes outside the router** (browser Navigation API, newest first)\n${outside.join('\n')}\n\n`
+    : '';
   return capped(
-    `${UNTRUSTED}\n\n${header}\n\n${loopsText(loops)}${recent.map((nav) => describeNavigation(nav, page)).join('\n')}${droppedNote(page.dropped, 'navigations', 'navigations')}${otherPages(state, page)}${freshness(page, now)}`,
+    `${UNTRUSTED}\n\n${header}\n\n${outsideText}${loopsText(loops)}${recent.map((nav) => describeNavigation(nav, page)).join('\n')}${droppedNote(page.dropped, 'navigations', 'navigations')}${otherPages(state, page)}${freshness(page, now)}`,
   );
 }
 

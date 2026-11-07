@@ -108,6 +108,29 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
         }
       </section>
     }
+    @if (outsideRouter().length) {
+      <section class="outside" aria-labelledby="outside-heading">
+        <h3 id="outside-heading">History changes outside the router</h3>
+        <p class="muted">
+          Browser Navigation API events no router navigation came with, such as
+          <code>history.pushState</code> or a hash change. They explain a browser URL that differs
+          from the router's.
+        </p>
+        <ul>
+          @for (entry of outsideRouter(); track $index) {
+            <li>
+              <time>{{ time(entry.at) }}</time> {{ entry.type }} to <code>{{ entry.url }}</code>
+              @if (entry.userInitiated) {
+                (started by the user)
+              }
+              @if (entry.result === 'failed') {
+                <span class="bad">failed{{ entry.error ? ': ' + entry.error : '' }}</span>
+              }
+            </li>
+          }
+        </ul>
+      </section>
+    }
     @if (items().length) {
       <div class="meta-row">
         <span class="muted count"
@@ -182,6 +205,12 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
               @if (nav.caller) {
                 <dt>Started by</dt>
                 <dd>{{ nav.caller }} ({{ nav.trigger }})</dd>
+              }
+              @if (nav.platform; as platform) {
+                <dt>Navigation API</dt>
+                <dd>
+                  {{ platform.type }}{{ platform.userInitiated ? ' (started by the user)' : '' }}
+                </dd>
               }
               @if (nav.extras?.length) {
                 <dt>Extras</dt>
@@ -531,6 +560,30 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
     .navs > li.in-loop {
       box-shadow: inset 3px 0 0 var(--danger);
     }
+    .outside {
+      display: grid;
+      gap: 6px;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .outside h3 {
+      margin: 0;
+      color: var(--text-strong);
+      font-size: 13px;
+      letter-spacing: normal;
+      text-transform: none;
+    }
+    .outside p,
+    .outside ul {
+      margin: 0;
+    }
+    .outside ul {
+      padding-left: 20px;
+    }
     .loops {
       display: grid;
       gap: 8px;
@@ -620,6 +673,14 @@ export class RouteTimeline {
   readonly message = linkedSignal<string, string>({ source: this.pageId, computation: () => '' });
 
   readonly loops = computed(() => this.page().loops ?? []);
+
+  /** The last Navigation API events that no router navigation came with, newest first. */
+  readonly outsideRouter = computed(() =>
+    (this.page().platformNavigations ?? [])
+      .filter((entry) => entry.navigationId === undefined)
+      .slice(-5)
+      .reverse(),
+  );
 
   private readonly loopById = computed(() => {
     const byId = new Map<number, NavigationLoop>();
