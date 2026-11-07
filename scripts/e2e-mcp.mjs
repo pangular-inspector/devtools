@@ -2990,6 +2990,8 @@ function runDocs(state) {
     'params',
     'replaceurl',
     'skiplocationchange',
+    'element',
+    'locator',
   ]);
   // Library tools are documented but not listed for the demo, which uses none of the libraries.
   docs.phantomTools = [...documented].filter(
