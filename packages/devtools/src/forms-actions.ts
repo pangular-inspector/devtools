@@ -4,6 +4,7 @@ import {
   findFieldElement,
   isAbstractControl,
   nodeAt,
+  redactFormText,
   serializeFormValue,
   type FormsDebugApi,
   type FoundForm,
@@ -44,11 +45,12 @@ export const FORM_ACTIONS = [
   'instrument',
   'pick',
   'cancel-pick',
+  'try-webmcp',
 ] as const;
 
 export type FormActionName = (typeof FORM_ACTIONS)[number];
 
-export const CONFIRM_ACTIONS: FormActionName[] = ['reset', 'submit', 'restore'];
+export const CONFIRM_ACTIONS: FormActionName[] = ['reset', 'submit', 'restore', 'try-webmcp'];
 
 export interface FormActionRequest {
   action: FormActionName;
@@ -88,6 +90,11 @@ export interface ActionContext {
   forms: Map<string, FoundForm>;
   elements: WeakMap<object, Element>;
   all: () => Iterable<Element>;
+  /** Runs a form's linked WebMCP tool (`try-webmcp`). */
+  runTool?: (
+    root: object,
+    args: unknown,
+  ) => Promise<{ ok: boolean; text?: string; error?: string }>;
 }
 
 let devtoolsDepth = 0;
@@ -1021,6 +1028,21 @@ async function perform(
       if (signal) found.root['value'].set(restored);
       else found.root['patchValue'](restored);
       return { ok: true, message: `Restored snapshot ${request.snapshot}.` };
+    }
+    case 'try-webmcp': {
+      if (!signal) return fail('WebMCP tools exist only for Signal Forms.');
+      const args = request.value ?? {};
+      if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+        return fail('Pass the tool input as a JSON object.');
+      }
+      if (!ctx.runTool) return fail('WebMCP is not watched on this page.');
+      const run = await ctx.runTool(found.root, args);
+      const formId = request.formId ?? '';
+      if (!run.ok) return fail(redactFormText(formId, run.error ?? 'The tool call failed.'));
+      const text = redactFormText(formId, run.text ?? '').trim();
+      const failed = text.startsWith('Form submission failed');
+      const message = `The tool answered: ${text || '(no text)'}`;
+      return failed ? { ok: false, message, error: message } : { ok: true, message };
     }
     default:
       return fail('Unknown action.');

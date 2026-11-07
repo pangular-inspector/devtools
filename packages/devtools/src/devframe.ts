@@ -116,6 +116,8 @@ import {
 } from './rpc/component-tools.ts';
 import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import { inspectComponentText } from './rpc/component-detail-text.ts';
+import { createDeferLoads } from './rpc/defer-loads.ts';
+import { PICK_KEYS } from './component-pick.ts';
 import { createComponentEdits } from './rpc/component-edits.ts';
 import { createSignalRestores } from './rpc/signal-restores.ts';
 import { createComponentValues, valueResultText } from './rpc/component-values.ts';
@@ -127,6 +129,7 @@ import {
   expirePages,
   inspectFormsText,
   isPageReport,
+  matchForms,
   mergePageReport,
   type PageReport,
   type FormsState,
@@ -134,12 +137,14 @@ import {
   UNTRUSTED,
   untrusted,
 } from './rpc/forms-tools.ts';
+import { playwrightTestText } from './rpc/forms-playwright.ts';
 import {
   explainCustomControlText,
   explainFieldText,
   explainSubmitText,
   fieldOwner,
   exportFormText,
+  type FieldArgs,
   formDiffText,
   formHistoryText,
   formPayloadText,
@@ -333,6 +338,10 @@ import {
 } from './rpc/default-page.ts';
 import { namingPageRead } from './rpc/page-read-scope.ts';
 import { routerActionAnswer } from './rpc/router-action-answer.ts';
+import { diffNavigationsText, navigationDiffResult } from './rpc/router-diff.ts';
+import { callsForNavigation, nextNavigation } from './rpc/router-http.ts';
+import { MAX_WAIT_MS, NavigationStream, streamText } from './rpc/router-stream.ts';
+import { previewNavigationText, routePreviewResult } from './rpc/router-preview.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
@@ -1030,6 +1039,14 @@ const pangular = defineDevframe({
       : null;
 
     const routerPages = new Map<string, RouterPage>();
+    /** Every navigation the pages report, numbered, for pangular:follow-navigations. */
+    const navigationStream = new NavigationStream();
+    /** Drops the stream entries and signatures of pages that expired or were forgotten. */
+    const dropGoneStreamPages = () => {
+      for (const id of navigationStream.pageIds()) {
+        if (!routerPages.has(id)) navigationStream.clear(id);
+      }
+    };
     const routerState = await my.rpc.sharedState('router', {
       initialValue: { pages: [] } as RouterState,
     });
@@ -1062,6 +1079,12 @@ const pangular = defineDevframe({
           applyRouter(currentRouter(routerPages));
         }
         feed.navigations(report.pageId, report.navigations);
+        // Merging a report expires stale pages too.
+        dropGoneStreamPages();
+        // A report that failed to merge left no page, so its navigations stay out of the stream.
+        if (routerPages.has(report.pageId)) {
+          navigationStream.record(report.pageId, report.navigations);
+        }
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
     });
@@ -1164,7 +1187,11 @@ const pangular = defineDevframe({
       name: 'router-lint',
       type: 'query',
       jsonSerializable: true,
-      handler: (pageId: unknown) => routerLintResult(pageFor(pageId), { rules: config.lint.rules }),
+      handler: (pageId: unknown) =>
+        routerLintResult(pageFor(pageId), {
+          rules: config.lint.rules,
+          httpFor: routerHttpCalls,
+        }),
     });
 
     register({
@@ -1176,6 +1203,73 @@ const pangular = defineDevframe({
         if (!page?.config || typeof message?.url !== 'string') return null;
         return matchUrl(page.config, message.url.slice(0, 2000));
       },
+    });
+
+    /** The HTTP inspector's calls of a page, for the router's per-navigation HTTP join. */
+    const routerHttpCalls = (pageId: string) =>
+      on.http ? httpPages.get(pageId)?.calls : undefined;
+
+    register({
+      name: 'router-http',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; id?: unknown }) => {
+        const page = pageFor(message?.pageId);
+        const nav = page?.navigations.find((n) => n.id === message?.id);
+        if (!page || !nav) return null;
+        return callsForNavigation(
+          nav,
+          nextNavigation(page.navigations, nav),
+          routerHttpCalls(page.pageId),
+        );
+      },
+    });
+
+    /** The source routes and ServerRoute entries a preview names, empty when the scan fails. */
+    const previewScans = () => {
+      let sources: ReturnType<typeof extractRoutes> = [];
+      let serverRoutes: ReturnType<typeof scanServerRoutes> = [];
+      try {
+        sources = extractRoutes(ctx.cwd);
+      } catch {
+        sources = [];
+      }
+      try {
+        serverRoutes = scanServerRoutes(ctx.cwd);
+      } catch {
+        serverRoutes = [];
+      }
+      return { sources, serverRoutes };
+    };
+
+    register({
+      name: 'router-preview',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; url?: unknown }) => {
+        const { sources, serverRoutes } = previewScans();
+        return routePreviewResult(
+          routerState.value() as RouterState,
+          {
+            page: typeof message?.pageId === 'string' ? message.pageId : undefined,
+            url: typeof message?.url === 'string' ? message.url : undefined,
+          },
+          sources,
+          serverRoutes,
+        );
+      },
+    });
+
+    register({
+      name: 'router-diff',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; a?: unknown; b?: unknown }) =>
+        navigationDiffResult(routerState.value() as RouterState, {
+          page: typeof message?.pageId === 'string' ? message.pageId : undefined,
+          a: typeof message?.a === 'number' ? message.a : undefined,
+          b: typeof message?.b === 'number' ? message.b : undefined,
+        }),
     });
 
     register({
@@ -1197,6 +1291,7 @@ const pangular = defineDevframe({
         if (!config.actions.router) throw new Error(actionBlockedMessage('router'));
         if (typeof pageId !== 'string') throw new Error('Give the id of the page to clear.');
         if (clearRouterNavigations(routerPages, pageId)) applyRouter(currentRouter(routerPages));
+        navigationStream.clear(pageId);
         void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
       },
     });
@@ -1208,6 +1303,7 @@ const pangular = defineDevframe({
       handler: (pageId: string) => {
         if (mayForget(pageId) && routerPages.delete(pageId)) {
           applyRouter(currentRouter(routerPages));
+          navigationStream.clear(pageId);
         }
       },
     });
@@ -1473,7 +1569,10 @@ const pangular = defineDevframe({
       const next = expirePages(formPages, now, limits.formTimeline, liveTtl);
       if (next) applyForms(next);
       const nextRouter = expireRouterPages(routerPages, now, liveTtl);
-      if (nextRouter) applyRouter(nextRouter);
+      if (nextRouter) {
+        applyRouter(nextRouter);
+        dropGoneStreamPages();
+      }
       const nextPipes = expirePipePages(pipePages, now, liveTtl);
       if (nextPipes) applyPipes(nextPipes);
       if (expireNgrxPages(ngrxPages, now, liveTtl)) applyNgrx();
@@ -1812,6 +1911,7 @@ const pangular = defineDevframe({
               if (clearRouterNavigations(routerPages, pageId)) {
                 applyRouter(currentRouter(routerPages));
               }
+              navigationStream.clear(pageId);
               void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
               cleared.push(`router navigations for page "${pageId}"`);
             } else {
@@ -1824,6 +1924,7 @@ const pangular = defineDevframe({
                 });
               }
               applyRouter(currentRouter(routerPages));
+              navigationStream.clear();
               cleared.push('router navigations');
             }
           }
@@ -2037,6 +2138,8 @@ const pangular = defineDevframe({
             return formPayloadText(state, target);
           case 'fixture':
             return exportFormText(state, { ...target, format: 'fixture' });
+          case 'playwright':
+            return playwrightTestText(state, { ...target, url: formPageUrl(state, target) });
           default:
             return explainFieldText(state, target);
         }
@@ -2259,6 +2362,29 @@ const pangular = defineDevframe({
     });
     for (const tool of componentEdits.tools) agent.registerTool(tool);
 
+    // Loads one @defer block when an agent asks: same gate and owner check as the writes above.
+    const deferLoads = createDeferLoads({
+      config,
+      pages: () => componentPages.values(),
+      broadcast: (method, message) => {
+        const pageId = (message as { pageId?: unknown } | null)?.pageId;
+        void (my.rpc.broadcast as (options: OwnerBroadcast) => Promise<void>)({
+          method,
+          args: [message],
+          optional: true,
+          filter: owners.deliversTo(typeof pageId === 'string' ? pageId : undefined),
+        });
+      },
+      answersFor,
+    });
+    register({
+      name: 'defer-load-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: deferLoads.answer,
+    });
+    agent.registerTool(deferLoads.tool);
+
     // Nested levels of component values: the panel opens them, inspect-component reads them.
     const componentValues = createComponentValues({
       pages: () => componentPages.values(),
@@ -2345,6 +2471,44 @@ const pangular = defineDevframe({
           void my.rpc.broadcast({
             method: 'component-pick',
             args: [{ requestId, pageId }],
+            optional: true,
+          });
+        });
+      },
+    });
+
+    // A keyboard move of the running pick: the panel sends the key, the page
+    // answers with the component it shows now on the pick's result channel.
+    register({
+      name: 'request-component-pick-move',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (target: { pageId?: unknown; key?: unknown } | null) => {
+        const key = PICK_KEYS.find((k) => k === target?.key);
+        if (!key) return { moved: false, error: 'Unknown key.' };
+        const asked = typeof target?.pageId === 'string' ? target.pageId : undefined;
+        const pageId = asked ?? latestComponentPage(componentPages.values())?.pageId;
+        if (!pageId || !componentPages.has(pageId)) {
+          return { moved: false, error: 'No page is connected. Open the app in a browser first.' };
+        }
+        return new Promise<Record<string, unknown>>((resolve) => {
+          const requestId = `pick${++pickSeq}`;
+          const timer = setTimeout(() => {
+            pendingPicks.delete(requestId);
+            resolve({ moved: false, error: 'The page did not answer.' });
+          }, 5_000);
+          timer.unref?.();
+          pendingPicks.set(requestId, {
+            pageId,
+            settle: (result) => {
+              clearTimeout(timer);
+              pendingPicks.delete(requestId);
+              resolve(result);
+            },
+          });
+          void my.rpc.broadcast({
+            method: 'component-pick',
+            args: [{ requestId, pageId, move: key }],
             optional: true,
           });
         });
@@ -2649,6 +2813,12 @@ const pangular = defineDevframe({
         http: httpPages.values(),
         components: componentPages.values(),
       });
+    /** The address of the page a form is on, for the Playwright test export. */
+    function formPageUrl(state: FormsState, args: FieldArgs): string | undefined {
+      const forms = matchForms(state.forms, args.form, args.page);
+      const pageId = (forms[0]?.id ?? '').split('@')[1] ?? args.page;
+      return pageId ? livePageDetails().get(pageId)?.url : undefined;
+    }
     const withPageUrls = <T extends { pageId: string; reportedAt: number }>(pages: T[]) => {
       const details = livePageDetails();
       return pages.map((page) => {
@@ -3465,6 +3635,7 @@ const pangular = defineDevframe({
               clear: record === 'clear',
             }),
           acks: cdAcks,
+          angularOf: angularPages.get,
         });
         if ('refused' in answer) return answer;
         const next = answer.markdown;
@@ -3789,7 +3960,99 @@ const pangular = defineDevframe({
           if (args.perf) return { markdown: refusal('Pass either `perf` or `format: "repro"`.') };
           return { markdown: exportNavigationText(state, { page: args.page, id: args.id }) };
         }
-        return { markdown: explainNavigationText(state, args, Date.now(), limits.navigations) };
+        return {
+          markdown: explainNavigationText(
+            state,
+            args,
+            Date.now(),
+            limits.navigations,
+            routerHttpCalls,
+          ),
+        };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:diff-navigations',
+      title: 'Diff two navigations',
+      description:
+        'What changed between two recorded navigations: URL, outcome, query params, route params and data, the component in each outlet, guard and resolver verdicts and timing. `b` defaults to the newest finished navigation, `a` to the last earlier one to the same path.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          a: { type: 'integer', description: 'Id of the earlier navigation.' },
+          b: { type: 'integer', description: 'Id of the later navigation.' },
+        },
+      },
+      handler: async (args: { page?: string; a?: number; b?: number }) => {
+        const state = routerState.value() as RouterState;
+        if (!state.pages.length) return { markdown: noRouter };
+        return { markdown: diffNavigationsText(state, args) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:follow-navigations',
+      title: 'Follow navigations',
+      description: `New and changed navigations since a cursor, oldest first, to follow a login or redirect flow without polling. Without \`since\`, the latest 5 and a cursor; pass it back as \`since\`, with \`waitMs\` (up to ${MAX_WAIT_MS}) to wait for the next one.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          since: {
+            type: 'integer',
+            minimum: 0,
+            description: 'The cursor a previous call returned. Without it, the last 5 navigations.',
+          },
+          waitMs: {
+            type: 'integer',
+            minimum: 0,
+            maximum: MAX_WAIT_MS,
+            description:
+              'With `since`: how long to wait for a navigation when none came yet (default 0).',
+          },
+        },
+      },
+      handler: async (args: { page?: string; since?: number; waitMs?: number }) => {
+        const state = routerState.value() as RouterState;
+        if (args.page && !state.pages.some((p) => p.pageId === args.page)) {
+          return { markdown: noPage(args.page, state) };
+        }
+        if (typeof args.since !== 'number' || !Number.isFinite(args.since)) {
+          const all = navigationStream.read(0, args.page);
+          const read = { ...all, entries: all.entries.slice(-5) };
+          delete read.reset;
+          return { markdown: streamText(read, { waited: false }) };
+        }
+        const since = Math.floor(args.since);
+        const wait = typeof args.waitMs === 'number' && args.waitMs > 0 ? args.waitMs : 0;
+        const read = await navigationStream.wait(since, wait, args.page);
+        return { markdown: streamText(read, { since, waited: wait > 0 }) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:preview-navigation',
+      title: 'Preview a navigation',
+      description:
+        'What going to a URL would do, predicted from the live route config without navigating: redirects, the route chain and params, then in order the guards, lazy chunks, resolvers and components that run, with source files and the render mode.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          url: { type: 'string', description: 'A path such as /admin/users?tab=roles.' },
+        },
+        required: ['url'],
+      },
+      handler: async (args: { page?: string; url?: string }) => {
+        const state = routerState.value() as RouterState;
+        if (!state.pages.length) return { markdown: noRouter };
+        if (typeof args.url !== 'string' || !args.url) {
+          return { markdown: refusal('Pass `url`, such as /users/42.') };
+        }
+        const { sources, serverRoutes } = previewScans();
+        return { markdown: previewNavigationText(state, args, sources, serverRoutes) };
       },
     });
 
@@ -3859,7 +4122,12 @@ const pangular = defineDevframe({
       handler: async (args: { page?: string }) => {
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: lintRoutesText(state, args, undefined, { rules: config.lint.rules }) };
+        return {
+          markdown: lintRoutesText(state, args, undefined, {
+            rules: config.lint.rules,
+            httpFor: routerHttpCalls,
+          }),
+        };
       },
     });
 
@@ -4465,16 +4733,23 @@ const pangular = defineDevframe({
       id: 'pangular:export-form',
       title: 'Export a form',
       description:
-        'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200) and notes what was cut.',
+        'Export a form as a JSON snapshot, a test fixture (setValue / signal model plus the expected status), or a Playwright test replaying its recorded history. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200).',
       inputSchema: {
         type: 'object',
         properties: {
           form: formProperty,
-          format: { type: 'string', enum: ['snapshot', 'fixture'] },
+          format: { type: 'string', enum: ['snapshot', 'fixture', 'playwright'] },
           page: formPageProperty,
         },
       },
-      handler: withForms(exportFormText),
+      handler: withForms((state, args: FieldArgs & { format?: string }) =>
+        args.format === 'playwright'
+          ? playwrightTestText(state, { ...args, url: formPageUrl(state, args) })
+          : exportFormText(state, {
+              ...args,
+              format: args.format === 'fixture' ? 'fixture' : 'snapshot',
+            }),
+      ),
     });
 
     // `wait-for` with `condition: "form"`: polls the forms state until the condition holds.
@@ -4549,7 +4824,7 @@ const pangular = defineDevframe({
       id: 'pangular:run-form-action',
       title: 'Run a form action',
       description:
-        'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument. reset, submit and restore need `confirm: true`.',
+        'Act on a live form (dev only): set-value, mark-touched/untouched/dirty/pristine, touch-all, revalidate, reset, enable, disable, submit, focus, focus-first-invalid, store-as-global, snapshot, restore, instrument, try-webmcp (runs its WebMCP tool). reset, submit, restore, try-webmcp need confirm.',
       inputSchema: {
         type: 'object',
         required: ['action', 'form'],
@@ -4574,11 +4849,14 @@ const pangular = defineDevframe({
               'snapshot',
               'restore',
               'instrument',
+              'try-webmcp',
             ],
           },
           form: { type: 'string', description: 'Full form id, e.g. Checkout.form@ab12.' },
           path: pathProperty,
-          value: { description: 'New value for set-value.' },
+          value: {
+            description: 'New value for set-value, or the input object for try-webmcp.',
+          },
           mode: { type: 'string', enum: ['code', 'user'] },
           confirm: { type: 'boolean' },
           force: { type: 'boolean' },

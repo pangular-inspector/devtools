@@ -191,6 +191,8 @@ describe('change detection views through the page overlay', () => {
   const had = Object.getOwnPropertyDescriptor(console, 'timeStamp');
   beforeEach(() => {
     Object.defineProperty(console, 'timeStamp', { value: vi.fn(), configurable: true });
+    // A recording a test started would otherwise resume in the next one (same pageId).
+    sessionStorage.clear();
   });
   afterEach(() => {
     vi.restoreAllMocks();

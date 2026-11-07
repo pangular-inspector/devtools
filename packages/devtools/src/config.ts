@@ -441,6 +441,7 @@ export function enabledPanelTabs(config: ResolvedPangularConfig): (typeof PANEL_
 export const PANEL_LINK_ITEMS: Partial<Record<PanelTab, string>> = {
   components: 'a component instance, by its id in the component tree',
   injectors: "a component's element injector, by the component's id",
+  signals: "a component's signal graph, by the component's id",
   forms: 'a form, by its id',
 };
 
@@ -963,6 +964,7 @@ export const FORM_WRITE_ACTIONS: readonly string[] = [
   'disable',
   'submit',
   'restore',
+  'try-webmcp',
 ];
 
 /** Router actions that start, stop, repeat or probe a navigation. */
@@ -1038,6 +1040,13 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'inspect-component': { kind: 'tool', inspectors: ['components'], page: true },
   'list-components': { kind: 'tool', inspectors: ['components'], page: true },
   'defer-blocks': { kind: 'tool', inspectors: ['components'], page: true },
+  'load-defer-block': {
+    kind: 'tool',
+    inspectors: ['components'],
+    safety: 'action',
+    actions: ['components'],
+    page: true,
+  },
   'for-blocks': { kind: 'tool', inspectors: ['components'], page: true },
   hydration: { kind: 'tool', inspectors: ['components'], page: true },
   'change-detection': { kind: 'tool', inspectors: ['components'], page: true },
@@ -1154,6 +1163,9 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   router: { kind: 'resource', inspectors: ['router'], page: true },
   'inspect-route': { kind: 'tool', inspectors: ['router'], page: true },
   'explain-navigation': { kind: 'tool', inspectors: ['router'], page: true },
+  'diff-navigations': { kind: 'tool', inspectors: ['router'], page: true },
+  'follow-navigations': { kind: 'tool', inspectors: ['router'], page: true },
+  'preview-navigation': { kind: 'tool', inspectors: ['router'], page: true },
   'list-routes': { kind: 'tool', inspectors: ['router'], page: true },
   'lint-routes': { kind: 'tool', inspectors: ['router'], page: true },
   'router-config': { kind: 'tool', inspectors: ['router'], page: true },
@@ -1409,11 +1421,13 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'select-component': 'components',
   'request-component-pick': 'components',
   'cancel-component-pick': 'components',
+  'request-component-pick-move': 'components',
   'component-pick-result': 'components',
   'request-page-highlight': 'components',
   'component-screenshot-result': 'components',
   'request-component-edit': 'components',
   'component-edit-result': 'components',
+  'defer-load-result': 'components',
   'request-hydration-overlay': 'components',
   'request-component-value': 'components',
   'component-value-result': 'components',
@@ -1468,6 +1482,9 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'router-lint': 'router',
   'router-match': 'router',
   'router-export': 'router',
+  'router-diff': 'router',
+  'router-http': 'router',
+  'router-preview': 'router',
   'forget-router-page': 'router',
   'clear-router-navigations': 'router',
   'get-pipes': 'pipes',
@@ -2320,6 +2337,22 @@ export interface DeferNoteBlock {
   triggers: string[];
   /** Page clock, ms since epoch, when the state or hydration state last changed. */
   since: number;
+  /** Page clock, ms since epoch, when the overlay saw the block hydrate. */
+  hydratedAt?: number;
+}
+
+/**
+ * The hydration state of a block as the panel and the defer-blocks tool word
+ * it. A block that is `hydrated` without a `hydratedAt` hydrated before the
+ * overlay attached, so no one saw it happen.
+ */
+export function deferHydrationLabel(
+  block: Pick<DeferNoteBlock, 'hydration' | 'hydratedAt'>,
+): string {
+  if (block.hydration === 'hydrated' && block.hydratedAt === undefined) {
+    return 'hydrated before inspection';
+  }
+  return block.hydration;
 }
 
 export interface DeferNote {
