@@ -98,7 +98,7 @@ Each entry point exports only its documented API. The values below were internal
 | `/http`                        | `MAX_CALLS`, `MAX_DELAY_MS`, `MAX_RULES`, `RULES_STORAGE_KEY`, `claimTransferEntry`, `clientRules`, `decodePayload`, `httpRegistry`, `matchRule`, `pangularHttpInterceptor`, `parseBody`, `resetTransferEntries`, `ruleHasEffect`, `ruleStatus`, `sanitizeCalls`, `sanitizeRules`, `storeRules`, `transferCacheEligible`. Use `providePangularHttp()` or `withPangular()`                     |
 | `/popup`                       | `registerNgrxSignals`. Import it from `/overlay` or `/overlay-manual`                                                                                                                                                                                                                                                                                                                         |
 
-What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PANGULAR_INSPECTORS`, `PANGULAR_LIMITS` and `resolvePangularConfig`. `.` and `/devframe` export the same plus `createPangular`, `initDevframe` and the devframe definition as the default export. `/hub` exports `PANGULAR_HUB_BASE`, `hubEnabled` and `initPangularHub`. `/cli` exports `createPangularCli`, and `/http` exports `providePangularHttp` and `withPangular`. The overlay, Angular Native and NativeScript entries keep their exports.
+What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PANGULAR_INSPECTORS`, `PANGULAR_LIMITS` and `resolvePangularConfig`. `.` and `/devframe` export the same plus `createPangular`, `initDevframe` and the devframe definition as the default export. `/hub` exports `PANGULAR_HUB_BASE`, `hubEnabled` and `initPangularHub`. `/cli` exports `createPangularCli`, `buildReport` and `DEFAULT_REPORT_DIR`, and `/http` exports `providePangularHttp` and `withPangular`. The overlay, Angular Native and NativeScript entries keep their exports.
 
 ### Security
 
@@ -175,6 +175,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `pangular skills` lists or installs the bundled agent skills.
 - `pangular dev` takes `--proxy-origin`, `--allowed-origin` and `--auth-token`.
 - `pangular build` refuses an `--outDir` that would delete files that are not a previous report, unless `--force` is passed.
+- `buildReport()` from `@pangular-inspector/devtools/cli` writes the static report from a script, with the same options and output folder checks as `pangular build`.
 - The source scan reads Nx projects.
 
 ### Performance
