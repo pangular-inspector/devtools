@@ -7,6 +7,7 @@ All notable changes to `@pangular-inspector/devtools` are listed here. The forma
 ### Features
 
 - `limits.cdSlowMs` (default 16 ms) sets when a change detection cycle counts as slow. The recording flags cycles over it, the `change-detection` agent tool counts and marks them, and the panel chart draws its budget line there instead of at a fixed 16.6 ms.
+- The server keeps at most 256 KB of JSON for each NgRx store's state. Past it, the largest slices show `[too large: N KB]`, so one huge slice can't fill the server's memory or the panel.
 
 ## 1.0.0
 
