@@ -64,7 +64,7 @@ The tree shows up to 2000 component instances, and walks up to 256 levels of DOM
 
 ### Detail header
 
-The header of the selected instance shows the class name, the host tag, and the source file and line. In a development build, the file and line come from the debug info Angular's compiler attaches to the component, so they point at the exact class. Without it, they come from the source scan, matched by class name. They are missing when neither has them. With a live devtools server, the file and line are a button that opens the file in your editor. See [Open a file in your editor](#open-a-file-in-your-editor).
+The header of the selected instance shows the class name, the host tag, and the source file and line. In a development build, the file and line come from the debug info Angular's compiler attaches to the component, so they point at the exact class. Without it, they come from the source scan, matched by class name. When some of those classes have the host tag as their selector, only those are kept; otherwise every class with the name is kept. One match left is marked **Likely**. Several are listed under **Not certain**, and **Open source** then opens the compiled class. The file and line are missing when neither source has them. With a live devtools server, the file and line are a button that opens the file in your editor. See [Open a file in your editor](#open-a-file-in-your-editor).
 
 In the [Chrome extension](../getting-started/chrome-extension.md), the header also has two buttons:
 
@@ -531,7 +531,7 @@ Instance ids change on every page load. Don't store them between sessions.
     No page is connected, or the connected page is a production build. Open the app in a development build with the overlay loaded.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why are the file and line missing?">
-    Production builds drop Angular's debug info. The detail header then matches the class name against the source scan, and classes outside the scanned folders, or from libraries, have no match.
+    Production builds drop Angular's debug info. The detail header then matches the class name against the source scan, keeping only classes whose selector is the host tag when there are any. One match is marked <strong>Likely</strong>; several are listed under <strong>Not certain</strong>. Classes outside the scanned folders, or from libraries, have no match, so no file shows.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Why does a component show +2?">
     Two directives sit on its host element. Select it to see one block per directive.

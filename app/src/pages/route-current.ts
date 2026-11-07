@@ -19,9 +19,18 @@ interface RouteRow {
   nesting?: string;
 }
 
+/** The outlet and the component it shows, as a screen reader names a parent outlet. */
+function outletName(outlet: OutletInfo): string {
+  return outlet.component
+    ? `${outlet.component} in the ${outlet.outlet} outlet`
+    : `the ${outlet.outlet} outlet`;
+}
+
 interface OutletRow {
   outlet: OutletInfo;
   depth: number;
+  /** What a screen reader hears for the nesting the indent shows, on nested outlets. */
+  nesting?: string;
 }
 
 @Component({
@@ -173,6 +182,9 @@ interface OutletRow {
           @for (row of outletRows(); track $index) {
             <li [style.padding-left.px]="10 + row.depth * 16">
               <span class="tag">{{ row.outlet.outlet }}</span>
+              @if (row.nesting) {
+                <span class="visually-hidden">{{ row.nesting }}, </span>
+              }
               @if (row.outlet.activated) {
                 <code>{{ row.outlet.component ?? '?' }}</code> for
                 <code>{{ row.outlet.route ?? '?' }}</code>
@@ -378,10 +390,11 @@ export class RouteCurrent {
 
   readonly outletRows = computed(() => {
     const rows: OutletRow[] = [];
-    const visit = (outlets: OutletInfo[], depth: number) => {
+    const visit = (outlets: OutletInfo[], depth: number, parent?: OutletInfo) => {
       for (const outlet of outlets) {
-        rows.push({ outlet, depth });
-        if (outlet.children) visit(outlet.children, depth + 1);
+        const nesting = parent && `level ${depth + 1}, inside ${outletName(parent)}`;
+        rows.push({ outlet, depth, nesting });
+        if (outlet.children) visit(outlet.children, depth + 1, outlet);
       }
     };
     visit(this.page().outlets ?? [], 0);

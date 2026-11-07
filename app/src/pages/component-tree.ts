@@ -178,6 +178,13 @@ function bare(name: string): string {
   return name.replace(/^_(?=[A-Z])/, '');
 }
 
+/** True when two paths name the same file, one maybe longer or with `./` or backslashes. */
+function sameSourceFile(a: string, b: string): boolean {
+  const norm = (path: string) => path.replace(/\\/g, '/').replace(/^\.\//, '');
+  const [x, y] = [norm(a), norm(b)];
+  return x === y || x.endsWith('/' + y) || y.endsWith('/' + x);
+}
+
 /** The ids above `id`, nearest first; stops at a repeated id so a bad map cannot loop. */
 export function ancestors(parents: ReadonlyMap<string, string>, id: string): string[] {
   const out: string[] = [];
@@ -473,10 +480,31 @@ function storedDirectiveHosts(): boolean {
               <span class="badge">component</span>
               <h2 id="ct-detail-title" class="mono">{{ sel.name }}</h2>
               <span class="mono muted">&lt;{{ sel.tag }}&gt;</span>
-              @if (whereOf(sel); as where) {
+              @if (detail()?.source; as where) {
                 <p class="where mono">
                   <app-source-link [file]="where.file" [line]="where.line" />
                 </p>
+              } @else {
+                @let guesses = sourceCandidates(sel);
+                @if (guesses.length === 1) {
+                  <p class="where mono guess" [title]="guessTitle">
+                    <span class="likely">Likely</span
+                    ><span class="sr-only">, matched by class name: </span
+                    ><app-source-link [file]="guesses[0].file" [line]="guesses[0].line" />
+                  </p>
+                } @else if (guesses.length > 1) {
+                  <div class="where guess" [title]="guessTitle">
+                    <p class="guess-text">
+                      <span class="likely">Not certain</span>
+                      {{ guesses.length }} source files define {{ bareName(sel.name) }}:
+                    </p>
+                    <ul class="guess-list mono">
+                      @for (guess of guesses; track sourceKey(guess)) {
+                        <li><app-source-link [file]="guess.file" [line]="guess.line" /></li>
+                      }
+                    </ul>
+                  </div>
+                }
               }
               @if (devtoolsActions()) {
                 <div class="actions" role="group" aria-label="Chrome DevTools">
@@ -1397,6 +1425,28 @@ function storedDirectiveHosts(): boolean {
       font-size: 12px;
       overflow-wrap: anywhere;
     }
+    .likely {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 0 6px;
+      border: 1px solid;
+      border-radius: 99px;
+      @include m.tint(warn);
+      font-family: var(--font-sans);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      line-height: 16px;
+      text-transform: uppercase;
+      vertical-align: 1px;
+    }
+    .guess-text {
+      margin: 0;
+    }
+    .guess-list {
+      margin: 4px 0 0;
+      padding-left: 18px;
+    }
     .badge {
       padding: 2px 8px;
       border-radius: 99px;
@@ -2210,8 +2260,15 @@ export class ComponentTree {
     return this.formOwners().filter((form) => form.file === file);
   }
 
+  /**
+   * The exact location the page gives, else the source scan's guess when only one class may be
+   * it. Several candidates give null, so Open source falls back to the class itself.
+   */
   whereOf(node: LiveNode): SourceLocation | null {
-    return this.detail()?.source ?? this.sourceFor(node);
+    const exact = this.detail()?.source;
+    if (exact) return exact;
+    const candidates = this.sourceCandidates(node);
+    return candidates.length === 1 ? candidates[0] : null;
   }
 
   async revealInElements(node: LiveNode) {
@@ -2248,11 +2305,32 @@ export class ComponentTree {
     );
   }
 
-  sourceFor(node: LiveNode): SourceComponent | null {
+  /** Why a location from the source scan is marked as a guess. */
+  protected readonly guessTitle =
+    'The page gave no exact location. This comes from the source scan, matched by class name.';
+
+  /**
+   * The source scan components that may define this instance, for when the page gives no exact
+   * location: the classes with its name, narrowed to those whose selector is its host tag when
+   * any is. More than one means the scan cannot tell which file it is.
+   */
+  sourceCandidates(node: LiveNode): SourceComponent[] {
     const matches = (this.sourceByClass().get(bare(node.name)) ?? []).filter(
       (c) => c.kind === 'component',
     );
-    return matches.find((c) => c.selector === node.tag) ?? matches[0] ?? null;
+    const bySelector = matches.filter((c) => c.selector === node.tag);
+    return bySelector.length ? bySelector : matches;
+  }
+
+  /**
+   * The source scan entry of this instance: the one in the file the page names, or the only
+   * candidate. Null when none matches or several may be it.
+   */
+  sourceFor(node: LiveNode): SourceComponent | null {
+    const candidates = this.sourceCandidates(node);
+    const exact = this.detail()?.source;
+    if (exact) return candidates.find((c) => sameSourceFile(c.file, exact.file)) ?? null;
+    return candidates.length === 1 ? candidates[0] : null;
   }
 
   sourceKey(comp: SourceComponent) {

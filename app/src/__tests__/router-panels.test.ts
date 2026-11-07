@@ -753,6 +753,42 @@ describe('RouteCurrent', () => {
     expect(hidden).toEqual(['', ', level 2, child of (root)', ', level 3, child of /users']);
   });
 
+  it('tells screen readers how each outlet is nested', async () => {
+    const fixture = mount(
+      RouteCurrent,
+      page({
+        outlets: [
+          {
+            outlet: 'primary',
+            activated: true,
+            component: 'Shell',
+            route: '/shell',
+            children: [
+              {
+                outlet: 'side',
+                activated: true,
+                component: 'Filters',
+                route: '/side',
+                children: [{ outlet: 'primary', activated: false }],
+              },
+            ],
+          },
+        ],
+      }),
+      offline,
+    );
+    await settle(fixture);
+    const rows = Array.from(el(fixture).querySelectorAll('.outlets li'));
+    const hidden = rows.map(
+      (row) => row.querySelector(':scope > .visually-hidden')?.textContent?.trim() ?? '',
+    );
+    expect(hidden).toEqual([
+      '',
+      'level 2, inside Shell in the primary outlet,',
+      'level 3, inside Filters in the side outlet,',
+    ]);
+  });
+
   it('reports an unreachable page on Abort instead of #undefined', async () => {
     const fixture = mount(
       RouteCurrent,
