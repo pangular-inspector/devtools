@@ -739,7 +739,7 @@ Without `page`, the tool uses the one page that reports NgRx state. With several
 
 ### Change the Store DevTools history <ngmd-badge variant="destructive">Destructive</ngmd-badge>
 
-`ngrx-store-devtools` runs an operation on the `@ngrx/store` Store DevTools history of the running app, in development only, like the **Store DevTools history** controls on the [NgRx Store](../inspectors/ngrx-store.md#store-devtools-history) page. It needs `provideStoreDevtools()`. Every operation but `pause` adds a `Store DevTools: …` entry to the log. Reads: page.
+`ngrx-store-devtools` runs an operation on the `@ngrx/store` Store DevTools history of the running app, in development only, like the **Store DevTools history** controls on the [NgRx Store](../inspectors/ngrx-store.md#store-devtools-history) page. It needs `provideStoreDevtools()`. Every operation but `pause` adds an entry to the log: `jump` with `seq` adds `Restore #N`, as `ngrx-restore` does, and the others add `Store DevTools: …`. Reads: page.
 
 | `op`     | What it does                                                                                                                          | Other arguments                                                 |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
