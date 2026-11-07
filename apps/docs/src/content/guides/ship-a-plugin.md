@@ -168,8 +168,20 @@ The tools register as `pangular:plugin:feature-flags:flags` and `pangular:plugin
 
 Your library lists `@pangular-inspector/devtools` as an optional peer dependency, so an app that wants the tab installs it as its own development dependency first:
 
-```bash
+```bash group="install" name="pnpm" image="https://cdn.simpleicons.org/pnpm/F69220" active
+pnpm add -D @pangular-inspector/devtools
+```
+
+```bash group="install" name="npm" image="https://cdn.simpleicons.org/npm/CB3837"
 npm install -D @pangular-inspector/devtools
+```
+
+```bash group="install" name="yarn" image="https://cdn.simpleicons.org/yarn/2C8EBB"
+yarn add -D @pangular-inspector/devtools
+```
+
+```bash group="install" name="bun" image="https://bun.sh/logo.svg"
+bun add -D @pangular-inspector/devtools
 ```
 
 Then tell the apps that use your library to make two changes.
@@ -223,7 +235,7 @@ export function provideFeatureFlagsPangularPlugin(): EnvironmentProviders {
 }
 ```
 
-`FeatureFlags` is the demo's service that holds the store; the real one also turns store changes into a signal for templates. Add `provideFeatureFlagsPangularPlugin()` to the app's providers. Then pass the server plugin to the Vite plugin:
+`FeatureFlags` is the demo's service that holds the store; the real one also turns store changes into a signal for templates. `@Service()` needs Angular 22 or later. On an older version, declare the service with `@Injectable({providedIn: 'root'})`. Add `provideFeatureFlagsPangularPlugin()` to the app's providers. Then pass the server plugin to the Vite plugin:
 
 ```ts {4,8}
 // examples/analog/vite.config.ts
