@@ -1203,6 +1203,36 @@ describe('FormsWebMcp Try this tool', () => {
     expect(text(fixture)).toContain('Form submitted successfully');
   });
 
+  it('runs a confirmed try once and keeps the button off until it answers', async () => {
+    const calls: Record<string, unknown>[] = [];
+    let answer!: (value: unknown) => void;
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', tool);
+    fixture.componentRef.setInput('formId', 'signup@p1');
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_name, arg) => {
+        calls.push(arg);
+        return new Promise((resolve) => (answer = resolve));
+      }),
+    );
+    await settle(fixture);
+    button(fixture, 'Try this tool').click();
+    await settle(fixture);
+    button(fixture, 'Confirm try').click();
+    await settle(fixture);
+    expect(calls).toHaveLength(1);
+    expect(button(fixture, 'Try this tool').disabled).toBe(true);
+    // A second try while the first runs, armed again, sends nothing.
+    fixture.componentInstance.armed.set(true);
+    await fixture.componentInstance.tryTool();
+    expect(calls).toHaveLength(1);
+    answer({ ok: true, message: 'The tool answered: Form submitted successfully' });
+    await settle(fixture);
+    expect(text(fixture)).toContain('Form submitted successfully');
+    expect(button(fixture, 'Confirm try').disabled).toBe(false);
+  });
+
   it('refuses input that is not a JSON object', async () => {
     const fixture = TestBed.createComponent(FormsWebMcp);
     fixture.componentRef.setInput('tool', tool);

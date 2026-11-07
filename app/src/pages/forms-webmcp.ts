@@ -171,7 +171,7 @@ export function sampleInput(schema: unknown, depth = 0): unknown {
                 type="button"
                 class="small primary"
                 [class.armed]="armed()"
-                [disabled]="!canWrite()"
+                [disabled]="!canWrite() || running()"
                 [attr.aria-describedby]="canWrite() ? null : uid + '-try-off'"
                 (click)="tryTool()"
               >
@@ -356,12 +356,14 @@ export class FormsWebMcp {
       previous && previous.source.target === source.target ? previous.value : source.sample,
   });
   readonly armed = linkedSignal({ source: this.target, computation: () => false });
+  /** A confirmed try is on its way, so a second click can't submit the form twice. */
+  readonly running = linkedSignal({ source: this.target, computation: () => false });
   readonly message = linkedSignal({ source: this.target, computation: () => '' });
 
   /** First press arms the button, the second sends the input to the page (try-webmcp). */
   async tryTool() {
     const formId = this.formId();
-    if (!formId) return;
+    if (!formId || this.running()) return;
     let value: unknown;
     try {
       value = JSON.parse(this.draft());
@@ -380,14 +382,19 @@ export class FormsWebMcp {
     }
     this.armed.set(false);
     const target = this.target();
-    const result = await formAction(this.rpc(), {
-      action: 'try-webmcp',
-      formId,
-      value,
-      confirm: true,
-    });
-    if (this.target() !== target) return;
-    this.message.set(actionMessage(result));
+    this.running.set(true);
+    try {
+      const result = await formAction(this.rpc(), {
+        action: 'try-webmcp',
+        formId,
+        value,
+        confirm: true,
+      });
+      if (this.target() !== target) return;
+      this.message.set(actionMessage(result));
+    } finally {
+      if (this.target() === target) this.running.set(false);
+    }
   }
 
   readonly statusText = computed(() => {
