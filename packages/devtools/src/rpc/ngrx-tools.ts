@@ -16,6 +16,7 @@ import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 import { UNTRUSTED, untrusted } from './forms-tools.ts';
 import { refusal } from './refusal.ts';
 import { rankPages } from './default-page.ts';
+import { capNgrxFields, capNgrxState } from './ngrx-size-cap.ts';
 
 export const NGRX_PAGE_EXPIRES_MS = PAGE_TTL_MS;
 const MAX_LOG = 200;
@@ -167,11 +168,19 @@ export function mergeNgrxReport(
     session: report.session,
     url: redactUrl(String(report.url ?? '').slice(0, 2000)),
     title: redactMessage(String(report.title ?? '').slice(0, 2000)).slice(0, 200),
+    // Each state is capped, so one huge slice can't fill the server's memory or the panel.
     stores: validItems<NgrxSignalStoreInfo>(report.stores, StoreSchema).map((store) => ({
       ...store,
+      state: capNgrxFields(store.state),
+      computed: capNgrxFields(store.computed),
       ...nameStore(store, declarations),
     })),
-    classic: v.is(ClassicSchema, report.classic) ? (report.classic as NgrxClassicStoreInfo) : null,
+    classic: v.is(ClassicSchema, report.classic)
+      ? {
+          ...(report.classic as NgrxClassicStoreInfo),
+          state: capNgrxState((report.classic as NgrxClassicStoreInfo).state),
+        }
+      : null,
     log,
     dropped: Math.max(0, (log[0]?.seq ?? 1) - 1),
     reportedAt: now,

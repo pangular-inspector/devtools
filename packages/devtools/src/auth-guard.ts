@@ -69,7 +69,7 @@ export class CodeGuard {
   private readonly options: Required<Omit<CodeGuardOptions, 'now' | 'warn'>>;
   private readonly now: () => number;
   private readonly warn: (message: string) => void;
-  private readonly clients = new WeakMap<object, ClientState>();
+  private clients = new WeakMap<object, ClientState>();
   private recent: number[] = [];
   private failures = 0;
   private warnedWindowAt = -Infinity;
@@ -126,6 +126,14 @@ export class CodeGuard {
     this.clients.delete(client);
     this.failures = 0;
     this.recent = [];
+  }
+
+  /** Forgets every wrong code and unlocks the exchange: the user rotated the tokens and the code. */
+  reset(): void {
+    this.clients = new WeakMap();
+    this.failures = 0;
+    this.recent = [];
+    this.locked = false;
   }
 }
 
@@ -206,6 +214,24 @@ export function guardedExchange(
   };
 }
 
+const guards = new WeakMap<object, CodeGuard>();
+
+/**
+ * Whether the context's code guard locked the exchange after too many wrong
+ * codes (`CodeGuard.locked`). False when no guard was registered.
+ */
+export function codeGuardLocked(ctx: unknown): boolean {
+  return guards.get(ctx as object)?.locked ?? false;
+}
+
+/**
+ * Unlocks the context's code guard. Only `pangular token --rotate` calls it,
+ * which the user runs on this machine, so a guesser can't unlock it.
+ */
+export function resetCodeGuard(ctx: unknown): void {
+  guards.get(ctx as object)?.reset();
+}
+
 /**
  * Registers the guarded code exchange on the devframe's RPC host, before
  * devframe registers its own. Returns false when an exchange was registered
@@ -219,12 +245,9 @@ export function registerCodeGuard(
   if (context.mode === 'build') return true;
   if (context.rpc.definitions.has(EXCHANGE)) return false;
   const { onTrusted, ...guardOptions } = options;
-  const handler = guardedExchange(
-    context,
-    new CodeGuard(guardOptions),
-    defaultExchange(context),
-    onTrusted,
-  );
+  const guard = new CodeGuard(guardOptions);
+  guards.set(context, guard);
+  const handler = guardedExchange(context, guard, defaultExchange(context), onTrusted);
   context.rpc.register({ name: EXCHANGE, type: 'action', jsonSerializable: true, handler });
   return true;
 }

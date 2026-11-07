@@ -13,13 +13,14 @@ The package installs a `pangular` binary. Run it from the root of your Angular w
 
 ## Commands
 
-| Command  | What it does                                                       |
-| -------- | ------------------------------------------------------------------ |
-| `dev`    | Starts a local server with the devtools UI.                        |
-| `build`  | Writes a static copy of the devtools with the scan.                |
-| `mcp`    | Starts an MCP server over stdio for coding agents.                 |
-| `skills` | Lists or installs the bundled [agent skills](../agents/skills.md). |
-| `lint`   | Runs the source lints and prints the findings as JSON or SARIF.    |
+| Command  | What it does                                                                |
+| -------- | --------------------------------------------------------------------------- |
+| `dev`    | Starts a local server with the devtools UI.                                 |
+| `build`  | Writes a static copy of the devtools with the scan.                         |
+| `mcp`    | Starts an MCP server over stdio for coding agents.                          |
+| `skills` | Lists or installs the bundled [agent skills](../agents/skills.md).          |
+| `lint`   | Runs the source lints and prints the findings as JSON or SARIF.             |
+| `token`  | Shows the trusted tokens of the project, or drops them all with `--rotate`. |
 
 `pangular --version` prints the package version. An unknown command or flag prints one error line and exits with code 1. `pangular --help` lists the commands and flags.
 
@@ -101,12 +102,13 @@ The default command starts a local server with the devtools UI. `dev` is optiona
 npx @pangular-inspector/devtools dev --port 9999 --open
 ```
 
-When the server is ready, it prints the package version, the panel URL, the panel URL for [Angular Native](./angular-native.md) apps and the MCP endpoint:
+When the server is ready, it prints the package version, the panel URL, the panel URL for [Angular Native](./angular-native.md) apps, the [NativeScript](./nativescript.md) setup view and the MCP endpoint:
 
 ```text
   pangular v<version>
   Panel: http://localhost:9999/
   Angular Native apps: http://localhost:9999/?view=angular-native
+  NativeScript setup: http://localhost:9999/?view=nativescript
   MCP:   http://localhost:9999/__mcp
 ```
 
@@ -218,6 +220,26 @@ pangular skills install --agent agents --dry-run
 ```
 
 `--agent` takes `claude`, `agents` or `github`. See [Install them](../agents/skills.md#install-them) for every flag.
+
+## Trusted tokens
+
+A browser that enters the one-time code gets a session token, which the server trusts for 7 days. `pangular token` prints how many tokens the project has and when the first one expires. It never prints a token.
+
+`pangular token --rotate` drops every trusted token of the project and prints a new one-time code:
+
+```bash
+pangular token --rotate
+```
+
+```text
+Dropped 2 trusted token(s) for this project.
+New one-time code: 482913 (expires in 5 min)
+Enter it in the panel to connect again.
+```
+
+Run it in the project folder, or pass `--root`. It works with every server that runs the project: the standalone CLI, the Vite plugin and the Express hub. The running server drops the tokens it holds, stops trusting the panels and pages that used them, and makes the new code, which also ends a lock after too many wrong codes. Each panel then asks for the code again. If no server runs, the command still drops the tokens and says so. The server prints a new code when it starts.
+
+The command and the server pass the request and the code through two files in the project's private token folder (`~/.pangular-inspector/auth/<project>/`, readable by you only). The command deletes the file with the code once it printed it. See [Security](../security.md) for how the tokens are stored.
 
 ## Lint export
 

@@ -98,7 +98,7 @@ A code lasts 5 minutes. If you type the right code after it expires, the server 
 
 #### Trusted browsers
 
-A browser that exchanges the code gets a session token, so it doesn't need the code again after a reload. The server keeps those tokens in `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project (named after a hash of its path), so a token from one project doesn't open another project's server. The folder is readable by you only (mode `0700`), and the file too (`0600`). A token expires 7 days after the code was exchanged. At that moment the server drops it, and a page or panel still connected with it is no longer trusted. At startup the server drops entries in the file that aren't token records, and it only trusts a token that has its own entry, so a name such as `constructor` or `toString` is never a token. To sign out every browser, delete the project's folder, or all of `~/.pangular-inspector/auth`, and restart the server.
+A browser that exchanges the code gets a session token, so it doesn't need the code again after a reload. The server keeps those tokens in `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project (named after a hash of its path), so a token from one project doesn't open another project's server. The folder is readable by you only (mode `0700`), and the file too (`0600`). A token expires 7 days after the code was exchanged. At that moment the server drops it, and a page or panel still connected with it is no longer trusted. At startup the server drops entries in the file that aren't token records, and it only trusts a token that has its own entry, so a name such as `constructor` or `toString` is never a token. To sign out every browser, run [`pangular token --rotate`](./getting-started/cli.md#trusted-tokens) in the project folder: the running server drops every token and the command prints a new one-time code. Deleting the project's folder, or all of `~/.pangular-inspector/auth`, and restarting the server does the same.
 
 Version 0.0.7 and earlier kept the tokens in `~/.devframes/devframe/auth.json` (the Express hub and the Vite plugin) or `~/.pangular/devframe/auth.json` (the CLI), readable by other users and without expiry. Newer versions don't read those files. Delete them if no other devframe tool uses them.
 
@@ -222,6 +222,21 @@ A page reconnects with the same page id after a reload. To take its page back, t
 | The old connection sent nothing for 30 s | On its next report. A tab in the background stays owned while it says it is still there. |
 
 Agent tools and the panel don't report pages, so these rules don't apply to them. [`ngrx-dispatch`](./agents/tools.md#dispatch-an-action) without `page` is refused while more than one page reports NgRx state. The answer lists those pages, so you can call it again with one. Other tools that act on a page pick one when `page` is left out. `navigate`, for example, acts on the first page that reports a router. Pass `page` when more than one tab is open.
+
+### Check the security status
+
+The **Security** block on the [Dashboard](./inspectors/dashboard.md#security-block) shows how the running server lets clients in. The panel reads it with the `security-status` RPC, which answers trusted clients only: a panel or page that exchanged the one-time code, sent a trusted token or a pairing token, or any client while auth is off.
+
+| Row             | What it says                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| One-time code   | On, with when the current code expires; off; or locked after too many wrong codes.                                     |
+| Trusted clients | How many session tokens the server trusts, and when the first and the last of them expire.                             |
+| Pairing tokens  | How many [pairing tokens](#pairing-tokens) the server accepts. Only shown when it accepts any.                         |
+| Reach           | This machine only, or other machines too (`allowLan`, `--host` with a network address, or no origin check).            |
+| Allowed origins | The origins allowed beyond this machine and the Chrome extension, at most 20, or **Any** when the origin check is off. |
+| Allowed hosts   | The `Host` names allowed beyond loopback, from Vite's `server.allowedHosts`. Only shown when there are any.            |
+
+The answer never holds a token, a pairing token or the one-time code. It holds counts, times and the origins and hosts from your own config, masked like other text. Agent tools can't read it. A static report built with `pangular build` has no server, so its Dashboard shows no **Security** block.
 
 ## What is redacted
 
