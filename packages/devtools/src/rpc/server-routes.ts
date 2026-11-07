@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { relative } from 'node:path';
 import {
   matchDelimiter,
   maskStrings,
@@ -7,6 +6,7 @@ import {
   sourceRoots,
   stripComments,
   walkFiles,
+  relativeFile,
 } from './source-scan.ts';
 
 export interface ServerRouteEntry {
@@ -75,7 +75,7 @@ export function scanServerRoutes(cwd: string): ServerRouteEntry[] {
   }
   return files.flatMap((file) => {
     try {
-      return parseServerRoutes(readFileSync(file, 'utf-8'), relative(cwd, file));
+      return parseServerRoutes(readFileSync(file, 'utf-8'), relativeFile(cwd, file));
     } catch {
       return [];
     }

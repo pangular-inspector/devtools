@@ -15,6 +15,7 @@ import {
   sourceRoots,
   startsRegex,
   stripComments,
+  toPosixPath,
 } from '../source-scan.ts';
 
 function workspace(files: Record<string, string>, workspaceJson?: unknown) {
@@ -374,5 +375,12 @@ describe('Nx workspaces', () => {
     } finally {
       warn.mockRestore();
     }
+  });
+});
+
+describe('toPosixPath', () => {
+  it('reports a Windows relative path with forward slashes', () => {
+    expect(toPosixPath('src\\app\\app.ts', '\\')).toBe('src/app/app.ts');
+    expect(toPosixPath('src/app/app.ts', '/')).toBe('src/app/app.ts');
   });
 });
