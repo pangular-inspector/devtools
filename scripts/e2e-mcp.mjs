@@ -753,6 +753,7 @@ const READ_PLAN = [
   ['list-http-calls', '/examples/http', () => ({ failed: true })],
   ['list-http-calls', '/examples/http', () => ({ view: 'waterfall', headers: true })],
   ['list-http-rules', '/examples/http', () => ({})],
+  ['lint-http', '/examples/http', () => ({})],
   ['inspect-transfer-state', '/examples/http', () => ({})],
   ['list-ssr-overrides', '/examples/http', () => ({})],
 
