@@ -1,4 +1,5 @@
 import { redactCredentials } from './credential-redact.ts';
+import { redactHighEntropy } from './entropy-redact.ts';
 import { REDACTED, isRedactedKey, redactJwt, wordsOf } from './forms-privacy.ts';
 
 /**
@@ -297,6 +298,8 @@ export function redactText(
       out = out.split(form).join(REDACTED);
     }
   }
+  // Opt-in (`redaction.entropy`), after every named rule, so a known shape keeps its prefix.
+  out = redactHighEntropy(out, REDACTED);
   // After the known secrets, so an address can't swallow the start of one and leave the rest readable.
   return mode === 'url' ? maskEmails(out) : out;
 }

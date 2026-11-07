@@ -2,6 +2,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import {
   actionBlockedMessage,
   configFromConnection,
+  resolveEntropy,
   type PangularAction,
   type PangularInspector,
   type ResolvedPangularConfig,
@@ -34,7 +35,11 @@ export function withRedaction(
   const secretNames = names((answer as { secretNames?: unknown }).secretNames);
   const unmask = names((answer as { unmask?: unknown }).unmask);
   if (!secretNames || !unmask) return config;
-  return { ...config, redaction: { secretNames, unmask } };
+  const entropy = resolveEntropy((answer as { entropy?: unknown }).entropy);
+  return {
+    ...config,
+    redaction: entropy ? { secretNames, unmask, entropy } : { secretNames, unmask },
+  };
 }
 
 export function actionAllowed(client: DevframeRpcClient | null, action: PangularAction): boolean {
