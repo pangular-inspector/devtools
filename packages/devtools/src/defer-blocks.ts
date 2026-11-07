@@ -23,6 +23,8 @@ interface RawDeferBlock {
 /** The most defer blocks one collection reports. */
 export const MAX_DEFER_BLOCKS = 500;
 const MAX_ROOT_IDS = 5;
+/** The state changes a block keeps, newest last. */
+export const MAX_DEFER_TRANSITIONS = 6;
 const DEFER_TYPE = 0;
 const HYDRATION = new Set(['not-configured', 'dehydrated', 'hydrated']);
 
@@ -66,7 +68,11 @@ function timeOf(value: unknown): number | null {
  */
 export function createDeferTracker(now: () => number = Date.now) {
   const ids = new WeakMap<object, string>();
-  const seen = new WeakMap<object, { key: string; since: number; hydratedAt?: number }>();
+  type Transition = NonNullable<DeferBlockInfo['transitions']>[number];
+  const seen = new WeakMap<
+    object,
+    { key: string; since: number; hydratedAt?: number; transitions: Transition[] }
+  >();
   const byPosition = new WeakMap<Element, object[]>();
   const lastHosts = new WeakMap<Element, object[]>();
   let nextId = 0;
@@ -160,10 +166,17 @@ export function createDeferTracker(now: () => number = Date.now) {
             : [];
           const key = `${raw.state}|${hydration}`;
           const previous = seen.get(host);
+          const changed = !previous || previous.key !== key;
           const record = {
             key,
-            since: previous && previous.key === key ? previous.since : now(),
+            since: changed ? now() : previous.since,
             hydratedAt: previous?.hydratedAt,
+            transitions: changed
+              ? [
+                  ...(previous?.transitions ?? []),
+                  { state: raw.state, hydration, at: now() },
+                ].slice(-MAX_DEFER_TRANSITIONS)
+              : previous.transitions,
           };
           if (previous?.key.endsWith('|dehydrated') && hydration === 'hydrated') {
             record.hydratedAt = now();
@@ -195,6 +208,8 @@ export function createDeferTracker(now: () => number = Date.now) {
             block.placeholder = { minimumTime: timeOf(raw.placeholderBlock.minimumTime) };
           }
           if (record.hydratedAt !== undefined) block.hydratedAt = record.hydratedAt;
+          // The first entry is the state the overlay found; only a change is worth sending.
+          if (record.transitions.length > 1) block.transitions = record.transitions;
           out.push(block);
           lastById.set(block.id, { host, block });
         }

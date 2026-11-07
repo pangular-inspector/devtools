@@ -869,7 +869,9 @@ function storedDirectiveHosts(): boolean {
         [blocks]="deferBlocks()"
         [truncated]="page()?.deferTruncated === true"
         [clockOffset]="page()?.clockOffset ?? 0"
+        [mismatches]="page()?.hydration?.mismatches ?? []"
         (showOwner)="showOwner($event)"
+        (showNode)="revealNode($event)"
         (highlight)="$event ? highlightBlock($event) : highlight(null)"
       />
       @if (deferUnavailable()) {

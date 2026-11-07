@@ -167,7 +167,9 @@ A row also carries the notes the [`defer-blocks`](../agents/tools.md#defer-block
 
 When the block sets times, the row lists them, such as `placeholder min 500ms · loading after 100ms, min 1s`. Ages are counted on the page's clock, so a page on another device with its clock set wrong still shows the right age. The panel counts on from its own clock, so it assumes the panel and the server agree on the time, as they do when both run on one machine. A screen reader reads the badge as **stuck** or **waiting** without the seconds, so the row's name does not change while the age counts up.
 
-Hover or focus a row to highlight the block in the page. A block with several root elements gets one box around all of them. Click it to select the component that holds it. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
+Hover or focus a row to highlight the block in the page. A block with several root elements gets one box around all of them. Click it to select the component that holds it.
+
+The arrow button next to a row opens the block's details: its id (the one [`load-defer-block`](../agents/tools.md#load-defer-block) takes), the host tag of its component, when it entered its state and when it hydrated, on the page's clock, how many root elements it rendered and every trigger. **Transitions** lists the state changes the page saw, up to the last six, starting from the state it found when the devtools attached. A **mismatch** badge marks a block whose root element is a component with a [hydration mismatch](#hydration), and the details have a button that selects that component. The list is hidden when the page renders no defer blocks, or when its Angular version has no util to read them.
 
 The list holds the first 500 blocks of a page. When the page has more, the count reads **500+**.
 

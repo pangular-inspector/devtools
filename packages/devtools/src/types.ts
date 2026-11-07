@@ -262,6 +262,11 @@ export interface DeferBlockInfo {
   /** Page clock, ms since epoch, when the state or hydration state last changed. */
   since: number;
   hydratedAt?: number;
+  /**
+   * The state changes the overlay saw, oldest first, on the page clock: the
+   * state it found, then each change. Left out until the block changed.
+   */
+  transitions?: { state: string; hydration: DeferBlockInfo['hydration']; at: number }[];
 }
 
 export interface ForBlockInfo {

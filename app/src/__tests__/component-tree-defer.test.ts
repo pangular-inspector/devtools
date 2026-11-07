@@ -265,3 +265,62 @@ describe('defer blocks', () => {
     fixture.destroy();
   });
 });
+
+describe('defer block details', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('open below the row with the block id, transitions and mismatches inside it', async () => {
+    const fixture = TestBed.createComponent(ComponentTree);
+    const page = {
+      pageId: 'p1',
+      roots: [{ id: 'c1', name: 'App', tag: 'app-root', children: [] }],
+      count: 1,
+      detail: null,
+      reportedAt: 1000,
+      hydration: {
+        hydrated: true,
+        counts: { hydrated: 1, skipped: 0, mismatched: 1, clientOnly: 0, dehydratedBlocks: 0 },
+        mismatches: [{ id: 'e9', name: 'Note', tag: 'app-note' }],
+      },
+      deferBlocks: [
+        {
+          id: 'd4',
+          owner: { id: 'c1', name: 'App', tag: 'app-root' },
+          state: 'complete',
+          hydration: 'not-configured',
+          triggers: ['on idle'],
+          rootIds: ['e9'],
+          since: 2000,
+          transitions: [
+            { state: 'placeholder', hydration: 'not-configured', at: 1000 },
+            { state: 'complete', hydration: 'not-configured', at: 2000 },
+          ],
+        },
+      ],
+    };
+    fixture.componentRef.setInput('rpc', client({ p1: page }));
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+    }
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.defer-row')!.textContent).toContain('mismatch');
+    const toggle = el.querySelector<HTMLButtonElement>('.defer-toggle')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(el.querySelector('.defer-detail')).toBeNull();
+    toggle.click();
+    await fixture.whenStable();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const detail = el.querySelector('.defer-detail')!;
+    expect(toggle.getAttribute('aria-controls')).toBe(detail.id);
+    expect(detail.textContent).toContain('d4');
+    expect(Array.from(detail.querySelectorAll('.transitions .mono'), (s) => s.textContent)).toEqual(
+      ['placeholder', 'complete'],
+    );
+    const revealed = vi.spyOn(fixture.componentInstance, 'revealNode');
+    detail.querySelector<HTMLButtonElement>('.mismatch-links button')!.click();
+    expect(revealed).toHaveBeenCalledWith('e9');
+  });
+});

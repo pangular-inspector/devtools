@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import { deferHydrationLabel, deferNotes } from '../config.ts';
-import { MAX_DEFER_BLOCKS, createDeferTracker, type DeferDebugNg } from '../defer-blocks.ts';
+import {
+  MAX_DEFER_BLOCKS,
+  MAX_DEFER_TRANSITIONS,
+  createDeferTracker,
+  type DeferDebugNg,
+} from '../defer-blocks.ts';
 import { elementById } from '../element-id.ts';
 import { DEFER_ROWS, deferBlocksText, toComponentPage } from '../rpc/component-tools.ts';
 import { MAX_TOOL_CHARS } from '../rpc/router-tools.ts';
@@ -460,5 +465,56 @@ describe('deferNotes', () => {
       since: 0,
     };
     expect(deferNotes(block, Date.now()).map((note) => note.kind)).toEqual([]);
+  });
+});
+
+describe('defer block transitions', () => {
+  it('keeps the state changes the overlay saw, and none for a block that never changed', () => {
+    const { anchor, lazy, instances } = page();
+    let raw: unknown[] = [block({ hostNode: anchor }), block({ hostNode: lazy })];
+    const ng: DeferDebugNg = {
+      getComponent: (el) => instances.get(el) ?? null,
+      ɵgetControlFlowBlocks: () => raw,
+    };
+    let clock = 1000;
+    const tracker = createDeferTracker(() => clock);
+    expect(tracker.collect(ng)![0].transitions).toBeUndefined();
+    clock = 2000;
+    raw = [block({ hostNode: anchor, state: 'loading' }), block({ hostNode: lazy })];
+    tracker.collect(ng);
+    clock = 3000;
+    raw = [block({ hostNode: anchor, state: 'complete' }), block({ hostNode: lazy })];
+    const [loaded, idle] = tracker.collect(ng)!;
+    expect(loaded.transitions).toEqual([
+      { state: 'placeholder', hydration: 'not-configured', at: 1000 },
+      { state: 'loading', hydration: 'not-configured', at: 2000 },
+      { state: 'complete', hydration: 'not-configured', at: 3000 },
+    ]);
+    expect(idle.transitions).toBeUndefined();
+    for (let i = 0; i < 10; i++) {
+      clock += 1000;
+      raw = [block({ hostNode: anchor, state: i % 2 ? 'complete' : 'error' })];
+      tracker.collect(ng);
+    }
+    expect(tracker.collect(ng)![0].transitions).toHaveLength(MAX_DEFER_TRANSITIONS);
+  });
+});
+
+describe('guardDeferBlocks transitions', () => {
+  it('keeps valid steps only, at most six', async () => {
+    const { guardDeferBlocks } = await import('../rpc/component-report-guard.ts');
+    const steps = [
+      { state: 'placeholder', hydration: 'dehydrated', at: 1 },
+      { state: 2, at: 2 },
+      { state: 'complete', hydration: 'bogus', at: 3 },
+      { state: 'complete', at: 'later' },
+    ];
+    const [out] = guardDeferBlocks([{ id: 'd1', state: 'complete', transitions: steps }]);
+    expect(out!.transitions).toEqual([
+      { state: 'placeholder', hydration: 'dehydrated', at: 1 },
+      { state: 'complete', hydration: 'not-configured', at: 3 },
+    ]);
+    const many = Array.from({ length: 9 }, (_, i) => ({ state: 's', at: i }));
+    expect(guardDeferBlocks([{ id: 'd1', transitions: many }])[0]!.transitions).toHaveLength(6);
   });
 });
