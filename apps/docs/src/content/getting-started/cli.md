@@ -181,14 +181,14 @@ import {buildReport} from '@pangular-inspector/devtools/cli';
 const {outDir} = await buildReport({outDir: 'dist/devtools-report'});
 ```
 
-| Option    | What it does                                                                                                        |
-| --------- | ------------------------------------------------------------------------------------------------------------------- |
-| `outDir`  | Output directory, relative to the working directory. The default is `dist-static`. It is emptied first.             |
-| `root`    | The project folder to scan. The default is the working directory. `PANGULAR_ROOT` is not read.                      |
-| `config`  | The devtools config. Without it, `pangular.config.json` in `root` is read when it exists. `PANGULAR_CONFIG` is not. |
-| `pretty`  | Pretty-print the data files.                                                                                        |
-| `force`   | Empty `outDir` even when it holds files that are not a previous report.                                             |
-| `distDir` | A folder with a panel build to copy instead of the one the package ships.                                           |
+| Option    | What it does                                                                                                                                           |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `outDir`  | Output directory, relative to the working directory, not to `root` as with `pangular build --root`. The default is `dist-static`. It is emptied first. |
+| `root`    | The project folder to scan. The default is the working directory. `PANGULAR_ROOT` is not read.                                                         |
+| `config`  | The devtools config as an object, not a file path. Without it, `pangular.config.json` in `root` is read when it exists. `PANGULAR_CONFIG` is not.      |
+| `pretty`  | Pretty-print the data files.                                                                                                                           |
+| `force`   | Empty `outDir` even when it holds files that are not a previous report.                                                                                |
+| `distDir` | A folder with a panel build to copy instead of the one the package ships.                                                                              |
 
 It resolves to `{outDir, root}`, both absolute paths.
 
