@@ -154,6 +154,7 @@ pnpm test:axe                       # axe check of every panel page (needs Chrom
 pnpm test:axe:extension             # axe check of the extension panel (after pnpm test:axe)
 pnpm test:coverage                  # Package and panel tests with v8 coverage, into dist/coverage
 pnpm extension:build                # Chrome extension
+pnpm extension:build:firefox        # Firefox copy of the extension, into dist/extension-firefox
 pnpm skills:check                   # Agent skills and roles in .claude/
 pnpm commit:check                   # Commit messages on your branch
 ```
