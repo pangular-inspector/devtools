@@ -5,6 +5,7 @@ import type { RouterSetup } from '../router-setup.ts';
 import type { LinkInfo, OutletInfo } from '../router-links.ts';
 import type { PreloadRecord } from '../router-actions.ts';
 import type { PlatformNavigation } from '../router-platform-nav.ts';
+import { MAX_ROUTER_APPS, type RouterAppReport } from '../router-apps.ts';
 import type { HttpCall } from '../http-rules.ts';
 import {
   callsForNavigation,
@@ -51,12 +52,19 @@ export interface RouterReport {
   instrumented?: boolean;
   /** The browser Navigation API's `navigate` events, newest last. */
   platformNavigations?: PlatformNavigation[];
+  /**
+   * Every Angular app on the page with a Router, when there is more than one
+   * (`router-apps.ts`). The rest of the report describes the `primary` one.
+   */
+  apps?: RouterAppReport[];
 }
 
 export interface RouterPage extends RouterReport {
   reportedAt: number;
   changedAt: number;
   loops?: NavigationLoop[];
+  /** Set on the view of one app of a page that runs several (`rpc/router-apps.ts`). */
+  appId?: string;
 }
 
 export interface RouterState {
@@ -415,7 +423,40 @@ export function isRouterReport(
     optional(
       report.platformNavigations,
       (v) => Array.isArray(v) && v.length <= 30 && v.every(isPlatformNavigation),
+    ) &&
+    optional(
+      report.apps,
+      (v) =>
+        Array.isArray(v) &&
+        v.length <= MAX_ROUTER_APPS &&
+        v.every((app) => isRouterApp(app, maxNavigations)),
     )
+  );
+}
+
+function isRouterApp(value: unknown, maxNavigations: number): boolean {
+  if (!isRecord(value)) return false;
+  const app: Partial<RouterAppReport> = value;
+  const nodes = { n: 0 };
+  return (
+    isText(app.id, 60) &&
+    isText(app.name, 200) &&
+    isText(app.selector, 60) &&
+    optional(app.primary, (v) => v === true) &&
+    optional(app.snapshot, (v) => v === null || isSnapshot(v)) &&
+    optional(
+      app.navigations,
+      (v) => Array.isArray(v) && v.length <= maxNavigations && v.every(isNavigation),
+    ) &&
+    optional(app.dropped, isNumber) &&
+    optional(app.generation, isNumber) &&
+    optional(
+      app.config,
+      (v) => Array.isArray(v) && v.length <= MAX_CHILDREN && v.every((node) => isNode(node, nodes)),
+    ) &&
+    optional(app.configTruncated, isNumber) &&
+    optional(app.activeIds, (v) => isNames(v, MAX_ROUTES)) &&
+    optional(app.setup, (v) => isRecord(v) && isPlain(v, { n: 500 }))
   );
 }
 
@@ -428,7 +469,12 @@ function stateOf(pages: Pages): RouterState {
 }
 
 function contentOf(report: RouterReport): string {
-  return JSON.stringify([report.snapshot, report.navigations, report.platformNavigations]);
+  return JSON.stringify([
+    report.snapshot,
+    report.navigations,
+    report.platformNavigations,
+    report.apps?.map((app) => [app.id, app.snapshot, app.navigations]),
+  ]);
 }
 
 export function currentRouter(pages: Pages): RouterState {
@@ -469,6 +515,13 @@ export function clearRouterNavigations(pages: Pages, pageId: string, now = Date.
   const next: RouterPage = { ...page, navigations, changedAt: now };
   delete next.dropped;
   delete next.platformNavigations;
+  if (page.apps) {
+    next.apps = page.apps.map((app) => {
+      if (!app.navigations) return app;
+      const { dropped: _dropped, ...rest } = app;
+      return { ...rest, navigations: app.navigations.filter((nav) => nav.outcome === 'pending') };
+    });
+  }
   next.loops = detectLoops(navigations, next.config);
   pages.set(pageId, next);
   return true;

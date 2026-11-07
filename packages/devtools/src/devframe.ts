@@ -337,6 +337,7 @@ import { diffNavigationsText, navigationDiffResult } from './rpc/router-diff.ts'
 import { callsForNavigation, nextNavigation } from './rpc/router-http.ts';
 import { MAX_WAIT_MS, NavigationStream, streamText } from './rpc/router-stream.ts';
 import { previewNavigationText, routePreviewResult } from './rpc/router-preview.ts';
+import { APP_ARGUMENT, routerStateForApp } from './rpc/router-apps.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
@@ -1103,14 +1104,14 @@ const pangular = defineDevframe({
         ?.pageId;
     };
 
-    const requestRouterAction = (page: string | undefined, request: unknown) => {
+    const requestRouterAction = (page: string | undefined, request: unknown, app?: string) => {
       const action = (request as { action?: unknown } | undefined)?.action;
       return !config.actions.router && ROUTER_WRITE_ACTIONS.includes(action as string)
         ? Promise.resolve<unknown>({ error: actionBlockedMessage('router') })
-        : sendRouterAction(page, request);
+        : sendRouterAction(page, request, app);
     };
 
-    const sendRouterAction = (page: string | undefined, request: unknown) =>
+    const sendRouterAction = (page: string | undefined, request: unknown, app?: string) =>
       new Promise<unknown>((resolve) => {
         const pageId = page || defaultPageId();
         // No page could answer: say so now instead of after the 15 s wait.
@@ -1144,7 +1145,8 @@ const pangular = defineDevframe({
         });
         void my.rpc.broadcast({
           method: 'router-action',
-          args: [{ requestId, pageId, request }],
+          // `app` picks one app on a page that runs several (`router-apps.ts`).
+          args: [{ requestId, pageId, request, ...(app ? { app } : {}) }],
           optional: true,
         });
       });
@@ -1164,15 +1166,26 @@ const pangular = defineDevframe({
       name: 'request-router-action',
       type: 'action',
       jsonSerializable: true,
-      handler: (message: { pageId?: string; request?: unknown }) =>
+      handler: (message: { pageId?: string; app?: unknown; request?: unknown }) =>
         requestRouterAction(
           typeof message?.pageId === 'string' ? message.pageId : undefined,
           message?.request,
+          typeof message?.app === 'string' ? message.app.slice(0, 60) : undefined,
         ),
     });
 
-    const pageFor = (pageId: unknown) => {
+    /** The router state with one page shown as one of its apps, for the panel's app picker. */
+    const routerStateFor = (pageId: unknown, app: unknown): RouterState => {
       const state = routerState.value() as RouterState;
+      if (typeof app !== 'string' || !app) return state;
+      const scoped = routerStateForApp(state, {
+        page: typeof pageId === 'string' ? pageId : undefined,
+        app,
+      });
+      return 'error' in scoped ? state : scoped.state;
+    };
+    const pageFor = (pageId: unknown, app?: unknown) => {
+      const state = routerStateFor(pageId, app);
       return typeof pageId === 'string'
         ? state.pages.find((p) => p.pageId === pageId)
         : (defaultPage(state.pages.filter((p) => p.snapshot)) ?? defaultPage(state.pages));
@@ -1182,19 +1195,25 @@ const pangular = defineDevframe({
       name: 'router-lint',
       type: 'query',
       jsonSerializable: true,
-      handler: (pageId: unknown) =>
-        routerLintResult(pageFor(pageId), {
-          rules: config.lint.rules,
-          httpFor: routerHttpCalls,
-        }),
+      // A page id, or `{ pageId, app }` for one app of a page that runs several.
+      handler: (target: unknown) =>
+        routerLintResult(
+          target && typeof target === 'object'
+            ? pageFor((target as { pageId?: unknown }).pageId, (target as { app?: unknown }).app)
+            : pageFor(target),
+          {
+            rules: config.lint.rules,
+            httpFor: routerHttpCalls,
+          },
+        ),
     });
 
     register({
       name: 'router-match',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; url?: unknown }) => {
-        const page = pageFor(message?.pageId);
+      handler: (message: { pageId?: unknown; app?: unknown; url?: unknown }) => {
+        const page = pageFor(message?.pageId, message?.app);
         if (!page?.config || typeof message?.url !== 'string') return null;
         return matchUrl(page.config, message.url.slice(0, 2000));
       },
@@ -1208,8 +1227,8 @@ const pangular = defineDevframe({
       name: 'router-http',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; id?: unknown }) => {
-        const page = pageFor(message?.pageId);
+      handler: (message: { pageId?: unknown; app?: unknown; id?: unknown }) => {
+        const page = pageFor(message?.pageId, message?.app);
         const nav = page?.navigations.find((n) => n.id === message?.id);
         if (!page || !nav) return null;
         return callsForNavigation(
@@ -1241,10 +1260,10 @@ const pangular = defineDevframe({
       name: 'router-preview',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; url?: unknown }) => {
+      handler: (message: { pageId?: unknown; app?: unknown; url?: unknown }) => {
         const { sources, serverRoutes } = previewScans();
         return routePreviewResult(
-          routerState.value() as RouterState,
+          routerStateFor(message?.pageId, message?.app),
           {
             page: typeof message?.pageId === 'string' ? message.pageId : undefined,
             url: typeof message?.url === 'string' ? message.url : undefined,
@@ -1259,8 +1278,8 @@ const pangular = defineDevframe({
       name: 'router-diff',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; a?: unknown; b?: unknown }) =>
-        navigationDiffResult(routerState.value() as RouterState, {
+      handler: (message: { pageId?: unknown; app?: unknown; a?: unknown; b?: unknown }) =>
+        navigationDiffResult(routerStateFor(message?.pageId, message?.app), {
           page: typeof message?.pageId === 'string' ? message.pageId : undefined,
           a: typeof message?.a === 'number' ? message.a : undefined,
           b: typeof message?.b === 'number' ? message.b : undefined,
@@ -1271,8 +1290,8 @@ const pangular = defineDevframe({
       name: 'router-export',
       type: 'query',
       jsonSerializable: true,
-      handler: (message: { pageId?: unknown; id?: unknown }) =>
-        exportNavigationText(routerState.value() as RouterState, {
+      handler: (message: { pageId?: unknown; app?: unknown; id?: unknown }) =>
+        exportNavigationText(routerStateFor(message?.pageId, message?.app), {
           page: typeof message?.pageId === 'string' ? message.pageId : undefined,
           id: typeof message?.id === 'number' ? message.id : undefined,
         }),
@@ -3814,6 +3833,12 @@ const pangular = defineDevframe({
       },
     });
 
+    /** The router state for a tool's `page` and `app`, with a line naming the page's other apps. */
+    const routerFor = (args: { page?: string; app?: unknown }) => {
+      const scoped = routerStateForApp(routerState.value() as RouterState, args);
+      if ('error' in scoped) return { error: { markdown: refusal(scoped.error) } };
+      return { state: scoped.state, page: scoped.page ?? args.page, note: scoped.note };
+    };
     const noRouter = `No router state has been reported. Live data needs a page: connect through the MCP endpoint of the server that runs the app, with the app open in a browser. The stdio MCP server has no page, so there it always answers this.`;
     const pageProperty = PAGE_ARGUMENT;
 
@@ -3826,6 +3851,7 @@ const pangular = defineDevframe({
         type: 'object',
         properties: {
           page: pageProperty,
+          app: APP_ARGUMENT,
           component: {
             type: 'string',
             description:
@@ -3833,10 +3859,13 @@ const pangular = defineDevframe({
           },
         },
       },
-      handler: async (args: { page?: string; component?: string }) => {
-        const state = routerState.value() as RouterState;
-        if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: inspectRouteText(state, args) };
+      handler: async (args: { page?: string; app?: string; component?: string }) => {
+        if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+        const scoped = routerFor(args);
+        if ('error' in scoped) return scoped.error;
+        return {
+          markdown: inspectRouteText(scoped.state, { ...args, page: scoped.page }) + scoped.note,
+        };
       },
     });
 
@@ -3849,6 +3878,7 @@ const pangular = defineDevframe({
         type: 'object',
         properties: {
           page: pageProperty,
+          app: APP_ARGUMENT,
           url: {
             type: 'string',
             description: 'Only navigations whose URL or final URL contains this text.',
@@ -3874,26 +3904,30 @@ const pangular = defineDevframe({
       },
       handler: async (args: {
         page?: string;
+        app?: string;
         url?: string;
         limit?: number;
         perf?: boolean;
         id?: number;
         format?: 'explain' | 'repro';
       }) => {
-        const state = routerState.value() as RouterState;
-        if (!state.pages.length) return { markdown: noRouter };
+        if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+        const scoped = routerFor(args);
+        if ('error' in scoped) return scoped.error;
+        const { state, page, note } = scoped;
         if (args.format === 'repro') {
           if (args.perf) return { markdown: refusal('Pass either `perf` or `format: "repro"`.') };
-          return { markdown: exportNavigationText(state, { page: args.page, id: args.id }) };
+          return { markdown: exportNavigationText(state, { page, id: args.id }) + note };
         }
         return {
-          markdown: explainNavigationText(
-            state,
-            args,
-            Date.now(),
-            limits.navigations,
-            routerHttpCalls,
-          ),
+          markdown:
+            explainNavigationText(
+              state,
+              { ...args, page },
+              Date.now(),
+              limits.navigations,
+              routerHttpCalls,
+            ) + note,
         };
       },
     });
@@ -3907,14 +3941,18 @@ const pangular = defineDevframe({
         type: 'object',
         properties: {
           page: pageProperty,
+          app: APP_ARGUMENT,
           a: { type: 'integer', description: 'Id of the earlier navigation.' },
           b: { type: 'integer', description: 'Id of the later navigation.' },
         },
       },
-      handler: async (args: { page?: string; a?: number; b?: number }) => {
-        const state = routerState.value() as RouterState;
-        if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: diffNavigationsText(state, args) };
+      handler: async (args: { page?: string; app?: string; a?: number; b?: number }) => {
+        if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+        const scoped = routerFor(args);
+        if ('error' in scoped) return scoped.error;
+        return {
+          markdown: diffNavigationsText(scoped.state, { ...args, page: scoped.page }) + scoped.note,
+        };
       },
     });
 
@@ -3967,18 +4005,28 @@ const pangular = defineDevframe({
         type: 'object',
         properties: {
           page: pageProperty,
+          app: APP_ARGUMENT,
           url: { type: 'string', description: 'A path such as /admin/users?tab=roles.' },
         },
         required: ['url'],
       },
-      handler: async (args: { page?: string; url?: string }) => {
-        const state = routerState.value() as RouterState;
-        if (!state.pages.length) return { markdown: noRouter };
+      handler: async (args: { page?: string; app?: string; url?: string }) => {
+        if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
         if (typeof args.url !== 'string' || !args.url) {
           return { markdown: refusal('Pass `url`, such as /users/42.') };
         }
+        const scoped = routerFor(args);
+        if ('error' in scoped) return scoped.error;
         const { sources, serverRoutes } = previewScans();
-        return { markdown: previewNavigationText(state, args, sources, serverRoutes) };
+        return {
+          markdown:
+            previewNavigationText(
+              scoped.state,
+              { ...args, page: scoped.page },
+              sources,
+              serverRoutes,
+            ) + scoped.note,
+        };
       },
     });
 
@@ -3991,6 +4039,7 @@ const pangular = defineDevframe({
         type: 'object',
         properties: {
           page: pageProperty,
+          app: APP_ARGUMENT,
           match: {
             type: 'string',
             description: 'A URL such as /users/42 to match against the config.',
@@ -4009,33 +4058,41 @@ const pangular = defineDevframe({
       },
       handler: async (args: {
         page?: string;
+        app?: string;
         match?: string;
         audit?: boolean;
         filter?: string;
         resolveLazy?: string;
       }) => {
-        let state = routerState.value() as RouterState;
-        if (!state.pages.length) return { markdown: noRouter };
+        if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+        let scoped = routerFor(args);
+        if ('error' in scoped) return scoped.error;
         let resolved = '';
         if (args.resolveLazy !== undefined) {
           const target = routerTarget(args.page);
           if (!('pageId' in target)) return target;
-          const result = await requestRouterAction(target.pageId, {
-            action: 'resolve-lazy',
-            id: args.resolveLazy,
-          });
+          const appId = scoped.state.pages.find((p) => p.pageId === target.pageId)?.appId;
+          const result = await requestRouterAction(
+            target.pageId,
+            { action: 'resolve-lazy', id: args.resolveLazy },
+            appId,
+          );
           const answer = routerActionAnswer('resolve-lazy', target.pageId, result, []);
           if (refusalOf(answer) !== undefined) return { markdown: answer };
           resolved = `${answer}\n\n`;
-          state = routerState.value() as RouterState;
+          scoped = routerFor(args);
+          if ('error' in scoped) return scoped.error;
         }
+        const { state, note } = scoped;
         let sources: ReturnType<typeof extractRoutes> = [];
         try {
           sources = extractRoutes(ctx.cwd);
         } catch {
           sources = [];
         }
-        return { markdown: `${resolved}${listRoutesText(state, args, sources)}` };
+        return {
+          markdown: `${resolved}${listRoutesText(state, { ...args, page: scoped.page }, sources)}${note}`,
+        };
       },
     });
 
@@ -4044,15 +4101,17 @@ const pangular = defineDevframe({
       title: 'Lint routes',
       description:
         "Checks the live route config: routes after '**', shadowed params, empty paths without pathMatch full, redirect loops, deprecated guards, title and security issues, and the first 100 RouterLinks on the page.",
-      inputSchema: { type: 'object', properties: { page: pageProperty } },
-      handler: async (args: { page?: string }) => {
-        const state = routerState.value() as RouterState;
-        if (!state.pages.length) return { markdown: noRouter };
+      inputSchema: { type: 'object', properties: { page: pageProperty, app: APP_ARGUMENT } },
+      handler: async (args: { page?: string; app?: string }) => {
+        if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+        const scoped = routerFor(args);
+        if ('error' in scoped) return scoped.error;
         return {
-          markdown: lintRoutesText(state, args, undefined, {
-            rules: config.lint.rules,
-            httpFor: routerHttpCalls,
-          }),
+          markdown:
+            lintRoutesText(scoped.state, { ...args, page: scoped.page }, undefined, {
+              rules: config.lint.rules,
+              httpFor: routerHttpCalls,
+            }) + scoped.note,
         };
       },
     });
@@ -4062,11 +4121,14 @@ const pangular = defineDevframe({
       title: 'Show the router setup',
       description:
         'How the router is set up: provideRouter or forRoot, effective options (set or default), features, strategies, base href, hydration and whether guard instrumentation is on.',
-      inputSchema: { type: 'object', properties: { page: pageProperty } },
-      handler: async (args: { page?: string }) => {
-        const state = routerState.value() as RouterState;
-        if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: routerConfigText(state, args) };
+      inputSchema: { type: 'object', properties: { page: pageProperty, app: APP_ARGUMENT } },
+      handler: async (args: { page?: string; app?: string }) => {
+        if (!(routerState.value() as RouterState).pages.length) return { markdown: noRouter };
+        const scoped = routerFor(args);
+        if ('error' in scoped) return scoped.error;
+        return {
+          markdown: routerConfigText(scoped.state, { ...args, page: scoped.page }) + scoped.note,
+        };
       },
     });
 
