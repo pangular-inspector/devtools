@@ -339,6 +339,7 @@ async function startSession(
     ? attachNgrx(my, pageId, angularDebugApi, config.limits.changeLog, {
         tree,
         describe: () => ({ url: '/', title: TITLE }),
+        trace: config.ngrx.trace,
       })
     : null;
 
