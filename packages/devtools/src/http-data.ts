@@ -122,3 +122,241 @@ export function presetRules(
   const preset = HTTP_RULE_PRESETS.find((p) => p.id === id);
   return preset ? preset.rules.map((rule) => ({ ...rule, id: newId(), enabled: true })) : [];
 }
+
+/** A recorded call as the HAR export and the copy snippets read it. Its values are already masked. */
+export interface RecordedCall extends CallLike {
+  status: number;
+  durationMs: number;
+  at: number;
+  cacheHit: boolean;
+  faulted: boolean;
+  mocked?: boolean;
+  cancelled?: boolean;
+  delayMs?: number;
+  redirectedTo?: string;
+  pageUrl?: string;
+  requestId?: string;
+  ruleId?: string;
+  error?: string;
+  preview?: string;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+}
+
+/** The SSR document request a HAR export can start with. */
+export interface RecordedSsrRequest {
+  id: string;
+  method: string;
+  url: string;
+  status: number;
+  at: number;
+  durationMs: number;
+  renderMs: number;
+  headers: Record<string, string>;
+}
+
+export interface HarInput {
+  calls: readonly RecordedCall[];
+  /** The SSR request that served the page, written first. */
+  ssrRequest?: RecordedSsrRequest | null;
+  /** The page's title, for the HAR page entry. */
+  title?: string;
+  /** Resolves relative URLs, such as `http://localhost:4200`. Relative URLs stay as recorded without it. */
+  origin?: string;
+  creator?: { name: string; version: string };
+}
+
+interface HarHeader {
+  name: string;
+  value: string;
+}
+
+/** The parts of HAR 1.2 the export writes. */
+export interface HarLog {
+  log: {
+    version: '1.2';
+    creator: { name: string; version: string };
+    pages: { startedDateTime: string; id: string; title: string; pageTimings: object }[];
+    entries: HarEntry[];
+    comment: string;
+  };
+}
+
+export interface HarEntry {
+  pageref: string;
+  startedDateTime: string;
+  time: number;
+  request: {
+    method: string;
+    url: string;
+    httpVersion: string;
+    cookies: [];
+    headers: HarHeader[];
+    queryString: HarHeader[];
+    headersSize: -1;
+    bodySize: -1;
+  };
+  response: {
+    status: number;
+    statusText: string;
+    httpVersion: string;
+    cookies: [];
+    headers: HarHeader[];
+    content: { size: number; mimeType: string; text?: string; comment?: string };
+    redirectURL: string;
+    headersSize: -1;
+    bodySize: -1;
+  };
+  cache: Record<string, never>;
+  timings: { send: number; wait: number; receive: number };
+  comment?: string;
+  /** Where the call ran: `client`, `server`, or `document` for the SSR request itself. */
+  _side: 'client' | 'server' | 'document';
+  _notes?: string[];
+}
+
+const HAR_PAGE = 'page_1';
+const HAR_CLIP = 2000;
+
+function harHeaders(headers: Record<string, string> | undefined): HarHeader[] {
+  return Object.entries(headers ?? {}).map(([name, value]) => ({ name, value }));
+}
+
+function absoluteUrl(url: string, origin: string | undefined): string {
+  if (!origin || /^[a-z][a-z\d+.-]*:/i.test(url)) return url;
+  try {
+    return new URL(url, origin).href;
+  } catch {
+    return url;
+  }
+}
+
+function queryOf(url: string): HarHeader[] {
+  try {
+    return [...new URL(url, 'http://x').searchParams].map(([name, value]) => ({ name, value }));
+  } catch {
+    return [];
+  }
+}
+
+function isoTime(at: number): string {
+  const date = new Date(Number.isFinite(at) ? at : 0);
+  return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
+}
+
+function callNotes(call: RecordedCall): string[] {
+  const notes: string[] = [];
+  if (call.cacheHit) notes.push('transfer cache');
+  if (call.mocked) notes.push('mocked by a fault rule');
+  if (call.faulted) notes.push('failed by a fault rule');
+  if (call.delayMs) notes.push(`delayed ${call.delayMs} ms by a fault rule`);
+  if (call.cancelled) notes.push('cancelled');
+  if (call.requestId) notes.push(`SSR request ${call.requestId}`);
+  return notes;
+}
+
+function callEntry(call: RecordedCall, origin: string | undefined): HarEntry {
+  const url = absoluteUrl(call.url, call.side === 'client' ? origin : undefined);
+  const mimeType = call.responseHeaders?.['content-type'] ?? 'x-unknown';
+  const notes = callNotes(call);
+  const text = call.error && !call.preview ? undefined : call.preview;
+  const time = Math.max(0, call.durationMs);
+  return {
+    pageref: HAR_PAGE,
+    startedDateTime: isoTime(call.at),
+    time,
+    request: {
+      method: call.method,
+      url,
+      httpVersion: 'HTTP/1.1',
+      cookies: [],
+      headers: harHeaders(call.requestHeaders),
+      queryString: queryOf(url),
+      headersSize: -1,
+      bodySize: -1,
+    },
+    response: {
+      status: call.status,
+      statusText: call.cancelled ? 'cancelled' : (call.error ?? ''),
+      httpVersion: 'HTTP/1.1',
+      cookies: [],
+      headers: harHeaders(call.responseHeaders),
+      content: {
+        size: text?.length ?? 0,
+        mimeType,
+        ...(text === undefined ? {} : { text }),
+        ...(text !== undefined && text.length >= HAR_CLIP
+          ? { comment: `Clipped at ${HAR_CLIP} characters.` }
+          : {}),
+      },
+      redirectURL: call.redirectedTo ?? '',
+      headersSize: -1,
+      bodySize: -1,
+    },
+    cache: {},
+    timings: { send: 0, wait: time, receive: 0 },
+    ...(notes.length ? { comment: notes.join(', ') } : {}),
+    _side: call.side,
+    ...(notes.length ? { _notes: notes } : {}),
+  };
+}
+
+function documentEntry(request: RecordedSsrRequest, origin: string | undefined): HarEntry {
+  const url = absoluteUrl(request.url, origin);
+  const wait = Math.max(0, request.renderMs);
+  return {
+    pageref: HAR_PAGE,
+    startedDateTime: isoTime(request.at),
+    time: Math.max(0, request.durationMs),
+    request: {
+      method: request.method,
+      url,
+      httpVersion: 'HTTP/1.1',
+      cookies: [],
+      headers: [],
+      queryString: queryOf(url),
+      headersSize: -1,
+      bodySize: -1,
+    },
+    response: {
+      status: request.status,
+      statusText: '',
+      httpVersion: 'HTTP/1.1',
+      cookies: [],
+      headers: harHeaders(request.headers),
+      content: { size: 0, mimeType: request.headers['content-type'] ?? 'text/html' },
+      redirectURL: request.headers['location'] ?? '',
+      headersSize: -1,
+      bodySize: -1,
+    },
+    cache: {},
+    timings: { send: 0, wait, receive: Math.max(0, request.durationMs - wait) },
+    comment: `SSR request ${request.id}: the server render that served the page`,
+    _side: 'document',
+  };
+}
+
+/**
+ * A HAR 1.2 log of recorded calls, oldest first: the SSR document request
+ * when given, then the server and browser HttpClient calls. Values are
+ * written as the panel holds them, already masked, so `[redacted]` stands
+ * where a secret was. Request bodies are not recorded, and response bodies
+ * are the clipped previews.
+ */
+export function harLog(input: HarInput): HarLog {
+  const entries = [
+    ...(input.ssrRequest ? [documentEntry(input.ssrRequest, input.origin)] : []),
+    ...input.calls.map((call) => callEntry(call, input.origin)),
+  ].sort((a, b) => a.startedDateTime.localeCompare(b.startedDateTime));
+  const first = entries[0]?.startedDateTime ?? isoTime(Date.now());
+  return {
+    log: {
+      version: '1.2',
+      creator: input.creator ?? { name: 'Pangular Inspector', version: 'unknown' },
+      pages: [{ startedDateTime: first, id: HAR_PAGE, title: input.title ?? '', pageTimings: {} }],
+      entries,
+      comment:
+        'Exported by Pangular Inspector. Secrets are masked as [redacted]. Request bodies are not recorded and response bodies are clipped previews.',
+    },
+  };
+}

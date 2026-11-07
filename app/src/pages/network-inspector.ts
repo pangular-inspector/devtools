@@ -31,6 +31,7 @@ import { Select, type SelectOption } from '../ui/select';
 import { VirtualWindow } from '../ui/virtual-window';
 import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
+import { HarExport } from './network/har-export';
 import { RuleMatchCount } from './network/rule-match-count';
 import { RulePresets } from './network/rule-presets';
 import { presetRules } from '@pangular-inspector/devtools/internal/http-data';
@@ -315,6 +316,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 @Component({
   selector: 'app-network-inspector',
   imports: [
+    HarExport,
     JsonPipe,
     HttpHeadersView,
     LimitNote,
@@ -362,6 +364,13 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       >
         Clear timeline
       </button>
+      <app-har-export
+        [calls]="timeline()"
+        [ssrRequest]="pageSsrRequest()"
+        [title]="selected()?.title ?? ''"
+        [pageUrl]="selected()?.url"
+        (done)="message.set($event)"
+      />
       <p class="message" role="status">{{ message() }}</p>
     </div>
 
@@ -2410,6 +2419,11 @@ export class NetworkInspector {
   /** Follows the visible rows, so the preview hides while filters hide its call. */
   readonly selectedCall = computed(
     () => this.visibleCalls().find((c) => c.id === this.selectedCallId()) ?? null,
+  );
+
+  /** The SSR request that served the selected page, for the HAR export. */
+  readonly pageSsrRequest = computed(
+    () => this.requests().find((r) => r.id === this.pageRequestId()) ?? null,
   );
 
   readonly selectedRequest = computed(
