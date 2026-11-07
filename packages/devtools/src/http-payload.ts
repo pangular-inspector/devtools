@@ -24,6 +24,11 @@ export interface PayloadSummary {
   size: number;
   entries: PayloadEntry[];
   error?: string;
+  /**
+   * Set by the server when the payload came from a refetch (the page rendered
+   * its URL again) instead of the HTML the tab was served with.
+   */
+  refetchedAt?: number;
 }
 
 const MAX_VALUE_CHARS = 20_000;

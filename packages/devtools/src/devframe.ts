@@ -205,14 +205,21 @@ import { redactCall } from './http-redact.ts';
 import { redactMessage, redactUrl } from './router.ts';
 import { isSsrRequestId, ssrRegistry } from './ssr-registry.ts';
 import { sanitizeSsrOverrides, type SsrOverride } from './ssr-overrides.ts';
-import { ssrOverrideTools } from './rpc/ssr-override-tools.ts';
+import {
+  refetchAnswerText,
+  sanitizeRefetchResult,
+  ssrOverrideTools,
+} from './rpc/ssr-override-tools.ts';
 import { createComponentScreenshots } from './rpc/component-screenshots.ts';
 import { explainSsrRequestText, listSsrRequestsText, sanitizeSsrRequest } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import { httpWaterfallText } from './rpc/http-waterfall.ts';
 import { lintHttpText } from './rpc/http-lint.ts';
 import {
+  addHttpRulePreset,
+  HTTP_RULE_PRESET_IDS,
   httpRulesText,
+  presetChangeText,
   removeHttpRule,
   ruleChangeText,
   upsertHttpRule,
@@ -1499,6 +1506,88 @@ const pangular = defineDevframe({
         return saveSsrOverrides(sanitizeSsrOverrides(input));
       },
     });
+    // Refetch: the page renders its URL again on the server and pushes the payload it gets.
+    const pendingRefetches = new Map<
+      string,
+      { pageId: string; settle: (result: Record<string, unknown>) => void }
+    >();
+    let refetchSeq = 0;
+    const refetchPayloadOf = (page: string | undefined) =>
+      new Promise<Record<string, unknown>>((resolve) => {
+        if (!config.actions.http) return resolve({ error: actionBlockedMessage('http') });
+        const target = page ? httpPages.get(page) : defaultPage(httpPages.values());
+        if (!target) {
+          return resolve({
+            error: page
+              ? `Page \`${page.slice(0, 50)}\` reports no HTTP data. pangular:list-pages lists the pages that are connected.`
+              : 'No page reports HTTP data. Open the app in a browser with `withPangular()` in its HttpClient setup.',
+          });
+        }
+        const requestId = `p${++refetchSeq}`;
+        const timer = setTimeout(() => {
+          pendingRefetches.delete(requestId);
+          resolve({ error: 'The page did not answer within 15s. Is the tab still open?' });
+        }, 15_000);
+        timer.unref?.();
+        pendingRefetches.set(requestId, {
+          pageId: target.pageId,
+          settle: (result) => {
+            clearTimeout(timer);
+            pendingRefetches.delete(requestId);
+            resolve({ ...result, pageId: target.pageId });
+          },
+        });
+        void my.rpc.broadcast({
+          method: 'http-payload-refetch',
+          args: [{ requestId, pageId: target.pageId }],
+          optional: true,
+        });
+      });
+
+    register({
+      name: 'http-payload-refetch-result',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { requestId?: unknown; pageId?: unknown; result?: unknown }) => {
+        if (typeof message?.requestId !== 'string') return;
+        const pending = pendingRefetches.get(message.requestId);
+        if (!pending || !answersFor(pending.pageId, message.pageId)) return;
+        const result = sanitizeRefetchResult(message.result);
+        const stored = httpPayloads.get(pending.pageId);
+        if (result['ok'] && stored) {
+          const refetched = { ...stored, refetchedAt: Date.now() };
+          httpPayloads.set(pending.pageId, refetched);
+          httpPayloadState.mutate((draft) => {
+            draft.pages[pending.pageId] = refetched;
+          });
+        }
+        pending.settle(result);
+      },
+    });
+
+    register({
+      name: 'request-http-payload-refetch',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown } | undefined) =>
+        refetchPayloadOf(typeof message?.pageId === 'string' ? message.pageId : undefined),
+    });
+
+    agent.registerTool({
+      id: 'pangular:refetch-transfer-state',
+      title: 'Refetch TransferState',
+      description:
+        "Renders the page's URL again on the server, with the tab's cookies, and replaces the TransferState payload the panel and `inspect-transfer-state` show with the one the server sends now. The tab itself does not reload. Needs actions.http.",
+      inputSchema: { type: 'object', properties: { page: PAGE_ARGUMENT } },
+      handler: async (args: Record<string, unknown>) => {
+        const result = await refetchPayloadOf(pageArgument(args));
+        if (typeof result['error'] === 'string') return { markdown: refusal(result['error']) };
+        return {
+          markdown: refetchAnswerText(result, httpPayloads, httpPages.values()),
+        };
+      },
+    });
+
     // The panel's TransferState payload and SSR overrides, for agents.
     for (const tool of ssrOverrideTools({
       config,
@@ -1792,6 +1881,12 @@ const pangular = defineDevframe({
       },
       body: { description: 'Mock response body: JSON text or a JSON value. Alone it answers 200.' },
       enabled: { type: 'boolean', description: 'Default true.' },
+      preset: {
+        type: 'string',
+        enum: [...HTTP_RULE_PRESET_IDS],
+        description:
+          'Instead of the other arguments: add the plain rules of a built-in preset for every browser request. `offline` fails them with a network error, `slow-3g` holds them back 2000 ms, `flaky` fails 30% with 503.',
+      },
     };
     const newRuleId = () => `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const httpRuleChange = (change: RuleChange, verb: 'Added' | 'Updated' | 'Removed') => {
@@ -1816,10 +1911,24 @@ const pangular = defineDevframe({
       id: 'pangular:set-http-rule',
       title: 'Set an HTTP mock rule',
       description:
-        'Add or replace (`id`) an HTTP fault or mock rule (dev only): `pattern` plus `status`, `delayMs` or `body`. Applies to every tab now and to SSR on the next load. Needs actions.http.',
-      inputSchema: { type: 'object', properties: ruleInput, required: ['pattern'] },
+        'Add or replace (`id`) an HTTP fault or mock rule (dev only): `pattern` plus `status`, `delayMs` or `body`, or `preset` alone to add the Offline, Slow 3G or Flaky rules. Applies to every tab now and to SSR on the next load. Needs actions.http.',
+      inputSchema: { type: 'object', properties: ruleInput },
       handler: async (args: SetHttpRuleArgs) => {
         const rules = registry.rules ?? [];
+        if (args.pattern === undefined && args.preset === undefined) {
+          return {
+            markdown: refusal(
+              `Pass \`pattern\` with \`status\`, \`delayMs\` or \`body\`, or \`preset\` alone (${HTTP_RULE_PRESET_IDS.map((id) => `\`${id}\``).join(', ')}).`,
+            ),
+          };
+        }
+        if (args.preset !== undefined) {
+          if (!config.actions.http) return { markdown: refusal(actionBlockedMessage('http')) };
+          const change = addHttpRulePreset(rules, args, newRuleId);
+          if ('error' in change) return { markdown: refusal(change.error) };
+          setHttpRules(change.rules);
+          return { markdown: presetChangeText(change) };
+        }
         const verb = typeof args.id === 'string' && args.id ? 'Updated' : 'Added';
         return httpRuleChange(upsertHttpRule(rules, args, newRuleId), verb);
       },

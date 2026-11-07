@@ -348,6 +348,38 @@ function payloadNotes(payload: PayloadSummary): string {
   return notes.length ? `\n\n${notes.map((n) => `- ${n}`).join('\n')}` : '';
 }
 
+/**
+ * The page's answer to a payload refetch, cut down to the fields the server
+ * reads: a short error, or the counts of the payload the page pushed.
+ */
+export function sanitizeRefetchResult(input: unknown): Record<string, unknown> {
+  const value = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (typeof value['error'] === 'string') return { error: clip(value['error'], 300) };
+  if (value['ok'] !== true) return { error: 'The page sent no payload.' };
+  const count = (key: string) =>
+    typeof value[key] === 'number' && Number.isFinite(value[key]) ? Math.floor(value[key]) : 0;
+  return {
+    ok: true,
+    status: count('status'),
+    found: value['found'] === true,
+    entries: count('entries'),
+    size: count('size'),
+  };
+}
+
+/** The answer after a refetch: what changed, then the payload as `inspect-transfer-state` lists it. */
+export function refetchAnswerText(
+  result: Record<string, unknown>,
+  payloads: ReadonlyMap<string, PayloadSummary>,
+  pages: Iterable<HttpPage>,
+): string {
+  const pageId = String(result['pageId'] ?? '');
+  const head = result['found']
+    ? `Refetched the TransferState of page ${code(pageId)}: the server answered ${result['status']} with ${result['entries']} entr${result['entries'] === 1 ? 'y' : 'ies'}, ${result['size']} bytes. The panel and \`inspect-transfer-state\` show this payload until the tab reloads.`
+    : `Refetched page ${code(pageId)}: the server answered ${result['status']} without a TransferState script, so it did not server render this URL.`;
+  return `${head}\n\n${transferStateText(payloads, pages, { page: pageId })}`;
+}
+
 export interface SsrOverrideToolDeps {
   config: ResolvedPangularConfig;
   overrides: () => readonly SsrOverride[];

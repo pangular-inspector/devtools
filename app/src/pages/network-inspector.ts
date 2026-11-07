@@ -190,6 +190,8 @@ interface HttpPayload {
   size: number;
   entries: PayloadEntry[];
   error?: string;
+  /** Set when the payload came from Refetch, not from the HTML the tab was served with. */
+  refetchedAt?: number;
 }
 
 interface HttpPage {
@@ -1302,6 +1304,23 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 
       <section class="panel wide" aria-labelledby="payload-heading">
         <h2 id="payload-heading">TransferState payload</h2>
+        @if (selected(); as page) {
+          <div class="payload-tools">
+            <button
+              type="button"
+              data-refetch-payload
+              [disabled]="!canWrite() || refetching()"
+              [attr.aria-describedby]="canWrite() ? 'refetch-hint' : 'http-writes-off refetch-hint'"
+              (click)="refetchPayload(page.pageId)"
+            >
+              {{ refetching() ? 'Refetching…' : 'Refetch' }}
+            </button>
+            <span id="refetch-hint" class="muted small">
+              Renders this URL again on the server, with this tab's cookies, and shows the payload
+              it sends now. The tab does not reload.
+            </span>
+          </div>
+        }
         @if (selectedPayload(); as payload) {
           @if (!payload.found) {
             <div class="empty">
@@ -1311,6 +1330,9 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             <p class="muted small summary-line">
               {{ payload.entries.length }} entr{{ payload.entries.length === 1 ? 'y' : 'ies' }},
               {{ payload.size }} bytes
+              @if (payload.refetchedAt) {
+                <span class="tag" data-refetched>Refetched</span>
+              }
             </p>
             @if (payload.error) {
               <p class="bad" role="alert">{{ payload.error }}</p>
@@ -2179,6 +2201,17 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
       margin-bottom: 8px;
       font-variant-numeric: tabular-nums;
     }
+    .payload-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin-bottom: 12px;
+    }
+    .payload-tools .muted {
+      flex: 1 1 240px;
+      min-width: 0;
+    }
     .entries {
       border-top: 1px solid var(--border);
     }
@@ -2335,6 +2368,7 @@ export class NetworkInspector {
   readonly selectedCallId = signal<string | null>(null);
   readonly draft = signal<RuleDraft>({ ...EMPTY_DRAFT });
   readonly message = signal('');
+  readonly refetching = signal(false);
   readonly bodyPlaceholder = '{ "error": "Service unavailable" }';
   readonly statusOptions = HTTP_STATUS_OPTIONS;
 
@@ -2952,6 +2986,28 @@ export class NetworkInspector {
       },
       { injector: this.injector },
     );
+  }
+
+  /** Asks the page to render its URL again on the server and push the payload it gets. */
+  async refetchPayload(pageId: string) {
+    if (this.refetching()) return;
+    this.refetching.set(true);
+    try {
+      const result = (await call(this.rpc(), 'request-http-payload-refetch', { pageId })) as
+        { error?: string; found?: boolean; entries?: number; status?: number } | null | undefined;
+      if (!result) this.announce('Could not reach the devtools server.');
+      else if (result.error) this.announce(result.error);
+      else if (!result.found) {
+        this.announce(`The server answered ${result.status} without a TransferState payload.`);
+      } else {
+        const count = result.entries ?? 0;
+        this.announce(`Refetched: ${count} entr${count === 1 ? 'y' : 'ies'}.`);
+      }
+    } catch {
+      this.announce('Could not refetch the payload.');
+    } finally {
+      this.refetching.set(false);
+    }
   }
 
   /** Clears a repeated message first, so the live region speaks again for the same text. */

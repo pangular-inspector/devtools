@@ -228,6 +228,52 @@ const axe = (): AxeReport => ({
 const keys = (findings: AuditFinding[]) => findings.map((finding) => finding.key);
 
 describe('buildAudit', () => {
+  it('adds the HTTP lint findings, without a second fetched-twice for the same call', () => {
+    const state = http();
+    state.pages[0]!.calls = [
+      call({ id: 'd1', url: '/api/flights', at: NOW }),
+      call({ id: 'd2', url: '/api/flights', at: NOW + 100 }),
+      call({ id: 'w1', url: '/api/a', at: NOW + 5_000, durationMs: 10 }),
+      call({ id: 'w2', url: '/api/b', at: NOW + 5_020, durationMs: 10 }),
+      call({ id: 'w3', url: '/api/c', at: NOW + 5_040, durationMs: 10 }),
+      call({ id: 'c1', url: '/api/cities', at: NOW + 9_000 }),
+    ] as never;
+    (state.pages[0] as { ssrRequestId?: string }).ssrRequestId = 'r1';
+    state.serverCalls = [
+      call({ side: 'server', url: '/api/cities', cacheSkip: 'post', requestId: 'r1' }),
+    ] as never;
+    const report = buildAudit({ http: state }, 'tab1', {}, NOW);
+    const found = report.findings.filter((finding) => finding.area === 'http');
+    expect(keys(found).sort()).toEqual([
+      'http:duplicate-request:GET /api/flights',
+      'http:fetched-twice:GET /api/cities',
+      'http:request-waterfall:3 calls from GET /api/a',
+    ]);
+    expect(found.find((f) => f.rule === 'duplicate-request')).toMatchObject({
+      severity: 'warning',
+      tool: 'pangular:lint-http',
+      args: { page: 'tab1' },
+    });
+    // The transfer cache check found it first, so it keeps its own tool.
+    expect(found.find((f) => f.rule === 'fetched-twice')).toMatchObject({
+      tool: 'pangular:explain-ssr-request',
+    });
+  });
+
+  it('reports a server call made again from the lint when the cache check has no reason', () => {
+    const state = http();
+    state.pages[0]!.calls = [call({ id: 'c1', url: '/api/cities', at: NOW })] as never;
+    (state.pages[0] as { ssrRequestId?: string }).ssrRequestId = 'r1';
+    state.serverCalls = [call({ side: 'server', url: '/api/cities', requestId: 'r1' })] as never;
+    const report = buildAudit({ http: state }, 'tab1', {}, NOW);
+    expect(report.findings).toEqual([
+      expect.objectContaining({
+        key: 'http:fetched-twice:GET /api/cities',
+        tool: 'pangular:lint-http',
+      }),
+    ]);
+  });
+
   it('gathers every area into one list ranked by severity, area and count', () => {
     const report = buildAudit(
       {

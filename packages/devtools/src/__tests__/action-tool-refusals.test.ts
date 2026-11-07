@@ -84,6 +84,7 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
   'remove-http-rule': [{ id: 'nope' }],
   'set-ssr-override': [{ kind: 'nope', pattern: '/x' }],
   'remove-ssr-override': [{ id: 'nope' }],
+  'refetch-transfer-state': [{}, { page: 'gone' }],
   'analog-run-api': [{ path: '/api/x', method: 'POST' }],
   'analog-run-nitro-task': [{ name: 'db:migrate' }, { name: 'missing', confirm: true }],
   'analog-purge-nitro-cache': [{}, { confirm: true }, { confirm: true, files: ['/package.json'] }],
