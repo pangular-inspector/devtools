@@ -1076,7 +1076,10 @@ const pangular = defineDevframe({
         feed.navigations(report.pageId, report.navigations);
         // Merging a report expires stale pages too.
         dropGoneStreamPages();
-        navigationStream.record(report.pageId, report.navigations);
+        // A report that failed to merge left no page, so its navigations stay out of the stream.
+        if (routerPages.has(report.pageId)) {
+          navigationStream.record(report.pageId, report.navigations);
+        }
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
     });
