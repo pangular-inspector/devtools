@@ -1714,7 +1714,13 @@ export function createNgrxCollector<H extends object = Element>(
         };
       }
       case 'jump': {
-        if (request.seq !== undefined) return run({ type: 'restore', seq: request.seq });
+        if (request.seq !== undefined) {
+          // A jump moves the Store DevTools history; it never restores a signal store.
+          if (saved.get(request.seq)?.kind === 'signal') {
+            return { error: 'Only @ngrx/store entries can be used for a Store DevTools jump.' };
+          }
+          return run({ type: 'restore', seq: request.seq });
+        }
         const staged = (liftedOf(devtools)?.['stagedActionIds'] ?? []) as number[];
         const index = request.index!;
         if (index >= staged.length) {
