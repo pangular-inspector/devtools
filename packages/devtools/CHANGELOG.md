@@ -12,6 +12,7 @@ All notable changes to `@pangular-inspector/devtools` are listed here. The forma
 - **HTTP calls per navigation.** `pangular:explain-navigation` and a new **HTTP calls** button on each navigation list the `HttpClient` calls the SSR & HTTP inspector recorded for it, with status and time: the ones made while it ran, and the ones made after it ended, before the next navigation.
 - **Three router lint rules.** `always-run-parent` flags `runGuardsAndResolvers: 'always'` on a parent route with guards or resolvers. `lazy-component-eager` flags a `loadComponent` route whose component another route already imports eagerly. `resolver-refetch` flags a resolver whose `GET` the page makes again after the navigation, from the SSR & HTTP inspector's calls. Turn any of them off with `lint.rules`.
 - **Follow navigations from an agent.** `pangular:follow-navigations` returns the navigations that are new or changed since a cursor, across pages, and can wait up to 30 seconds for the next one, so an agent can follow a login and redirect flow without polling.
+- **What happens if I go to a URL.** The **Config** view has a **What happens** button, and agents a `pangular:preview-navigation` tool, that predict a navigation from the live route config without navigating: the redirects it follows, the route chain and params, and in order the guards, lazy chunks, resolvers and components that run, with each route's source file and the render mode.
 
 ## 1.0.0
 

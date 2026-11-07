@@ -18,10 +18,12 @@ import {
   sourceLocation,
   sourceOf,
   type RouteNode,
+  type RoutePreview,
   type RouterPage,
   type SourceRoute,
 } from './router-types';
 import { SourceLink } from '../ui/source-link';
+import { RoutePreviewCard } from './route-preview';
 import { plural } from '../format';
 
 /** "3 of 12 routes": the filtered count, worded like the other panel pages. */
@@ -52,7 +54,7 @@ interface TestedUrl {
 
 @Component({
   selector: 'app-route-tree',
-  imports: [JsonPipe, SourceLink],
+  imports: [JsonPipe, RoutePreviewCard, SourceLink],
   template: `
     <form class="test" (submit)="$event.preventDefault(); predict()">
       <label for="test-url">Test a URL</label>
@@ -66,6 +68,7 @@ interface TestedUrl {
         (input)="editUrl($any($event.target).value)"
       />
       <button type="submit" class="small primary">Predict</button>
+      <button type="button" class="small" (click)="whatHappens()">What happens</button>
       <button
         type="button"
         class="small"
@@ -100,6 +103,9 @@ interface TestedUrl {
           <div class="muted">{{ note }}</div>
         }
       </div>
+    }
+    @if (preview(); as card) {
+      <app-route-preview [preview]="card" />
     }
     @if (message()) {
       <p class="message" role="status">{{ message() }}</p>
@@ -472,6 +478,11 @@ export class RouteTree {
     source: this.pageId,
     computation: () => '',
   });
+  /** The "What happens" card for the URL in the box. */
+  readonly preview = linkedSignal<string, RoutePreview | null>({
+    source: this.pageId,
+    computation: () => null,
+  });
   private predictSeq = 0;
   private announceFlip = false;
   private probeSeq = 0;
@@ -574,6 +585,7 @@ export class RouteTree {
     this.predictSeq++;
     this.probeSeq++;
     this.match.set(null);
+    this.preview.set(null);
     this.message.set('');
   }
 
@@ -593,12 +605,43 @@ export class RouteTree {
     const pageId = this.pageId();
     const result = await routerCall<MatchResult>(this.rpc(), 'router-match', { pageId, url });
     if (seq !== this.predictSeq || pageId !== this.pageId()) return;
+    this.preview.set(null);
     this.match.set(result && { url, result });
     if (result) {
       if (this.message() === PAGE_UNREACHABLE) this.message.set('');
     } else {
       this.message.set(PAGE_UNREACHABLE);
     }
+  }
+
+  /** Predicts the redirects, guards, lazy chunks, resolvers and components of going to the URL. */
+  async whatHappens() {
+    const url = this.testUrl().trim();
+    const seq = ++this.predictSeq;
+    if (!url) {
+      this.preview.set(null);
+      this.askForUrl('preview');
+      return;
+    }
+    const pageId = this.pageId();
+    const result = await routerCall<RoutePreview | { error: string }>(
+      this.rpc(),
+      'router-preview',
+      { pageId, url },
+    );
+    if (seq !== this.predictSeq || pageId !== this.pageId()) return;
+    if (!result || 'error' in result) {
+      this.preview.set(null);
+      this.message.set(result?.error ?? PAGE_UNREACHABLE);
+      return;
+    }
+    this.match.set(null);
+    this.preview.set(result);
+    this.message.set(
+      result.chain.length
+        ? `${result.matched ? 'Matches' : 'Stops at'} ${result.chain.map((r) => r.path).join(' then ')}, ${result.steps.length} steps listed.`
+        : `${url} matches no route.`,
+    );
   }
 
   async probe() {

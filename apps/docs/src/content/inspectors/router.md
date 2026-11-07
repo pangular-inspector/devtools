@@ -99,6 +99,7 @@ The live route config. The tab merges lazy children in once they load, and marks
 
 - Filter the routes by path, component or declaring file. While the filter is set, the summary shows the count, for example "2 of 14 routes", and a screen reader announces it as you type. If nothing matches, click **Clear filters**.
 - **Test a URL** and click **Predict** to see which route matches it, or the nearest ones.
+- Click **What happens** for a card that predicts going to the URL from the live config, without navigating or running app code: the redirects it follows, the route chain and params, and then in order the `canMatch` guards, lazy children that download, `canDeactivate` guards of the routes being left, `canActivateChild` and `canActivate` guards, lazy components, resolvers, the components that render and the title. It also names the file each route is declared in and the render mode from `*.routes.server.ts`. Routes already active are marked, since they rerun guards only when their params change. The card stops at a function redirect, a redirect loop or a lazy route that has not loaded, and says why.
 - **Probe in app** runs the real matcher without navigating.
 - Fill in the params of a route and click **Go** to navigate to it. With a param left empty, **Go** marks the empty field and names the params to fill in.
 - **Read lazy** reads the routes of a lazy route that has not loaded.
@@ -205,6 +206,9 @@ Without that recording, the guards listed for a navigation are candidates: the `
   <ngmd-step title="Predict">
     Click <strong>Predict</strong>. A miss lists the nearest routes.
   </ngmd-step>
+  <ngmd-step title="See what runs">
+    Click <strong>What happens</strong> to list the redirects, guards, lazy chunks, resolvers and components of that navigation, in order.
+  </ngmd-step>
   <ngmd-step title="Probe">
     Click <strong>Probe in app</strong> to confirm with the real matcher. It runs <code>canMatch</code> and may load lazy chunks.
   </ngmd-step>
@@ -231,6 +235,7 @@ Without that recording, the guards listed for a navigation are candidates: the `
 | `pangular:explain-navigation` | Why a navigation failed or redirected, with any loop and the cause of each hop. Pass `url` or `id` to narrow it, `limit` for more than the last 5 (up to `limits.navigations`), `perf` for the slowest ones, or `format: "repro"` for a markdown repro of one navigation. |
 | `pangular:diff-navigations`   | What changed between two navigations: params, data, guards, resolvers, outlets, components and timing. Pass `a` and `b`, or leave them out to compare the newest navigation with the last one to the same path.                                                           |
 | `pangular:follow-navigations` | New and changed navigations since a cursor, across pages. Pass the cursor back as `since`, with `waitMs` to wait for the next navigation.                                                                                                                                 |
+| `pangular:preview-navigation` | What going to a URL would do, from the live config and without navigating: redirects, the route chain, guards, lazy chunks, resolvers and components in order, source files and render mode.                                                                              |
 | `pangular:inspect-route`      | The route the page is on. Pass `component` (a component class, tag or link text) for the route a component was rendered for, or a link state.                                                                                                                             |
 | `pangular:list-routes`        | The live config with source files and example URLs. `match` predicts a URL, `audit` lists the guards of each page, `resolveLazy` loads the routes of a lazy route first.                                                                                                  |
 | `pangular:lint-routes`        | The lint findings, including redirect loops seen at runtime.                                                                                                                                                                                                              |

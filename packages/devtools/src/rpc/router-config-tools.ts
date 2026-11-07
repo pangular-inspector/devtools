@@ -179,7 +179,7 @@ function effectiveGuards(node: RouteNode, parents: RouteNode[]): string[] {
   return out;
 }
 
-function sourceFor(node: RouteNode, sources: SourceRoute[]): string | undefined {
+export function sourceFor(node: RouteNode, sources: SourceRoute[]): string | undefined {
   const same = (s: SourceRoute) =>
     s.fullPath === node.fullPath &&
     (s.redirectTo !== undefined) === (node.redirectTo !== undefined);

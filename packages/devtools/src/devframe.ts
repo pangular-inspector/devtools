@@ -332,6 +332,7 @@ import { routerActionAnswer } from './rpc/router-action-answer.ts';
 import { diffNavigationsText, navigationDiffResult } from './rpc/router-diff.ts';
 import { callsForNavigation, nextNavigation } from './rpc/router-http.ts';
 import { MAX_WAIT_MS, NavigationStream, streamText } from './rpc/router-stream.ts';
+import { previewNavigationText, routePreviewResult } from './rpc/router-preview.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
@@ -1200,6 +1201,41 @@ const pangular = defineDevframe({
           nav,
           nextNavigation(page.navigations, nav),
           routerHttpCalls(page.pageId),
+        );
+      },
+    });
+
+    /** The source routes and ServerRoute entries a preview names, empty when the scan fails. */
+    const previewScans = () => {
+      let sources: ReturnType<typeof extractRoutes> = [];
+      let serverRoutes: ReturnType<typeof scanServerRoutes> = [];
+      try {
+        sources = extractRoutes(ctx.cwd);
+      } catch {
+        sources = [];
+      }
+      try {
+        serverRoutes = scanServerRoutes(ctx.cwd);
+      } catch {
+        serverRoutes = [];
+      }
+      return { sources, serverRoutes };
+    };
+
+    register({
+      name: 'router-preview',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; url?: unknown }) => {
+        const { sources, serverRoutes } = previewScans();
+        return routePreviewResult(
+          routerState.value() as RouterState,
+          {
+            page: typeof message?.pageId === 'string' ? message.pageId : undefined,
+            url: typeof message?.url === 'string' ? message.url : undefined,
+          },
+          sources,
+          serverRoutes,
         );
       },
     });
@@ -3862,6 +3898,30 @@ const pangular = defineDevframe({
         const wait = typeof args.waitMs === 'number' && args.waitMs > 0 ? args.waitMs : 0;
         const read = await navigationStream.wait(since, wait, args.page);
         return { markdown: streamText(read, { since, waited: wait > 0 }) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:preview-navigation',
+      title: 'Preview a navigation',
+      description:
+        'What going to a URL would do, predicted from the live route config without navigating: redirects, the route chain and params, then in order the guards, lazy chunks, resolvers and components that run, with source files and the render mode.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          url: { type: 'string', description: 'A path such as /admin/users?tab=roles.' },
+        },
+        required: ['url'],
+      },
+      handler: async (args: { page?: string; url?: string }) => {
+        const state = routerState.value() as RouterState;
+        if (!state.pages.length) return { markdown: noRouter };
+        if (typeof args.url !== 'string' || !args.url) {
+          return { markdown: refusal('Pass `url`, such as /users/42.') };
+        }
+        const { sources, serverRoutes } = previewScans();
+        return { markdown: previewNavigationText(state, args, sources, serverRoutes) };
       },
     });
 

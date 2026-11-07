@@ -266,6 +266,29 @@ export interface NavigationCalls {
   after: TimelineCall[];
 }
 
+/** What going to a URL would do (`router-preview` RPC). */
+export interface RoutePreview {
+  url: string;
+  finalUrl: string;
+  matched: boolean;
+  hops: { from: string; to: string; route: string }[];
+  chain: {
+    path: string;
+    component?: string;
+    outlet?: string;
+    lazy?: string;
+    title?: string;
+    source?: string;
+    active?: boolean;
+  }[];
+  params: Record<string, string>;
+  steps: { phase: string; items: string[] }[];
+  renderMode?: { mode: string; path: string; file: string };
+  stopped?: string;
+  notes: string[];
+  nearest: string[];
+}
+
 export const routerCall = rpcTry;
 
 export function isReplayableUrl(url: string): boolean {
