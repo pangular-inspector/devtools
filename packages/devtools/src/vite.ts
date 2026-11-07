@@ -7,6 +7,12 @@ import { PANGULAR_HUB_BASE, startPangularHub } from './hub.ts';
 import { analogMiddleware, setDevOrigin } from './analog-server-log.ts';
 import { analogConfig, setAnalogRoot } from './rpc/analog-scan.ts';
 import { viteScanWatcher } from './rpc/analog-scan-cache.ts';
+import { setViteEnv } from './rpc/analog-runtime-config.ts';
+import {
+  installTransformTracer,
+  resetTransformTracer,
+  type ViteServerLike,
+} from './analog-transform.ts';
 import { releaseServerState } from './server-state.ts';
 import { normalizeAllowedOrigins } from './allowed-origins.ts';
 import {
@@ -161,6 +167,10 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         // The Analog source scan is kept until this watcher sees a change. With
         // `server.watch: null` Vite's watcher never fires, so the cache watches by itself.
         if (server.config.server?.watch !== null) server.watcher?.on('all', viteScanWatcher());
+        // Lets the Analog Routes view show a page file's transform stack.
+        installTransformTracer(server as unknown as ViteServerLike);
+        // What import.meta.env holds, for the Runtime view.
+        setViteEnv(server.config.env);
       }
       const httpServer = server.httpServer;
       // The plugin runs the gate itself, in front of the whole dev server.
@@ -191,6 +201,10 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         };
       }
       httpServer?.once('close', () => {
+        if (analog) {
+          resetTransformTracer();
+          setViteEnv(undefined);
+        }
         void devtools.context
           .then(releaseServerState, () => undefined)
           .finally(() => devtools.close());

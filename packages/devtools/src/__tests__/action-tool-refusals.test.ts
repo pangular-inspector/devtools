@@ -79,6 +79,7 @@ const NOTHING_DONE: Record<string, Record<string, unknown>[]> = {
   'set-ssr-override': [{ kind: 'nope', pattern: '/x' }],
   'remove-ssr-override': [{ id: 'nope' }],
   'analog-run-api': [{ path: '/api/x', method: 'POST' }],
+  'analog-purge-nitro-cache': [{}, { confirm: true }, { confirm: true, files: ['/package.json'] }],
   'clear-recordings': [{ target: 'nothing' }],
 };
 

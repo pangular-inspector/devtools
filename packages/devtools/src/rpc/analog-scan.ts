@@ -3,6 +3,15 @@ import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { IGNORED_DIRS, maskStrings, stripComments } from './source-scan.ts';
 import { PARTIAL_HINT, partialReasons } from './analog-config-partial.ts';
+import {
+  contentUsageOf,
+  loadContentSchema,
+  typedFrontmatter,
+  validateFrontmatter,
+  type ContentSchema,
+  type ContentSchemaInfo,
+  type ContentUsage,
+} from './analog-content.ts';
 
 export type AnalogRouteKind = 'page' | 'layout' | 'markdown' | 'group' | 'implicit';
 
@@ -42,6 +51,8 @@ export interface AnalogContentFile {
   slug: string;
   attributes: Record<string, string>;
   error?: string;
+  /** Frontmatter problems found by the `analog.contentSchema` check. */
+  schemaErrors?: string[];
 }
 
 export interface AnalogRouteRule {
@@ -84,6 +95,16 @@ export interface AnalogProject {
   config: AnalogConfig;
   prerendered: string[];
   scanErrors?: string[];
+  /** The `analog.contentSchema` file and whether it could be used. */
+  contentSchema?: ContentSchemaInfo;
+  /** Where the app reads content files (`injectContentFiles`, `injectContent`, `contentFilesSource`). */
+  contentUsage?: ContentUsage[];
+}
+
+/** Options from the devtools config that change what the scan reports. */
+export interface AnalogScanOptions {
+  /** A JSON Schema file, relative to the project root, that content frontmatter must match. */
+  contentSchema?: string;
 }
 
 export interface AnalogLintFinding {
@@ -460,24 +481,41 @@ export function frontmatter(source: string): {
   return { attributes };
 }
 
-export function contentFiles(root: string): AnalogContentFile[] {
+export function contentFiles(root: string, schema?: ContentSchema): AnalogContentFile[] {
   return walk(join(root, 'src/content'), (n) => n.endsWith('.md')).map((full) => {
     const file = rel(root, full);
-    const parsed = frontmatter(read(full));
+    const source = read(full);
+    const parsed = frontmatter(source);
     const slug = parsed.attributes['slug'] || file.split('/').pop()!.replace(/\.md$/, '');
     const out: AnalogContentFile = { file, slug, attributes: parsed.attributes };
     if (parsed.error) out.error = parsed.error;
+    else if (schema) {
+      const errors = validateFrontmatter(typedFrontmatter(source).values, schema);
+      if (errors.length) out.schemaErrors = errors;
+    }
     return out;
   });
 }
 
-function configFile(root: string): string | undefined {
+/** The source files under src that read content files, and where. */
+export function contentUsage(root: string): ContentUsage[] {
+  return walk(join(root, 'src'), (n) => /\.(ts|analog|ag)$/.test(n) && !n.endsWith('.d.ts'))
+    .flatMap((full) => {
+      const source = read(full);
+      return /injectContent|contentFilesSource/.test(source)
+        ? contentUsageOf(rel(root, full), stripComments(source))
+        : [];
+    })
+    .slice(0, 100);
+}
+
+export function configFile(root: string): string | undefined {
   return ['vite.config.ts', 'vite.config.mts', 'vite.config.js', 'vite.config.mjs'].find((name) =>
     existsSync(join(root, name)),
   );
 }
 
-function blockEnd(source: string, open: number): number {
+export function blockEnd(source: string, open: number): number {
   let depth = 0;
   for (let i = open; i < source.length; i++) {
     if (source[i] === '{') depth++;
@@ -684,6 +722,11 @@ function nxWorkspace(root: string): string | undefined {
   }
 }
 
+/** The folder a workspace build writes `dist` into: the Nx root, or the package with Analog. */
+export function analogWorkspace(root: string): string {
+  return nxWorkspace(root) ?? analogPackage(root)?.dir ?? root;
+}
+
 export function analogVersion(root: string): string | undefined {
   return analogPackage(root)?.version;
 }
@@ -737,11 +780,11 @@ export function prerenderedPages(root: string, workspace = root): string[] {
   });
 }
 
-export function scanAnalog(cwd: string): AnalogProject {
+export function scanAnalog(cwd: string, options: AnalogScanOptions = {}): AnalogProject {
   walkErrors = new Map();
   const root = analogRoot(cwd);
   try {
-    const project = scanProject(root);
+    const project = scanProject(root, options);
     if (walkErrors.size) {
       project.scanErrors = Array.from(walkErrors, ([dir, code]) => `${rel(root, dir)}: ${code}`);
     }
@@ -751,11 +794,14 @@ export function scanAnalog(cwd: string): AnalogProject {
   }
 }
 
-function scanProject(root: string): AnalogProject {
+function scanProject(root: string, options: AnalogScanOptions): AnalogProject {
   const pkg = analogPackage(root);
   const version = pkg?.version;
   const files = routeFiles(root);
-  return {
+  const schema =
+    version && options.contentSchema ? loadContentSchema(root, options.contentSchema) : undefined;
+  const content = version ? contentFiles(root, schema?.schema) : [];
+  const project: AnalogProject = {
     analog: !!version,
     version,
     root,
@@ -770,11 +816,14 @@ function scanProject(root: string): AnalogProject {
           rel(root, f),
         )
       : [],
-    content: version ? contentFiles(root) : [],
+    content,
     serverFns: version ? serverFunctions(root) : [],
     config: analogConfig(root),
     prerendered: pkg ? prerenderedPages(root, nxWorkspace(root) ?? pkg.dir) : [],
   };
+  if (schema) project.contentSchema = schema.info;
+  if (content.length) project.contentUsage = contentUsage(root);
+  return project;
 }
 
 function safeDecode(part: string): string {
@@ -891,6 +940,15 @@ export function lintAnalog(
       file: error.slice(0, error.lastIndexOf(':')),
       message: `Could not read this folder (${error.slice(error.lastIndexOf(':') + 2)}), so its files are missing from every result.`,
       fix: 'Check the folder permissions, or that the path is a folder and not a file.',
+    });
+  }
+  if (project.contentSchema?.error) {
+    out.push({
+      rule: 'content-schema-unreadable',
+      severity: 'warning',
+      file: project.contentSchema.file,
+      message: `${project.contentSchema.error} The content frontmatter is not checked.`,
+      fix: 'Point analog.contentSchema at a JSON Schema file in the project, such as content.schema.json.',
     });
   }
   if (project.config.partial) {
@@ -1122,6 +1180,15 @@ export function lintAnalog(
         file: file.file,
         message: file.error,
         fix: 'Fix the frontmatter block (--- key: value ---).',
+      });
+    }
+    if (file.schemaErrors?.length) {
+      out.push({
+        rule: 'content-schema',
+        severity: 'warning',
+        file: file.file,
+        message: `The frontmatter does not match ${project.contentSchema?.file ?? 'the content schema'}: ${file.schemaErrors.join(' ')}`,
+        fix: 'Fix the frontmatter, or change the schema that analog.contentSchema points to.',
       });
     }
     const previous = slugs.get(file.slug);

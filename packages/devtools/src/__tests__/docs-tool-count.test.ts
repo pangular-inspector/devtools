@@ -77,8 +77,15 @@ it('states on the tools page how many tools the server registers', async () => {
     join(__dirname, '../../../../apps/docs/src/content/agents/tools.md'),
     'utf-8',
   );
-  const stated = /^\s*([A-Z][a-z]+(?:-[a-z]+)?) tools, grouped by inspector/m.exec(page)?.[1];
+  // Spelled out up to ninety-nine, in digits from 100.
+  const stated = /^\s*(\d{3,}|[A-Z][a-z]+(?:-[a-z]+)?) tools, grouped by inspector/m.exec(
+    page,
+  )?.[1];
   expect(stated).toBeDefined();
+  if (/^\d+$/.test(stated!)) {
+    expect(Number(stated)).toBe(registered);
+    return;
+  }
   const index = WORDS.indexOf(stated!);
   expect(index).toBeGreaterThanOrEqual(0);
   expect(index + 48).toBe(registered);
