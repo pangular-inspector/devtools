@@ -5025,11 +5025,18 @@ const pangular = defineDevframe({
           platforms.set(page.pageId, `capacitor-${page.info.platform}`);
         }
       }
-      const withUrl = <T extends { pageId: string; reportedAt: number }>(pages: Iterable<T>) =>
+      const withUrl = <
+        T extends { pageId: string; reportedAt: number; url?: string; title?: string },
+      >(
+        pages: Iterable<T>,
+      ) =>
         [...pages].map((page) => ({
           pageId: page.pageId,
           // An idle page sends only its heartbeat, which counts as a report here.
           reportedAt: Math.max(page.reportedAt, heartbeats.seenAt(page.pageId) ?? 0),
+          // A page only one inspector reports, such as Ionic, still names its own URL and title.
+          ...(page.url !== undefined ? { url: page.url } : {}),
+          ...(page.title !== undefined ? { title: page.title } : {}),
           ...details.get(page.pageId),
           platform: platforms.get(page.pageId),
           angular: angularPages.get(page.pageId)?.version,
