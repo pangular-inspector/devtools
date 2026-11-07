@@ -1,5 +1,6 @@
 import { Component, computed, effect, input, signal } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
+import { SearchField } from '../ui/search-field';
 
 /** One module of the Vite dev server's graph, as `build-graph.ts` sends it. */
 export interface GraphModule {
@@ -63,6 +64,7 @@ export const BUILD_ROWS = 25;
 
 @Component({
   selector: 'app-build-inspector',
+  imports: [SearchField],
   template: `
     <p class="intro">
       What the app loads: the Vite dev server's module graph with its lazy boundaries, and the
@@ -127,14 +129,12 @@ export const BUILD_ROWS = 25;
           }
           <h3>Modules</h3>
           <div class="filter">
-            <input
+            <app-search-field
               #search
-              type="search"
-              aria-label="Filter modules"
+              class="search"
               placeholder="Filter by file or URL"
-              [value]="filter()"
-              (input)="filter.set($any($event.target).value)"
-              (keydown.escape)="filter.set('')"
+              saveKey="build"
+              [(value)]="filter"
             />
             <span class="count">{{ shownModules().length }} of {{ vite.modules.length }}</span>
           </div>
@@ -278,19 +278,9 @@ export const BUILD_ROWS = 25;
       align-items: center;
       margin: 0 0 8px;
     }
-    .filter input {
+    .filter .search {
       flex: 1 1 200px;
       min-width: 0;
-      height: var(--control-h);
-      padding: 0 10px;
-      border: 1px solid var(--control-border);
-      border-radius: var(--radius-sm);
-      background: var(--surface);
-      color: var(--text);
-      font: inherit;
-    }
-    .filter input:focus-visible {
-      @include m.focus-ring;
     }
     .count {
       color: var(--text-2);
