@@ -66,4 +66,13 @@ describe('a value read again as the next key', () => {
     const out = redactText(`${'a: '.repeat(50)}password: "hunter2"`, [], 'text');
     expect(out).not.toContain('hunter2');
   });
+
+  it.each([
+    'Error: context:password: "hunter2"',
+    'Error: context:password: hunter2',
+    'Error: a:b:c:token: hunter2',
+    `Error: ${'a:'.repeat(5000)}password: hunter2`,
+  ])('finds a secret after a compact chain of key names: %s', (text) => {
+    expect(redactText(text, [], 'text')).not.toContain('hunter2');
+  });
 });
