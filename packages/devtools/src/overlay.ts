@@ -577,7 +577,9 @@ async function startOverlay(
   const cd = on.components
     ? attachChangeDetection(my, pageId, getNg, limits.cdCycles, tickMs, () => lease.active)
     : null;
-  const ngrx = on.ngrx ? attachNgrx(my, pageId, getNg, limits.changeLog) : null;
+  const ngrx = on.ngrx
+    ? attachNgrx(my, pageId, getNg, limits.changeLog, { trace: devtoolsConfig.ngrx.trace })
+    : null;
   // NGXS, Elf and MiniRx report through their Redux DevTools integration.
   if (!on.ngrx) uninstallReduxDevtoolsHook();
   const otherStores = on.ngrx ? attachReduxStores(my, pageId, { maxLog: limits.changeLog }) : null;
