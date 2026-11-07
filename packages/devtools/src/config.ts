@@ -1518,7 +1518,6 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'cancel-component-pick': 'components',
   'request-component-pick-move': 'components',
   'component-pick-result': 'components',
-  'request-page-highlight': 'components',
   'component-screenshot-result': 'components',
   'request-component-edit': 'components',
   'component-edit-result': 'components',
@@ -1835,7 +1834,17 @@ export function clearRecordingTargets(config: ResolvedPangularConfig): ClearReco
   );
 }
 
+/**
+ * RPC functions two inspectors share, registered while either is on: the
+ * Components page outline also outlines the Ionic page rows of the Capacitor tab.
+ */
+export const RPC_ANY_INSPECTOR: Record<string, readonly PangularInspector[]> = {
+  'request-page-highlight': ['components', 'capacitor'],
+};
+
 export function rpcAllowed(name: string, config: ResolvedPangularConfig): boolean {
+  const any = RPC_ANY_INSPECTOR[name];
+  if (any) return any.some((inspector) => config.inspectors[inspector]);
   const inspector = RPC_INSPECTOR[name];
   return !inspector || config.inspectors[inspector];
 }
