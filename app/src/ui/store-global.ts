@@ -5,7 +5,7 @@ import { isStaticReport } from '../rpc';
 /** What the page stores: a component, a provider or NgRx state (see `console-handles.ts`). */
 export type ConsoleTarget =
   | { kind: 'component'; id: string }
-  | { kind: 'provider'; injectorId: string; token: string; index: number }
+  | { kind: 'provider'; injectorId: string; token: string; index: number; tokenId?: string }
   | { kind: 'ngrx'; storeId: string };
 
 interface StoreResult {

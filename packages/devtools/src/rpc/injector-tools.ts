@@ -4,6 +4,7 @@ import type { InjectorPage, InjectorTreeNode } from '../types.ts';
 import { zoneModeText } from '../zone-mode.ts';
 import { untrusted } from './forms-tools.ts';
 import { countInjectors, largestFitting, outlineInjectors } from './injector-outline.ts';
+import { candidatesList, matchesToken, pickToken, type TokenPick } from './token-match.ts';
 
 export const MAX_TOOL_CHARS = 20_000;
 
@@ -17,6 +18,8 @@ const NARROW = 'pass `injector` or `token` to narrow it down';
 export interface InspectProvidersArgs {
   injector?: string;
   token?: string;
+  /** Picks one of several tokens named `token` (`ProviderInfo.tokenId`). */
+  tokenId?: string;
 }
 
 function flatten(nodes: InjectorTreeNode[], out: InjectorTreeNode[] = []): InjectorTreeNode[] {
@@ -235,9 +238,26 @@ export function inspectProvidersText(
     : '';
 
   const selector = args.injector?.trim();
-  const token = args.token?.trim();
+  const tokenId = typeof args.tokenId === 'string' ? args.tokenId.trim() : '';
+  let token = args.token?.trim();
   if ((selector?.length ?? 0) > MAX_ARG_CHARS || (token?.length ?? 0) > MAX_ARG_CHARS) {
     return `\`injector\` and \`token\` take at most ${MAX_ARG_CHARS} characters each. Pass a tag name, a class name, an injector name or id, or a token name.`;
+  }
+
+  // Two tokens can share a name; `tokenId` picks one, and a name that fits
+  // several lists them all, each with its `tokenId`.
+  let pick: TokenPick | undefined;
+  let ambiguousNote = ' ';
+  if (token || tokenId) {
+    const picked = pickToken(page, token ?? '', tokenId, all);
+    if ('error' in picked) return untrusted(picked.error);
+    if ('ambiguous' in picked) {
+      pick = { name: token ?? '' };
+      ambiguousNote = ` ${picked.ambiguous.length} different tokens are named \`${token}\`; every entry carries its \`tokenId\`, and passing \`tokenId\` keeps one of them:\n\n${candidatesList(picked.ambiguous)}\n\n`;
+    } else {
+      pick = picked;
+      token ||= picked.name;
+    }
   }
 
   if (!selector && !token) {
@@ -294,13 +314,10 @@ export function inspectProvidersText(
   }));
 
   const want = token?.toLowerCase();
-  const providedBy = want
+  const providedBy = pick
     ? all.flatMap((node) =>
         node.providers
-          .filter(
-            (provider) =>
-              provider.token.toLowerCase() === want || provider.tokenClass?.toLowerCase() === want,
-          )
+          .filter((provider) => matchesToken(provider, pick))
           .map((provider) => ({
             id: node.injector.id,
             name: node.injector.name,
@@ -309,15 +326,16 @@ export function inspectProvidersText(
           })),
       )
     : [];
-  const injectedBy = want
+  const injectedBy = pick
     ? (selector ? matched : all).flatMap((node) =>
         (node.dependencies ?? [])
-          .filter((dep) => dep.token.toLowerCase() === want)
+          .filter((dep) => matchesToken(dep, pick))
           .map((dep) => ({
             id: node.injector.id,
             name: node.injector.name,
             component: node.injector.component,
             from: dep.from,
+            ...(dep.tokenId ? { tokenId: dep.tokenId } : {}),
             flags: dep.flags,
             providedBy: dep.providedBy,
             providedByName: dep.providedBy ? nameOf(dep.providedBy) : null,
@@ -368,7 +386,7 @@ export function inspectProvidersText(
       if (missingToken) sections.push(missingToken);
       else if (token) {
         sections.push(
-          `Token \`${token}\` on page \`${pageId}\`. \`providedBy\` lists the injectors whose own providers include it; \`injectedBy\` lists what injects it${where} and which injector supplied it (\`providedBy\` null means none did).${shown(providedShown, providedBy)}${shown(injectedShown, injectedBy)}\n\n${JSON.stringify({ providedBy: providedShown, injectedBy: injectedShown })}`,
+          `Token \`${token}\`${pick?.id ? ` (\`${pick.id}\`)` : ''} on page \`${pageId}\`.${ambiguousNote}\`providedBy\` lists the injectors whose own providers include it; \`injectedBy\` lists what injects it${where} and which injector supplied it (\`providedBy\` null means none did).${shown(providedShown, providedBy)}${shown(injectedShown, injectedBy)}\n\n${JSON.stringify({ providedBy: providedShown, injectedBy: injectedShown })}`,
         );
       }
       return untrusted(`${sections.join('\n\n')}${insideNote}${notes}`);

@@ -203,6 +203,8 @@ export class ProviderValue {
   readonly pageId = input<string | null>(null);
   readonly injectorId = input.required<string>();
   readonly token = input.required<string>();
+  /** The page's id for the token, which the page matches before the name. */
+  readonly tokenId = input<string | undefined>(undefined);
   /** The provider's index in its injector's `providers`. */
   readonly index = input.required<number>();
   /** Tells apart providers of one token (multi providers), such as `(2 of 2)`. */
@@ -217,7 +219,7 @@ export class ProviderValue {
 
   /** The provider this shows; another one closes it. */
   readonly key = computed(
-    () => `${this.pageId()}|${this.injectorId()}|${this.index()}|${this.token()}`,
+    () => `${this.pageId()}|${this.injectorId()}|${this.index()}|${this.tokenId() ?? this.token()}`,
   );
   readonly open = linkedSignal<string, boolean>({ source: this.key, computation: () => false });
   readonly answer = linkedSignal<string, MembersAnswer | null>({
@@ -263,6 +265,7 @@ export class ProviderValue {
         request: {
           injectorId: this.injectorId(),
           token: this.token(),
+          ...(this.tokenId() ? { tokenId: this.tokenId() } : {}),
           index: this.index(),
           ...request,
         },
