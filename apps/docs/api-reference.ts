@@ -17,7 +17,7 @@ import {Node, Project, ts, type JSDoc} from 'ts-morph';
 export const API_DIR = 'src/content/api';
 
 /** Entry points that are not part of the public API. */
-const SKIPPED_EXPORTS = new Set(['./package.json', './internal/config', '.']);
+const SKIPPED_EXPORTS = new Set(['./package.json', '.']);
 
 type Kind = 'class' | 'interface' | 'function' | 'const' | 'type' | 'enum';
 
@@ -112,7 +112,8 @@ export function readApiEntries(repoRoot: string): ApiEntry[] {
   });
   const entries: ApiEntry[] = [];
   for (const [key, target] of Object.entries(pkg.exports)) {
-    if (SKIPPED_EXPORTS.has(key)) continue;
+    // `./internal/*` entries serve the panel and the extension, not apps.
+    if (SKIPPED_EXPORTS.has(key) || key.startsWith('./internal/')) continue;
     const rel = typeof target === 'string' ? target : (target.import ?? target.default);
     if (!rel?.endsWith('.ts')) continue;
     const sourceFile = project.addSourceFileAtPath(join(pkgDir, rel));

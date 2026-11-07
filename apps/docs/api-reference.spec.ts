@@ -24,7 +24,7 @@ describe('API reference', () => {
     const entries = readApiEntries(repoRoot);
     const hub = entries.find((entry) => entry.slug === 'hub');
     expect(hub?.symbols.map((s) => s.name)).toContain('initPangularHub');
-    expect(entries.some((entry) => entry.slug === 'internal-config')).toBe(false);
+    expect(entries.some((entry) => entry.slug.startsWith('internal-'))).toBe(false);
   }, 60_000);
 
   it('shows inferred return types and symbols re-exported from a dependency', () => {
