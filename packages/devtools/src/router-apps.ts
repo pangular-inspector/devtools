@@ -13,6 +13,7 @@ import {
 } from './router.ts';
 import { ConfigTracker, activeIds, walkConfig, type RouteNode } from './router-config.ts';
 import { detectSetup, type RouterSetup } from './router-setup.ts';
+import type { NavigationLoop } from './rpc/router-loops.ts';
 
 /**
  * One Angular app on the page with its own Router, as the router report
@@ -38,6 +39,8 @@ export interface RouterAppReport {
   configTruncated?: number;
   activeIds?: string[];
   setup?: RouterSetup;
+  /** Navigation loops in this app's history; the server adds them, the page never sends them. */
+  loops?: NavigationLoop[];
 }
 
 /** Most apps one page reports. */

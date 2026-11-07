@@ -228,6 +228,7 @@ export interface RouterApp {
   configTruncated?: number;
   activeIds?: string[];
   setup?: RouterSetup;
+  loops?: NavigationLoop[];
 }
 
 /** The apps of a page that runs more than one Angular app with a Router, else none. */
@@ -256,6 +257,7 @@ export function routerAppView(page: RouterPage, appId: string | null): RouterPag
     configTruncated: app.configTruncated,
     activeIds: app.activeIds,
     setup: app.setup,
+    loops: app.loops,
     apps: page.apps,
     appId: app.id,
   };

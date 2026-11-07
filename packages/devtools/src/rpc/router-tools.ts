@@ -519,7 +519,8 @@ export function clearRouterNavigations(pages: Pages, pageId: string, now = Date.
     next.apps = page.apps.map((app) => {
       if (!app.navigations) return app;
       const { dropped: _dropped, ...rest } = app;
-      return { ...rest, navigations: app.navigations.filter((nav) => nav.outcome === 'pending') };
+      const kept = app.navigations.filter((nav) => nav.outcome === 'pending');
+      return { ...rest, navigations: kept, loops: detectLoops(kept, app.config) };
     });
   }
   next.loops = detectLoops(navigations, next.config);
@@ -541,6 +542,14 @@ export function mergeRouterReport(
     next.config = previous.config;
   }
   next.loops = detectLoops(next.navigations, next.config);
+  // Each app of a page that runs several gets its own loops, for the panel's app view.
+  if (next.apps) {
+    next.apps = next.apps.map((app) =>
+      app.primary || !app.navigations
+        ? app
+        : { ...app, loops: detectLoops(app.navigations, app.config) },
+    );
+  }
   pages.set(report.pageId, next);
   expireRouterPages(pages, now, ttl);
   if (pages.size > MAX_PAGES) {
