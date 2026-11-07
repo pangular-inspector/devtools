@@ -147,8 +147,7 @@ export function stateRows(
               </button>
             } @else {
               <span class="leaf">
-                <span class="key">{{ row.key }}</span
-                ><span class="colon">:</span>
+                <span class="key">{{ row.key }}<span class="colon">:</span></span>
                 <code class="value">{{ row.text }}</code>
               </span>
             }

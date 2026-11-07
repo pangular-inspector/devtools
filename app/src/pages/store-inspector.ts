@@ -608,7 +608,7 @@ const CLASSIC_KINDS = new Set([
               </section>
 
               @if (storeStats().length) {
-                <section class="stats" aria-labelledby="ngrx-stats-heading">
+                <div class="stats">
                   <h4 id="ngrx-stats-heading">Action frequency</h4>
                   <p class="hint small">
                     How often each {{ current.classic ? 'action' : 'change' }} ran since the page
@@ -659,7 +659,7 @@ const CLASSIC_KINDS = new Set([
                       dispatches it for a missing filter or a dispatch of its own trigger.
                     </p>
                   }
-                </section>
+                </div>
               }
 
               @if (!current.redux) {

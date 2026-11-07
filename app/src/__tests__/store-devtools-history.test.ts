@@ -200,7 +200,7 @@ describe('call sites and action frequency', () => {
     const changed = Array.from(root(fixture).querySelectorAll('app-state-tree .row.changed')).map(
       (row) => row.querySelector('.key')?.textContent,
     );
-    expect(changed).toEqual(['0']);
+    expect(changed).toEqual(['0:']);
     expect(root(fixture).querySelector('app-state-tree .row .mark')?.textContent).toBe('changed');
   });
 });
