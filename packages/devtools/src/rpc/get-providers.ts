@@ -69,6 +69,23 @@ const PROVIDE_FN_TO_TOKEN: Record<string, string> = {
   provideEnvironmentInitializer: 'EnvironmentInitializer',
 };
 
+/** The `type` of a provide*() call the scan can't resolve to the tokens it registers. */
+export const HELPER_TYPE = 'helper';
+
+/**
+ * Whether the `provideX(` at `at` calls a function, as opposed to declaring
+ * one (`function provideX(`, a method `provideX() {`) or calling a member
+ * of some object (`foo.provideX(`).
+ */
+function isHelperCall(code: string, at: number): boolean {
+  const before = code.slice(Math.max(0, at - 40), at);
+  if (/(?:\bfunction\s*\*?\s*|\.\s*|#)$/.test(before)) return false;
+  const open = code.indexOf('(', at);
+  const close = matchDelimiter(code, open, '(', ')');
+  // `provideX(...) {` or `provideX(...): Type {` declares a method.
+  return !/^\s*(?::[^;{}()=]*)?\{/.test(code.slice(close + 1, close + 200));
+}
+
 interface ProviderEntry {
   token: string;
   source: string;
@@ -173,6 +190,16 @@ function scanFile(full: string, cwd: string, out: ProviderEntry[]) {
           line: lineAt(match.index!),
           providedIn: 'root',
           type: 'root-provider',
+        });
+      } else if (isHelperCall(code, match.index!)) {
+        // A provide*() function the scan can't resolve to a token, such as
+        // the app's own `provideFeature()` or one from a library.
+        out.push({
+          token: fnName + '()',
+          source: fnName + '()',
+          file: relPath,
+          line: lineAt(match.index!),
+          type: HELPER_TYPE,
         });
       }
     }

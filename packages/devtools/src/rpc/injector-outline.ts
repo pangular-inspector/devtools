@@ -8,6 +8,8 @@ export interface InjectorOutline {
   component?: string;
   /** The component's id in the component tree. */
   componentId?: string;
+  /** A lazy route's environment injector off the rendered path. */
+  inactive?: true;
   providers: number;
   dependencies: number;
   children: InjectorOutline[];
@@ -40,7 +42,7 @@ export function outlineInjectors(
     list
       .filter((node) => kept.has(node))
       .map((node) => {
-        const { id, name, type, component, componentId } = node.injector;
+        const { id, name, type, component, componentId, inactive } = node.injector;
         const children = build(node.children);
         const more = node.children.length - children.length;
         return {
@@ -49,6 +51,7 @@ export function outlineInjectors(
           type,
           ...(component ? { component } : {}),
           ...(componentId ? { componentId } : {}),
+          ...(inactive ? { inactive: true as const } : {}),
           providers: node.providers.length,
           dependencies: node.dependencies?.length ?? 0,
           children,
