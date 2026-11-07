@@ -197,6 +197,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Signal graph edges name their nodes instead of positions.
 - `inspect-signals` reads the graph of a component the page is not showing: a `component` the component tree knows, or a component host matched by the new `selector` argument (CSS). A selector that matches no component host is refused at once (#367).
 - A `Store` provided in a route is found, and the DI tools keep each signal store's name instead of `SignalStore`.
+- Two DI tokens with the same name, such as two `new InjectionToken('config')`, no longer mix up provider values or which token something injected. The injector tree carries a `tokenId` for each token, `read-provider-value` and `explain-injection` list the candidates for a shared name and take `tokenId` to pick one, and `inspect-providers` takes `tokenId` to keep one (#367).
 - The SSR hydration count is right, and a request is no longer reported as a transfer cache hit when it was not.
 - A failed write answers with `isError: true`, and a failing call keeps its response body.
 - The Express hub turns itself off with a warning on a Node.js that can't load it, instead of crashing the server.

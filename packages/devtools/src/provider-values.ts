@@ -34,8 +34,10 @@ export type ProviderDebugNg<H extends object = Element> = DebugNg<H> & Component
 export interface ProviderValueRequest {
   /** The injector id from the injector tree (`InjectorInfo.id`). */
   injectorId: string;
-  /** The provider's token name, which must still match at `index`. */
+  /** The provider's token name, which must still match at `index` when `tokenId` is missing. */
   token: string;
+  /** The token's id from the injector tree (`ProviderInfo.tokenId`), which must still match at `index`. */
+  tokenId?: string;
   /** The provider's place in the injector's `providers`. */
   index: number;
   /** Empty for the members; else a member name (or `$value`), then keys or indexes. */
@@ -89,6 +91,10 @@ export function toProviderValueRequest(message: unknown): ProviderValueRequest |
   if (typeof m['token'] !== 'string' || !m['token'] || m['token'].length > MAX_TOKEN) {
     return 'Pass the token name of a provider.';
   }
+  const tokenId = m['tokenId'];
+  if (tokenId !== undefined && (typeof tokenId !== 'string' || !tokenId || tokenId.length > 100)) {
+    return 'Pass the token id from the injector tree, or leave it out.';
+  }
   const index = m['index'];
   if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > MAX_INDEX) {
     return "Pass the provider's index in the injector's providers.";
@@ -108,6 +114,7 @@ export function toProviderValueRequest(message: unknown): ProviderValueRequest |
   return {
     injectorId: m['injectorId'],
     token: m['token'],
+    ...(tokenId ? { tokenId } : {}),
     index,
     path: [...(path as string[])],
     limit,
@@ -239,7 +246,14 @@ export function readProviderValue<H extends object = Element>(
   request: ProviderValueRequest,
 ): ProviderValueResult {
   if (!ng?.getInjector) return { error: 'Angular debug APIs are not available on this page.' };
-  const found = providerValue(ng, request.injectorId, request.token, request.index, 'read');
+  const found = providerValue(
+    ng,
+    request.injectorId,
+    request.token,
+    request.index,
+    'read',
+    request.tokenId,
+  );
   if ('error' in found) return { error: found.error };
   const instance = found.value;
   const type = typeOf(instance);

@@ -11,6 +11,7 @@ import { untrusted } from './forms-tools.ts';
 import { byRecency, PAGE_ARGUMENT, pageArgument, unknownPageText } from './pages.ts';
 import { capped } from './router-tools.ts';
 import { refusal } from './refusal.ts';
+import { ambiguousTokenText, matchesToken, pickToken, TOKEN_ID_ARGUMENT } from './token-match.ts';
 
 /** How long a read waits for its page to answer. */
 export const PROVIDER_VALUE_TIMEOUT_MS = 5_000;
@@ -88,6 +89,7 @@ export function createProviderValues(deps: Deps) {
           description:
             'The provider token: a service class name or an InjectionToken description (CartStore, API_URL).',
         },
+        tokenId: TOKEN_ID_ARGUMENT,
         injector: {
           type: 'string',
           description:
@@ -133,13 +135,15 @@ export function createProviderValues(deps: Deps) {
         };
       }
       const injector = typeof args['injector'] === 'string' ? args['injector'] : undefined;
-      const target = findProvider(page, token, injector);
+      const tokenId = typeof args['tokenId'] === 'string' ? args['tokenId'] : undefined;
+      const target = findProvider(page, token, injector, tokenId);
       if ('error' in target) return { markdown: untrusted(target.error) };
       const whole = (value: unknown) =>
         typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined;
       const result = await request(page.pageId, {
         injectorId: target.injectorId,
         token: target.token,
+        ...(target.tokenId ? { tokenId: target.tokenId } : {}),
         index: target.index,
         path,
         depth: whole(args['depth']),
@@ -210,6 +214,8 @@ export interface ProviderTarget {
   injectorName: string;
   /** The token as the page reported it, which the page matches. */
   token: string;
+  /** The page's id for the token, which the page matches before the name. */
+  tokenId?: string;
   /** The name the server gave it (a signal store's declared name), when it differs. */
   name?: string;
   index: number;
@@ -218,16 +224,18 @@ export interface ProviderTarget {
 /**
  * Finds the provider an agent named: `injector` is an injector id, an
  * environment injector name (Root, Platform, Route: admin), a tag, or a
- * component class name or id; `token` is the provider's token name. Without
- * `injector`, the first injector that provides the token, environment
- * injectors first. Answers with what to pass instead when nothing matches.
+ * component class name or id; `token` is the provider's token name, and
+ * `tokenId` picks one of several tokens with that name. Without `injector`,
+ * the first injector that provides the token, environment injectors first.
+ * Answers with what to pass instead when nothing matches, and with the
+ * candidates when the name fits several tokens.
  */
 export function findProvider(
   page: InjectorPage,
   token: string,
   injector?: string,
+  tokenId?: string,
 ): ProviderTarget | { error: string } {
-  const want = token.trim().toLowerCase();
   const all = [...flatten(page.environment), ...flatten(page.roots)];
   const named = injector?.trim();
   const candidates = named
@@ -247,11 +255,14 @@ export function findProvider(
       error: `No injector on page \`${page.pageId}\` matches \`${named}\`. Pass an injector id, an environment injector name (Root, Platform, Route: …), a tag or a component class name; pangular:inspect-providers lists them.`,
     };
   }
+  // Only the providers of the injectors `injector` names count, so a name
+  // two injectors use for different tokens resolves once one is named.
+  const pick = pickToken(page, token, tokenId, tokenId ? all : candidates);
+  if ('error' in pick) return pick;
+  if ('ambiguous' in pick) return { error: ambiguousTokenText(token, pick.ambiguous, page.pageId) };
   for (const node of candidates) {
     // A signal store is found by its name or by `SignalStore`, the class name it has.
-    const index = node.providers.findIndex(
-      (p) => p.token.toLowerCase() === want || p.tokenClass?.toLowerCase() === want,
-    );
+    const index = node.providers.findIndex((p) => matchesToken(p, pick));
     if (index >= 0) {
       const provider = node.providers[index]!;
       return {
@@ -259,6 +270,7 @@ export function findProvider(
         injectorName: node.injector.name,
         // The page matches the class name it reported.
         token: provider.tokenClass ?? provider.token,
+        ...(provider.tokenId ? { tokenId: provider.tokenId } : {}),
         ...(provider.tokenClass ? { name: provider.token } : {}),
         index,
       };

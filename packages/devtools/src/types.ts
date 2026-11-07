@@ -344,6 +344,12 @@ export interface InjectorInfo {
 
 export interface ProviderInfo {
   token: string;
+  /**
+   * The page's stable id for the token object (`tok-N`, `token-id.ts`), so
+   * two tokens with the same name stay apart. Missing in reports from older
+   * versions, which then match by `token` name.
+   */
+  tokenId?: string;
   type: 'class' | 'value' | 'factory' | 'existing' | 'unknown';
   isViewProvider: boolean;
   multi?: boolean;
@@ -366,6 +372,8 @@ export interface ProviderInfo {
 export interface DependencyInfo {
   from: string;
   token: string;
+  /** The page's stable id for the token, as on `ProviderInfo.tokenId`. */
+  tokenId?: string;
   flags: string[];
   providedBy: string | null;
   providedByName?: string;

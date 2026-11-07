@@ -35,8 +35,12 @@ const InjectorSchema = v.object({
   host: v.optional(text),
 });
 
+// `tokenId` is optional: reports from older overlays have none and match by name.
+const tokenId = v.optional(clipped(100));
+
 const ProviderSchema = v.object({
   token: text,
+  tokenId,
   type: v.picklist(['class', 'value', 'factory', 'existing', 'unknown']),
   isViewProvider: v.boolean(),
   multi: v.optional(v.boolean()),
@@ -47,6 +51,7 @@ const ProviderSchema = v.object({
 const DependencySchema = v.object({
   from: text,
   token: text,
+  tokenId,
   flags: texts(10),
   providedBy: v.nullable(text),
   providedByName: v.optional(text),

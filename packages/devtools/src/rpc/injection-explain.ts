@@ -9,6 +9,7 @@ import { NULL_INJECTOR_ID } from '../injector-tree.ts';
 import type { InjectorPage, InjectorTreeNode, ProviderInfo } from '../types.ts';
 import { code, untrusted } from './forms-tools.ts';
 import { MAX_ARG_CHARS, NO_INJECTORS } from './injector-tools.ts';
+import { ambiguousTokenText, matchesToken, pickToken, TOKEN_ID_ARGUMENT } from './token-match.ts';
 
 export interface InjectionFlags {
   self?: boolean;
@@ -21,6 +22,8 @@ export interface ExplainInjectionArgs extends InjectionFlags {
   /** An element injector (tag, class name, component id, injector id) or an environment injector name. */
   selector?: string;
   token?: string;
+  /** Picks one of several tokens named `token` (`ProviderInfo.tokenId`). */
+  tokenId?: string;
 }
 
 /** What one injector on the path did with the token. */
@@ -52,6 +55,8 @@ export interface InjectionStep {
 export interface InjectionExplanation {
   pageId: string;
   token: string;
+  /** The page's id for the token, when the report has one. */
+  tokenId?: string;
   flags: (keyof InjectionFlags)[];
   start: {
     id: string;
@@ -162,6 +167,11 @@ export function explainInjection(
         .join(', ')}.`,
     };
   }
+  const pick = pickToken(page, token, args.tokenId, all);
+  if ('error' in pick) return pick;
+  if ('ambiguous' in pick) {
+    return { error: untrusted(ambiguousTokenText(token, pick.ambiguous, page.pageId)) };
+  }
   const flags = FLAG_NAMES.filter((flag) => args[flag] === true);
   const fromElement = start.injector.type === 'element';
 
@@ -191,7 +201,7 @@ export function explainInjection(
   // such as `providedIn: 'root'`, are not in a provider list.
   const resolvedHere = (id: string) =>
     all.some((node) =>
-      (node.dependencies ?? []).some((dep) => dep.providedBy === id && sameToken(dep.token, token)),
+      (node.dependencies ?? []).some((dep) => dep.providedBy === id && matchesToken(dep, pick)),
     );
 
   const steps: InjectionStep[] = [];
@@ -260,14 +270,14 @@ export function explainInjection(
       // itself (the first step) and when the lookup comes up from inside its view.
       const fromInside = i === 0 || previousElement?.injector.host === id;
       const canSeeView = fromInside && (i > 0 || !!node?.injector.component);
-      const matching = providers.filter((p) => sameToken(p.token, token));
+      const matching = providers.filter((p) => matchesToken(p, pick));
       const visible = matching.filter((p) =>
         atBoundary ? p.isViewProvider : canSeeView || !p.isViewProvider,
       );
       const isOwnClass =
         !!node &&
-        (sameToken(node.injector.component ?? '', token) ||
-          (!atBoundary && !!node.injector.directives?.some((d) => sameToken(d, token))));
+        (sameToken(node.injector.component ?? '', pick.name) ||
+          (!atBoundary && !!node.injector.directives?.some((d) => sameToken(d, pick.name))));
       if (visible.length) {
         status = 'provides';
         provider = visible[0];
@@ -289,7 +299,7 @@ export function explainInjection(
       }
       previousElement = node;
     } else {
-      const listed = providers.find((p) => sameToken(p.token, token));
+      const listed = providers.find((p) => matchesToken(p, pick));
       if (listed) {
         status = 'provides';
         provider = listed;
@@ -367,6 +377,7 @@ export function explainInjection(
   return {
     pageId: page.pageId,
     token,
+    ...(pick.id ? { tokenId: pick.id } : {}),
     flags,
     start: {
       id: start.injector.id,
@@ -415,7 +426,7 @@ export function explainInjectionText(result: InjectionExplanation | { error: str
     [
       `**${result.summary}**`,
       '',
-      `Lookup of ${code(result.token)} from ${code(result.start.component ?? result.start.name)} (${code(result.start.id)}) on page ${code(result.pageId)}, flags: ${result.flags.length ? result.flags.join(', ') : 'none'}. Read from the injector tree the page reported; nothing was created or injected.`,
+      `Lookup of ${code(result.token)}${result.tokenId ? ` (${code(result.tokenId)})` : ''} from ${code(result.start.component ?? result.start.name)} (${code(result.start.id)}) on page ${code(result.pageId)}, flags: ${result.flags.length ? result.flags.join(', ') : 'none'}. Read from the injector tree the page reported; nothing was created or injected.`,
       '',
       '| Step | Injector | Kind | Result | Why |',
       '| --- | --- | --- | --- | --- |',
@@ -443,6 +454,7 @@ export const EXPLAIN_INJECTION_SCHEMA = {
       description:
         'The token, as the Injectors tab names it: a class name (HttpClient) or an InjectionToken description (API_URL). At most 500 characters.',
     },
+    tokenId: TOKEN_ID_ARGUMENT,
     self: FLAG_SCHEMA('`inject(T, { self: true })` / `@Self()`: ask only the first injector.'),
     skipSelf: FLAG_SCHEMA('`{ skipSelf: true }` / `@SkipSelf()`: start at the parent injector.'),
     host: FLAG_SCHEMA(
@@ -466,6 +478,7 @@ export function injectionArgs(raw: unknown): ExplainInjectionArgs & { page?: str
   return {
     selector: str('selector'),
     token: str('token'),
+    ...(str('tokenId') ? { tokenId: str('tokenId') } : {}),
     ...(page ? { page } : {}),
     ...Object.fromEntries(FLAG_NAMES.filter((flag) => args[flag] === true).map((f) => [f, true])),
   };
@@ -515,6 +528,7 @@ export function registerInjectionExplain(host: InjectionExplainHost): void {
       markdown: explainInjectionText(
         run({
           token: raw?.['token'],
+          tokenId: raw?.['tokenId'],
           page: raw?.['page'],
           ...flagsOf(raw),
           selector: raw?.['injector'],

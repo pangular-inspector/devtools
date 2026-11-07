@@ -32,6 +32,7 @@ import { registerStartup } from './rpc/startup-register.ts';
 import type { PangularServerPlugin } from './plugin.ts';
 import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
+import { TOKEN_ID_ARGUMENT } from './rpc/token-match.ts';
 import { registerInjectionExplain } from './rpc/injection-explain.ts';
 import { sanitizeInjectorTree } from './rpc/injector-report.ts';
 import { createFrameworkNames, markFramework } from './rpc/framework-tokens.ts';
@@ -3628,10 +3629,16 @@ const pangular = defineDevframe({
             description:
               'Optional. A token name, such as a service class or InjectionToken description (HttpClient, API_URL). Returns where it is provided and injected. With `injector`, only injections by the matching injectors are listed. At most 500 characters.',
           },
+          tokenId: TOKEN_ID_ARGUMENT,
           page: PAGE_ARGUMENT,
         },
       },
-      handler: async (args: { injector?: string; token?: string; page?: string }) => {
+      handler: async (args: {
+        injector?: string;
+        token?: string;
+        tokenId?: string;
+        page?: string;
+      }) => {
         const requested = pageArgument(args);
         if (requested && !injectorPages.has(requested)) {
           return {

@@ -392,11 +392,18 @@ describe('componentDetail', () => {
       {
         from: 'Card',
         token: 'Store',
+        tokenId: expect.stringMatching(/^tok-/),
         flags: [],
         providedBy: expect.any(String),
         providedByName: 'Root',
       },
-      { from: 'Card', token: 'Widget', flags: ['optional'], providedBy: null },
+      {
+        from: 'Card',
+        token: 'Widget',
+        tokenId: expect.stringMatching(/^tok-/),
+        flags: ['optional'],
+        providedBy: null,
+      },
     ]);
   });
 
