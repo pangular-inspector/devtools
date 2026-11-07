@@ -9,7 +9,7 @@ description: The live route, every navigation as a story, the live route config,
 
 # Router
 
-The Routes tab reads the running app's Router. The top section, **Live router**, has five views. The bottom section, **Source route config**, lists the routes your files declare. When more than one page is connected, a **Page** picker chooses which one you see.
+The Routes tab reads the running app's Router. The top section, **Live router**, has six views. The bottom section, **Source route config**, lists the routes your files declare. When more than one page is connected, a **Page** picker chooses which one you see.
 
 <ngmd-image src="/images/panel/router.png" alt="The Routes tab on the Current view after navigating to a user page: the URL and document title, the active routes with their components, params, static and resolved data and the resolver, and the outlets with Show in Components buttons"></ngmd-image>
 
@@ -36,7 +36,7 @@ Every navigation as one story:
 - Router warnings, and the cancel or error reason. The tab explains NG04xxx errors.
 - When the navigation error handler redirects, the navigation names the error handler as the cause and keeps the error that triggered it, with its error code.
 
-Filter by URL, or check **Only problems** to keep the navigations that did not succeed and the ones in a loop. **Only problems** leaves out the navigations that **Probe in app** cancels, the way the problem count on the **Navigations** tab does. Each row has **Replay** and **Copy repro** (a markdown repro). **Replay** is off for a navigation whose URL is redacted or not relative, and a note under the row says why. **Export JSON** saves the list.
+Filter by URL, or check **Only problems** to keep the navigations that did not succeed and the ones in a loop. **Only problems** leaves out the navigations that **Probe in app** cancels, the way the problem count on the **Navigations** tab does. Each row has **Replay**, **Compare** (opens the [Compare view](#compare) with this navigation as the later one) and **Copy repro** (a markdown repro). **Replay** is off for a navigation whose URL is redacted or not relative, and a note under the row says why. **Export JSON** saves the list.
 
 **Clear** empties the list and its loop warnings for the page you are looking at, so you can test a flow from a clean list without reloading the app. Other tabs keep their navigations. A navigation still running stays in the list. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, **Clear** is off.
 
@@ -55,6 +55,24 @@ To see one, open the Routes lab of the demo app (`/examples/routes`). **Guard lo
 When the view finds a loop, a **Loop detected** section appears above the list. It shows the cycle of URLs, such as `/account → /login → /account`. Under it, each hop names its cause: the guard, the `redirectTo` entry or the `navigate` call. A last line lists the navigation ids, how many times the chain came back, how it ended and the guards involved.
 
 Each navigation in a loop gets a **loop** badge and a red edge. Its details gain a **Loop** row with the cycle and the hop this navigation caused.
+
+### Compare
+
+Two recorded navigations side by side. Pick the **Earlier** and **Later** navigation. The view starts with the newest finished navigation and the one before it, and leaves out probes. Each part that differs gets a table with the field and its value in each navigation:
+
+| Part                        | What it compares                                                                    |
+| --------------------------- | ----------------------------------------------------------------------------------- |
+| **Navigation**              | URL, final URL, outcome, cancel code, trigger, redirect target and kind, error code |
+| **Query params**            | The query params of the final URL                                                   |
+| **Route params**            | The params of each activated route                                                  |
+| **Route data**              | The data of each activated route, static and resolved                               |
+| **Outlets and components**  | The route and component in each outlet, named outlets included                      |
+| **Guards**                  | The guards that ran, the overall verdict and each recorded guard result             |
+| **Resolvers**               | The resolvers that ran and each recorded resolver result                            |
+| **Phase timing**            | The time of each phase                                                              |
+| **Lazy loads and requests** | Lazy loaded routes and the HTTP request count                                       |
+
+The parts that are the same are listed under the tables. Params and data are kept for each navigation that ends, with secret-looking values redacted and each value cut at 120 characters. A navigation that was cancelled or failed activated no route, so the view says it has no route data to compare.
 
 ### Config
 
@@ -189,6 +207,7 @@ Without that recording, the guards listed for a navigation are candidates: the `
 | Tool or resource              | What it does                                                                                                                                                                                                                                                              |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pangular:explain-navigation` | Why a navigation failed or redirected, with any loop and the cause of each hop. Pass `url` or `id` to narrow it, `limit` for more than the last 5 (up to `limits.navigations`), `perf` for the slowest ones, or `format: "repro"` for a markdown repro of one navigation. |
+| `pangular:diff-navigations`   | What changed between two navigations: params, data, guards, resolvers, outlets, components and timing. Pass `a` and `b`, or leave them out to compare the newest navigation with the last one to the same path.                                                           |
 | `pangular:inspect-route`      | The route the page is on. Pass `component` (a component class, tag or link text) for the route a component was rendered for, or a link state.                                                                                                                             |
 | `pangular:list-routes`        | The live config with source files and example URLs. `match` predicts a URL, `audit` lists the guards of each page, `resolveLazy` loads the routes of a lazy route first.                                                                                                  |
 | `pangular:lint-routes`        | The lint findings, including redirect loops seen at runtime.                                                                                                                                                                                                              |

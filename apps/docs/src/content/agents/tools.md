@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Ninety-eight tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  Ninety-nine tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -634,9 +634,12 @@ All router tools read the page, except `scan-render-mode`, which also reads your
 | Tool                 | What it answers                                                                                                                                                                                                                                                                                       | Arguments                                                                     |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `inspect-route`      | The current route: URL, query params, fragment, title, the navigation in flight, the active route tree (component, params, data, guards, resolvers) and the outlet tree with each outlet's `routerOutletData`. With `component`, the route a component was rendered for, or whether a link is active. | `component`: component class, element tag or link text                        |
+| `diff-navigations`   | What changed between two recorded navigations: URL and outcome, query params, route params and data per route, the route and component in each outlet, guard and resolver verdicts, phase timing, lazy loads and the request count.                                                                   | `a`, `b`: navigation ids                                                      |
 | `explain-navigation` | Recent navigations, newest first: who started each one, redirects and loops with the cause of each hop, per-phase timing, guard and resolver verdicts, lazy loads, and the cancel or error reason in plain language.                                                                                  | `url`, `id`, `limit` (1 to `limits.navigations`, default 5), `perf`, `format` |
 
 Use `explain-navigation` for "why was I redirected". Pass `perf: true` for "why is navigation slow": it lists the slowest navigations and preloads. Pass `format: "repro"` for a markdown repro of one navigation (`id`, or by default the latest one that did not succeed), with router options, any loop it is part of and the relevant slice of the route config. `format` is `explain` by default, and `repro` can't be combined with `perf`.
+
+Use `diff-navigations` for "why did this work last time". Without `b`, it takes the newest finished navigation that is not a probe. Without `a`, it takes the latest earlier navigation to the same path, else the one before. Params and data come from the routes each navigation activated, so a cancelled or failed navigation has none, and the answer says so.
 
 ### Read the route config
 

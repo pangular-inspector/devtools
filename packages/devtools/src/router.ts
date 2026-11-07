@@ -3,6 +3,7 @@ import { routerHeldOnPage } from './router-fallback.ts';
 import { REDACTED, serializeFormValue } from './forms.ts';
 import { decode, isSecretKey, knownSecrets, redactText, rememberSecret } from './text-redact.ts';
 import { clip } from './text.ts';
+import { matchedRoutesOf, type MatchedRoute } from './router-matched.ts';
 
 export interface RouteGuards {
   canActivate?: string[];
@@ -84,6 +85,8 @@ export interface NavigationRecord {
   beforeConnect?: boolean;
   earlier?: number;
   probe?: boolean;
+  /** The routes it activated, for comparing two navigations (`router-diff.ts`). */
+  routes?: MatchedRoute[];
 }
 
 export interface RouterDebugApi {
@@ -1128,6 +1131,11 @@ export function applyRouterEvent(
         );
         if (!nav.lazyLoaded.length) delete nav.lazyLoaded;
       }
+      const matched = matchedRoutesOf(
+        read(() => snapshotState?.['root'] as AnyRecord, null),
+        state.secrets,
+      );
+      if (matched.length) nav.routes = matched;
       if (router) {
         const reused = reusedOf(router);
         if (reused.length) nav.reused = reused;

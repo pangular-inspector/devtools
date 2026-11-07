@@ -329,6 +329,7 @@ import {
 } from './rpc/default-page.ts';
 import { namingPageRead } from './rpc/page-read-scope.ts';
 import { routerActionAnswer } from './rpc/router-action-answer.ts';
+import { diffNavigationsText, navigationDiffResult } from './rpc/router-diff.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
@@ -1172,6 +1173,18 @@ const pangular = defineDevframe({
         if (!page?.config || typeof message?.url !== 'string') return null;
         return matchUrl(page.config, message.url.slice(0, 2000));
       },
+    });
+
+    register({
+      name: 'router-diff',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; a?: unknown; b?: unknown }) =>
+        navigationDiffResult(routerState.value() as RouterState, {
+          page: typeof message?.pageId === 'string' ? message.pageId : undefined,
+          a: typeof message?.a === 'number' ? message.a : undefined,
+          b: typeof message?.b === 'number' ? message.b : undefined,
+        }),
     });
 
     register({
@@ -3752,6 +3765,26 @@ const pangular = defineDevframe({
           return { markdown: exportNavigationText(state, { page: args.page, id: args.id }) };
         }
         return { markdown: explainNavigationText(state, args, Date.now(), limits.navigations) };
+      },
+    });
+
+    agent.registerTool({
+      id: 'pangular:diff-navigations',
+      title: 'Diff two navigations',
+      description:
+        'What changed between two recorded navigations: URL, outcome, query params, route params and data, the component in each outlet, guard and resolver verdicts and timing. `b` defaults to the newest finished navigation, `a` to the last earlier one to the same path.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          page: pageProperty,
+          a: { type: 'integer', description: 'Id of the earlier navigation.' },
+          b: { type: 'integer', description: 'Id of the later navigation.' },
+        },
+      },
+      handler: async (args: { page?: string; a?: number; b?: number }) => {
+        const state = routerState.value() as RouterState;
+        if (!state.pages.length) return { markdown: noRouter };
+        return { markdown: diffNavigationsText(state, args) };
       },
     });
 

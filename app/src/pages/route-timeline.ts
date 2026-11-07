@@ -1,4 +1,4 @@
-import { Component, computed, input, linkedSignal } from '@angular/core';
+import { Component, computed, input, linkedSignal, output } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
@@ -296,6 +296,14 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
               <button
                 type="button"
                 class="small"
+                (click)="compare.emit(nav.id)"
+                [attr.aria-label]="'Compare navigation ' + nav.id + ' with an earlier one'"
+              >
+                Compare
+              </button>
+              <button
+                type="button"
+                class="small"
                 (click)="copy(nav)"
                 [attr.aria-label]="'Copy repro for navigation ' + nav.id"
               >
@@ -584,6 +592,8 @@ export class RouteTimeline {
   protected readonly plural = plural;
   page = input.required<RouterPage>();
   rpc = input<DevframeRpcClient | null>(null);
+  /** Asks for the Compare view with this navigation as the later one. */
+  readonly compare = output<number>();
   readonly maxNavigations = computed(() => panelConfig(this.rpc()).limits.navigations);
   readonly navigationAllowed = computed(() => actionAllowed(this.rpc(), 'router'));
   protected readonly navigationOff = actionBlockedMessage('router');

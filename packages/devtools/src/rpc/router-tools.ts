@@ -226,6 +226,18 @@ function isRun(value: unknown): boolean {
   );
 }
 
+function isMatchedRoute(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const route = value as Record<string, unknown>;
+  return (
+    isText(route['path'], 301) &&
+    optional(route['outlet'], (v) => isText(v, 100)) &&
+    optional(route['component'], (v) => isText(v, 201)) &&
+    optional(route['params'], isTextMap) &&
+    optional(route['data'], isTextMap)
+  );
+}
+
 function isNavigation(value: unknown): boolean {
   if (!isRecord(value)) return false;
   const nav: Partial<NavigationRecord> = value;
@@ -276,6 +288,7 @@ function isNavigation(value: unknown): boolean {
         isNames((v as { urls?: unknown }).urls, 10, 2001),
     ) &&
     optional(nav.runs, (v) => Array.isArray(v) && v.length <= 40 && v.every(isRun)) &&
+    optional(nav.routes, (v) => Array.isArray(v) && v.length <= 30 && v.every(isMatchedRoute)) &&
     optional(
       nav.guards,
       (v) =>

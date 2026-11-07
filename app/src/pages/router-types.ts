@@ -58,6 +58,7 @@ export interface NavigationRecord {
   beforeConnect?: boolean;
   earlier?: number;
   probe?: boolean;
+  routes?: MatchedRoute[];
 }
 
 export interface LoopHop {
@@ -203,6 +204,32 @@ export interface LintFinding {
 export type LintResult =
   | { checked: true; findings: LintFinding[] }
   | { checked: false; reason: 'no-page' | 'events-only' | 'no-config' };
+
+/** A field that differs between two navigations (`router-diff` RPC). */
+export interface DiffChange {
+  field: string;
+  before?: string;
+  after?: string;
+}
+
+export type NavigationDiffResult =
+  | {
+      a: number;
+      b: number;
+      sections: { title: string; changes: DiffChange[] }[];
+      same: string[];
+      notes: string[];
+    }
+  | { error: string };
+
+/** One activated route kept on a navigation record. */
+export interface MatchedRoute {
+  path: string;
+  outlet?: string;
+  component?: string;
+  params?: Record<string, string>;
+  data?: Record<string, string>;
+}
 
 export const routerCall = rpcTry;
 
