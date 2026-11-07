@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Ninety-eight tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  104 tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -174,10 +174,10 @@ Every tool has one of three safety tiers. The server sends the tier to your clie
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `read`        | Reads your source, the page or the server. `highlight` only shows and selects a component.                                           | Every other tool, and every resource                                                                                                                                                                                                                                                                                                                    |
 | `action`      | Changes the running page, the server's fault rules and SSR overrides, or what the page records. A reload or the next call undoes it. | `navigate`, `probe-route`, `record-guards`, `ngrx-dispatch`, `ngrx-restore`, `tanstack-run-query`, `run-form-action`, `fill-form`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `set-component-property`, `set-signal`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection` and `audit` |
-| `destructive` | Can lose data: it erases recordings, or sends writes to your own API routes.                                                         | `clear-recordings` and `analog-run-api`                                                                                                                                                                                                                                                                                                                 |
+| `destructive` | Can lose data: it erases recordings, deletes the Nitro cache, or sends writes to your own API routes.                                | `clear-recordings`, `analog-run-api` and `analog-purge-nitro-cache`                                                                                                                                                                                                                                                                                     |
 
 <ngmd-alert severity="important">
-  The twenty-one <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
+  The twenty-two <code>action</code> and <code>destructive</code> tools act on the app. Your client can ask you before it runs them.
 </ngmd-alert>
 
 When the hub is mounted, each finished call of an `action` or `destructive` tool posts an `Agent ran <tool>` message to the hub, so you can see what the agent changed. `record-change-detection` posts only when it starts, stops or clears a recording, or turns a live view on or off, and `audit` only when it runs axe. See [Messages and badges](../getting-started/popup-and-hub.md#messages-and-badges).
@@ -965,27 +965,32 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 ### Routes and files
 
-| Tool                           | What it answers                                                                                                                                                                                               | Arguments        |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `analog-scan-routes`           | File routes in match order: URL pattern, page or layout file, route groups, params, the sibling `.server.ts`, and route meta.                                                                                 | `filter`         |
-| `analog-scan-url`              | Which files render a URL (layouts, page, `.server.ts` load), the params, or why nothing matches.                                                                                                              | `url` (required) |
-| `analog-scan-api-routes`       | Server routes under `src/server/routes` with method, URL and file, plus server middleware.                                                                                                                    | none             |
-| `analog-scan-server-functions` | Server functions (`serverFn` exports in any `.server.ts` under `src`) with name, method, file and id, how often each ran over HTTP and during server rendering, and reads called again right after hydration. | none             |
-| `analog-scan-content`          | Markdown content files with slug, frontmatter, the route that serves them and parse errors.                                                                                                                   | `filter`         |
+| Tool                           | What it answers                                                                                                                                                                                                                                  | Arguments        |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
+| `analog-scan-routes`           | File routes in match order: URL pattern, page or layout file, route groups, params, the sibling `.server.ts`, and route meta.                                                                                                                    | `filter`         |
+| `analog-scan-url`              | Which files render a URL (layouts, page, `.server.ts` load), the params, or why nothing matches.                                                                                                                                                 | `url` (required) |
+| `analog-scan-api-routes`       | Server routes under `src/server/routes` with method, URL and file, plus server middleware.                                                                                                                                                       | none             |
+| `analog-scan-server-functions` | Server functions (`serverFn` exports in any `.server.ts` under `src`) with name, method, file and id, how often each ran over HTTP and during server rendering, and reads called again right after hydration.                                    | none             |
+| `analog-scan-content`          | Markdown content files with slug, frontmatter, the route that serves them and parse errors, plus mismatches with the [`analog.contentSchema`](../getting-started/configuration.md#analog) file and where the app reads content files.            | `filter`         |
+| `analog-scan-build`            | The last client build in `dist/analog/public`: JS and CSS totals with gzip, the entry chunk, each page's chunk with what it loads beyond the entry, its lazy chunks, and the largest files. Says to run `analog build` first when there is none. | none             |
+| `analog-scan-nitro`            | Nitro server plugins, tasks, storage mounts in `vite.config`, the routes cached by `isr`, `swr` or `cache` rules, and the cache entries on disk.                                                                                                 | none             |
+| `analog-scan-runtime-config`   | The `import.meta.env` keys, Nitro `runtimeConfig` from `vite.config` with `NITRO_` env overrides, and the resolved `analog()` options. Secret names and tokens are masked.                                                                       | none             |
 
 ### The running page
 
 | Tool                       | What it answers                                                                                                                                                                                                                                                                      | Reads       | Arguments                                                                                                                                               |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `analog-inspect-page`      | The open page: its files (layouts first, then pages in named outlets with the outlet name), the `load()` data it received, server rendering and hydration state, and hydration errors.                                                                                               | page        | none                                                                                                                                                    |
+| `analog-inspect-page`      | The open page: its files (layouts first, then pages in named outlets with the outlet name), the `load()` data it received, server rendering and hydration state, and hydration errors. With `data: true` it asks the page for the full `load()` value, masked, up to 200 KB.         | page        | `page`, `data`                                                                                                                                          |
+| `analog-inspect-transform` | Transforms a page, layout or `.server.ts` file again on the dev server and lists each plugin that changed it, in order, with the final code and whether each server function id is in it.                                                                                            | Vite plugin | `file` (required, as `analog-scan-routes` lists it), `ssr`                                                                                              |
 | `analog-list-server-calls` | Recent page renders, `load()` fetches, form actions (with their outcome), server functions by name and API calls, with status, time and size. Flags a `load()` fetched twice and a seeded server function read called again. Each call names its tab when the dev server could tell. | Vite plugin | `kind` (`page`, `load`, `action`, `fn` or `api`), `route`, `limit`, `page` (only that tab's calls; leave it out for every call, untagged ones included) |
 
 ### Rendering
 
-| Tool                          | What it answers                                                                                                                                                                                                      | Arguments |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `analog-explain-render-modes` | For each page: server rendered, prerendered, cached, redirected or client only, the route rule or config that decides it, and what the last request actually did. Says when `vite.config` could not be read in full. | none      |
-| `analog-scan-prerender`       | `prerender.routes` and `routeRules` with `prerender: true`, compared with the page files and the build output. Says when `vite.config` could not be read in full.                                                    | none      |
+| Tool                          | What it answers                                                                                                                                                                                                                         | Arguments                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `analog-explain-render-modes` | For each page: server rendered, prerendered, cached, redirected or client only, the route rule or config that decides it, and what the last request actually did. Says when `vite.config` could not be read in full.                    | none                            |
+| `analog-scan-prerender`       | `prerender.routes` and `routeRules` with `prerender: true`, compared with the page files and the build output. Says when `vite.config` could not be read in full.                                                                       | none                            |
+| `analog-inspect-render-mode`  | Requests a page route from the dev server with `Accept: text/html` and compares `cache-control`, `x-nitro-prerender`, `x-analog-no-ssr` and the HTML with the configured mode. Dynamic segments get a sample value. Reads: Vite plugin. | `path` (required, a page route) |
 
 ### Call a server route <ngmd-badge variant="destructive">Destructive</ngmd-badge>
 
@@ -993,16 +998,27 @@ These tools cover *Analog apps. Most read your source. Some also read what the V
 
 `path` must be an API route (under the API prefix, or any route in `src/server/routes`), an `/_analog` URL or a page of the app. The tool refuses Vite internals such as `/@fs/` and `/@id/`, Vite query flags such as `?raw`, `?url` and `?import`, `.` and `..` segments, and any path that names a file or folder in the project, so it can't read your source or files outside the app.
 
-| Argument  | Required | Value                                                         |
-| --------- | -------- | ------------------------------------------------------------- |
-| `path`    | yes      | An API route, an `/_analog` URL or a page path.               |
-| `method`  | no       | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` or `OPTIONS`. |
-| `body`    | no       | A JSON body.                                                  |
-| `confirm` | no       | Required for methods other than `GET`, `HEAD` and `OPTIONS`.  |
+| Argument  | Required | Value                                                                                                               |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `path`    | yes      | An API route, an `/_analog` URL or a page path.                                                                     |
+| `method`  | no       | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD` or `OPTIONS`.                                                       |
+| `body`    | no       | A JSON body.                                                                                                        |
+| `confirm` | no       | Required for methods other than `GET`, `HEAD` and `OPTIONS`.                                                        |
+| `headers` | no       | Extra request headers by name. `host`, `content-length` and other headers fetch or the dev server owns are refused. |
+| `cookies` | no       | Cookies by name, sent as one `cookie` header.                                                                       |
+
+### Purge the Nitro cache <ngmd-badge variant="destructive">Destructive</ngmd-badge>
+
+`analog-purge-nitro-cache` deletes Nitro cache entry files from disk, so the routes cached by `isr`, `swr` or `cache` rules render again on the next request. It needs `confirm: true` and [`actions.analog`](../getting-started/configuration.md#actions). It deletes only the `.json` entries `analog-scan-nitro` lists, in a Nitro cache folder inside the project.
+
+| Argument  | Required | Value                                                                |
+| --------- | -------- | -------------------------------------------------------------------- |
+| `confirm` | yes      | Must be `true`.                                                      |
+| `files`   | no       | Entry paths as `analog-scan-nitro` lists them. Leave it out for all. |
 
 ### Lint
 
-`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, frontmatter errors, and a `vite.config` it could not read in full (`config-partial`). It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the default page. If no page with that id sends Analog data, the answer says so and lists the pages that do.
+`analog-lint` finds Analog mistakes: two files for one URL, a missing default export, a layout without `router-outlet`, bad API method suffixes, prerender entries that match nothing, frontmatter errors, frontmatter that does not match the content schema (`content-schema`), and a `vite.config` it could not read in full (`config-partial`). It also reports live problems, like a `load()` fetched twice, a server function read that runs again after hydration, or a restart needed. Hydration errors and restart hints come from one page: pass `page` to pick it, or leave it out for the default page. If no page with that id sends Analog data, the answer says so and lists the pages that do.
 
 <ngmd-alert severity="helpful">
   <code>analog-list-server-calls</code> and <code>analog-run-api</code> need the <a href="../getting-started/vite.md">Vite plugin</a>. The plugin records the calls and knows the dev server address.
