@@ -1368,6 +1368,8 @@ export const SHARED_RPC: readonly string[] = [
   'audit-session',
   'request-axe-run',
   'axe-result',
+  // Auth and access settings for the Dashboard, for trusted clients; no inspector owns them.
+  'security-status',
 ];
 
 /**
@@ -2380,4 +2382,44 @@ export function deferNotes(block: DeferNoteBlock, pageNow: number): DeferNote[] 
     notes.push({ kind: 'dehydrated', text: 'still dehydrated', label: 'dehydrated' });
   }
   return notes;
+}
+
+/** Whether the one-time code is off, accepted, or locked after too many wrong codes. */
+export type OneTimeCodeState = 'off' | 'accepting' | 'locked';
+
+/**
+ * The answer of the `security-status` RPC (`security-status.ts`), for trusted
+ * clients: how the server lets clients in. It never carries a token, a
+ * pairing token or the one-time code.
+ */
+export interface SecurityStatus {
+  /** False when the host did not say how it is set up; the access fields are then defaults. */
+  reported: boolean;
+  /** Whether clients need the one-time code, a trusted token or a pairing token. */
+  auth: boolean;
+  /** Whether the server checks the `Origin` of requests and WebSocket upgrades. */
+  originCheck: boolean;
+  /** Origins allowed beyond this machine and the Chrome extension, at most 20. */
+  allowedOrigins: string[];
+  /** Whether a custom origin registry decides beyond `allowedOrigins`. */
+  customOrigins: boolean;
+  /** `Host` names allowed beyond loopback, or `any`. */
+  allowedHosts: string[] | 'any';
+  /** Whether the server answers other machines, not only this one. */
+  network: boolean;
+  /** Trusted tokens from the one-time code: how many, and when they expire. */
+  tokens: {
+    count: number;
+    nextExpiresAt: number | null;
+    lastExpiresAt: number | null;
+    /** How long a token stays trusted. */
+    ttlMs: number;
+  };
+  /** Pairing tokens the server accepts instead of the code. Only their count. */
+  pairingTokens: number;
+  oneTimeCode: {
+    state: OneTimeCodeState;
+    /** When the current code expires; only while it is accepting codes. */
+    expiresAt?: number;
+  };
 }

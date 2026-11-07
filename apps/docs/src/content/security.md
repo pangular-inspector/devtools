@@ -223,6 +223,21 @@ A page reconnects with the same page id after a reload. To take its page back, t
 
 Agent tools and the panel don't report pages, so these rules don't apply to them. [`ngrx-dispatch`](./agents/tools.md#dispatch-an-action) without `page` is refused while more than one page reports NgRx state. The answer lists those pages, so you can call it again with one. Other tools that act on a page pick one when `page` is left out. `navigate`, for example, acts on the first page that reports a router. Pass `page` when more than one tab is open.
 
+### Check the security status
+
+The **Security** block on the [Dashboard](./inspectors/dashboard.md#security-block) shows how the running server lets clients in. The panel reads it with the `security-status` RPC, which answers trusted clients only: a panel or page that exchanged the one-time code, sent a trusted token or a pairing token, or any client while auth is off.
+
+| Row             | What it says                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| One-time code   | On, with when the current code expires; off; or locked after too many wrong codes.                                     |
+| Trusted clients | How many session tokens the server trusts, and when the first and the last of them expire.                             |
+| Pairing tokens  | How many [pairing tokens](#pairing-tokens) the server accepts. Only shown when it accepts any.                         |
+| Reach           | This machine only, or other machines too (`allowLan`, `--host` with a network address, or no origin check).            |
+| Allowed origins | The origins allowed beyond this machine and the Chrome extension, at most 20, or **Any** when the origin check is off. |
+| Allowed hosts   | The `Host` names allowed beyond loopback, from Vite's `server.allowedHosts`. Only shown when there are any.            |
+
+The answer never holds a token, a pairing token or the one-time code. It holds counts, times and the origins and hosts from your own config, masked like other text. Agent tools can't read it. A static report built with `pangular build` has no server, so its Dashboard shows no **Security** block.
+
 ## What is redacted
 
 Live values leave the page. They are sent to the devtools server, shown in the panel and returned to agents. Redacted values are replaced with `[redacted]`.

@@ -206,6 +206,16 @@ export function guardedExchange(
   };
 }
 
+const guards = new WeakMap<object, CodeGuard>();
+
+/**
+ * Whether the context's code guard locked the exchange after too many wrong
+ * codes (`CodeGuard.locked`). False when no guard was registered.
+ */
+export function codeGuardLocked(ctx: unknown): boolean {
+  return guards.get(ctx as object)?.locked ?? false;
+}
+
 /**
  * Registers the guarded code exchange on the devframe's RPC host, before
  * devframe registers its own. Returns false when an exchange was registered
@@ -219,12 +229,9 @@ export function registerCodeGuard(
   if (context.mode === 'build') return true;
   if (context.rpc.definitions.has(EXCHANGE)) return false;
   const { onTrusted, ...guardOptions } = options;
-  const handler = guardedExchange(
-    context,
-    new CodeGuard(guardOptions),
-    defaultExchange(context),
-    onTrusted,
-  );
+  const guard = new CodeGuard(guardOptions);
+  guards.set(context, guard);
+  const handler = guardedExchange(context, guard, defaultExchange(context), onTrusted);
   context.rpc.register({ name: EXCHANGE, type: 'action', jsonSerializable: true, handler });
   return true;
 }

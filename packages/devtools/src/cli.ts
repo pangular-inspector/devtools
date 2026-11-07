@@ -10,12 +10,14 @@ import { createInteractiveAuth } from 'devframe/recipes/interactive-auth';
 import {
   accessLines,
   cliAccess,
+  listensOnNetwork,
   networkAddresses,
   setupSnippetLines,
   type CliAccess,
   type CliAccessFlags,
 } from './cli-access.ts';
 import { cliGatePolicy, gatedDevApp } from './cli-gate.ts';
+import type { PangularSecurityHost } from './security-status.ts';
 import pangular, { createPangular } from './devframe.ts';
 import { mcpPrintConfig, printConfigPort } from './mcp-print-config.ts';
 import {
@@ -179,12 +181,36 @@ function copyCommand(cli: CAC, from: Command, name: string, description: string)
   return command;
 }
 
-/** What `createPangular()` gets for a command: pairing tokens only for the dev server. */
-export function cliHostOptions(command: string, access: CliAccess, notAProject?: string) {
+/**
+ * What `createPangular()` gets for a command: pairing tokens and the access
+ * settings (for the Dashboard's security status) only for the dev server.
+ */
+export function cliHostOptions(
+  command: string,
+  access: CliAccess,
+  notAProject?: string,
+  security?: PangularSecurityHost,
+) {
   return {
     pageTools: command !== 'mcp',
     authTokens: command === 'dev' ? access.authTokens : [],
     ...(notAProject ? { notAProject } : {}),
+    ...(command === 'dev' && security ? { security } : {}),
+  };
+}
+
+/** The dev server's access settings, from its flags. */
+export function cliSecurity(
+  flags: { auth?: boolean; host?: string; proxyOrigin?: string },
+  access: CliAccess,
+): PangularSecurityHost {
+  const host = flags.host ?? 'localhost';
+  const proxy = flags.proxyOrigin ? proxyPanelUrl(flags.proxyOrigin) : undefined;
+  return {
+    auth: flags.auth !== false,
+    originCheck: true,
+    allowedOrigins: cliGatePolicy(access.allowedOrigins, host, proxy).allowedOrigins ?? [],
+    network: listensOnNetwork(host),
   };
 }
 
@@ -337,7 +363,10 @@ export function createPangularCli(options: PangularCliOptions = {}) {
     }
     resolved = resolvePangularConfig(config);
     // The agent never sees stderr, so the source scan tools say it too.
-    current = createPangular(config, cliHostOptions(command, access, angular ? undefined : root));
+    current = createPangular(
+      config,
+      cliHostOptions(command, access, angular ? undefined : root, cliSecurity(flags, access)),
+    );
   };
 
   const configureCli = (cli: CAC) => {
