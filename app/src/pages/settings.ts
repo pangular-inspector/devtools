@@ -34,7 +34,7 @@ const THEMES: { value: ThemePreference; label: string; hint: string }[] = [
 ];
 
 /**
- * Per-viewer settings (theme, tab bar layout and the popup's passive mode),
+ * Per-viewer settings (theme, tab bar layout, and the popup's passive mode and counts launcher),
  * and the dev server's browser agent tools switch.
  */
 @Component({
@@ -158,6 +158,20 @@ const THEMES: { value: ThemePreference; label: string; hint: string }[] = [
           The popup shortcut is turned off in the devtools config (<code>popup.hotkey</code>), so
           the button always shows.
         }
+      </p>
+      <label class="check wide">
+        <input
+          type="checkbox"
+          [checked]="pill()"
+          aria-describedby="settings-pill-hint"
+          (change)="pill.set($any($event.target).checked)"
+        />
+        <span>Counts launcher: show render and error counts on the floating button</span>
+      </label>
+      <p class="hint" id="settings-pill-hint">
+        While the panel is closed, the button becomes a pill with the number of component renders
+        and errors on the page since it loaded. Off by default. The popup on the page saves this
+        setting.
       </p>
     </section>
 
@@ -437,6 +451,8 @@ export class Settings {
   readonly layout = model<TabLayout>(DEFAULT_TAB_LAYOUT);
   readonly theme = model<ThemePreference>('system');
   readonly passive = model(false);
+  /** The counts launcher: the floating button shows render and error counts. */
+  readonly pill = model(false);
   /** The popup shortcut as the platform writes it, or `false` when it is off. */
   readonly hotkey = input<string | false>(false);
   readonly paletteShortcut = input('Ctrl+K');

@@ -36,6 +36,23 @@ describe('pangular build --outDir', () => {
     }
   });
 
+  it('treats a folder named like ..app as a child, so its parent is refused even with --force', () => {
+    const parent = fixtureDir('pangular-cli-dots-');
+    const cwd = join(parent, '..app');
+    mkdirSync(join(cwd, 'src'), { recursive: true });
+    for (const outDir of [parent, '..']) {
+      expect(() => checkReportOutDir(outDir, { cwd, force: true })).toThrow(
+        /working directory or one of its parents/,
+      );
+    }
+    expect(() =>
+      checkReportOutDir(join(cwd, 'dist-report'), { cwd: parent, invokedFrom: cwd, force: true }),
+    ).not.toThrow();
+    expect(() =>
+      checkReportOutDir(parent, { cwd: join(cwd, 'src'), invokedFrom: cwd, force: true }),
+    ).toThrow(/working directory or one of its parents/);
+  });
+
   it('sees through symlinks to the working directory and its parents, even with --force', () => {
     const root = fixtureDir('pangular-cli-link-');
     const cwd = join(root, 'workspace');

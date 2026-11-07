@@ -190,6 +190,16 @@ describe('attachErrors', () => {
     ]);
   });
 
+  it('counts every caught error, repeats included, for the launcher pill', () => {
+    quiet();
+    const h = harness();
+    expect(h.collector.errorCount()).toBe(0);
+    window.dispatchEvent(new ErrorEvent('error', { error: new Error('Once') }));
+    h.handler.handleError(new Error('Twice'));
+    h.handler.handleError(new Error('Twice'));
+    expect(h.collector.errorCount()).toBe(3);
+  });
+
   it('counts one occurrence once when Angular forwards a window error to its handler', async () => {
     quiet();
     const h = harness();

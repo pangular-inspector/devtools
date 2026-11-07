@@ -29,6 +29,8 @@ import type { ComponentFocus } from '../types/component-focus.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
 import { storeFlag, storedFlag } from '../view-prefs';
 import { StartupSection } from './startup-section';
+import { SearchField } from '../ui/search-field';
+import { Splitter, storedPaneSize } from '../ui/splitter';
 import type {
   InjectorTreeLimits,
   InjectorTreeNode,
@@ -104,6 +106,8 @@ function isTree(value: unknown): value is InjectorNode[] {
 @Component({
   selector: 'app-di-inspector',
   imports: [
+    SearchField,
+    Splitter,
     AngularUnavailable,
     NgTemplateOutlet,
     ProviderValue,
@@ -169,23 +173,13 @@ function isTree(value: unknown): value is InjectorNode[] {
             Environment <span class="pill">{{ environmentCount() }}</span>
           </button>
         </div>
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #queryInput
-            type="search"
-            placeholder="Find a token, component or injector…"
-            aria-label="Find a token, component or injector"
-            autocomplete="off"
-            spellcheck="false"
-            [value]="query()"
-            (input)="query.set($any($event.target).value)"
-            (keydown.escape)="query.set('')"
-          />
-        </div>
+        <app-search-field
+          #queryInput
+          class="search"
+          placeholder="Filter by token, component or injector"
+          saveKey="injectors"
+          [(value)]="query"
+        />
         <ng-container [ngTemplateOutlet]="pagePicker" />
         @if (view() === 'element') {
           <label class="checkbox">
@@ -309,7 +303,7 @@ function isTree(value: unknown): value is InjectorNode[] {
         </div>
       }
 
-      <div class="layout">
+      <div class="layout" [style.--detail-size.px]="detailSize()">
         @if (!rows().length) {
           <div class="state">
             <p class="state-title">No injectors to show</p>
@@ -402,6 +396,14 @@ function isTree(value: unknown): value is InjectorNode[] {
             </div>
           }
         </div>
+        <app-splitter
+          view="injectors"
+          label="Resize the injector detail"
+          [min]="300"
+          [max]="900"
+          [defaultSize]="420"
+          [(size)]="detailSize"
+        />
 
         @if (gone(); as name) {
           <section class="detail gone" aria-labelledby="di-detail-title">
@@ -694,23 +696,13 @@ function isTree(value: unknown): value is InjectorNode[] {
       </div>
     } @else {
       <div class="toolbar">
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #queryInput
-            type="search"
-            placeholder="Filter by token or file…"
-            aria-label="Filter by token or file"
-            autocomplete="off"
-            spellcheck="false"
-            [value]="query()"
-            (input)="query.set($any($event.target).value)"
-            (keydown.escape)="query.set('')"
-          />
-        </div>
+        <app-search-field
+          #queryInput
+          class="search"
+          placeholder="Filter by token or file"
+          saveKey="injectors-source"
+          [(value)]="query"
+        />
         <ng-container [ngTemplateOutlet]="pagePicker" />
         <span class="total" aria-live="polite">
           {{ sourceMatchCount() }} of {{ sourceProviders().length }}
@@ -1072,9 +1064,23 @@ function isTree(value: unknown): value is InjectorNode[] {
       gap: 12px;
       align-items: start;
     }
+    .layout > app-splitter {
+      display: none;
+    }
     @media (min-width: 880px) {
       .layout {
-        grid-template-columns: minmax(0, 1fr) minmax(340px, 44%);
+        grid-template-columns: minmax(0, 1fr) auto min(var(--detail-size, 420px), 70%);
+      }
+      .layout > * {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .layout > app-splitter {
+        display: block;
+        grid-column: 2;
+      }
+      .layout > .detail {
+        grid-column: 3;
       }
       .detail {
         position: sticky;
@@ -1958,7 +1964,9 @@ export class DiInspector {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly view = signal<TreeView>('element');
   readonly query = signal('');
-  private readonly queryInput = viewChild<ElementRef<HTMLInputElement>>('queryInput');
+  /** The detail width on wide panels, set by the splitter and saved per view. */
+  readonly detailSize = signal(storedPaneSize('injectors', 420));
+  private readonly queryInput = viewChild<SearchField>('queryInput');
   readonly onlyProviding = signal(false);
   readonly componentsOnly = signal(true);
   /** Hides Angular's own injectors and providers (marked `framework` by the server). */
@@ -2461,7 +2469,7 @@ export class DiInspector {
   /** Clears the search from a no-match message and keeps focus on the search box. */
   clearQuery() {
     this.query.set('');
-    this.queryInput()?.nativeElement.focus();
+    this.queryInput()?.focus();
   }
 
   label(node: InjectorNode) {

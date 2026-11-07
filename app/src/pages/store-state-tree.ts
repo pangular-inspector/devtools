@@ -9,6 +9,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { short } from './store-types';
+import { SearchField } from '../ui/search-field';
 
 /** The serializer's type marker: a tagged value shows as one leaf. */
 const TYPE = '@type';
@@ -111,16 +112,14 @@ export function stateRows(
  */
 @Component({
   selector: 'app-state-tree',
+  imports: [SearchField],
   template: `
     <div class="tree-tools">
-      <input
-        type="search"
+      <app-search-field
         class="tree-search"
-        placeholder="Search keys and values"
-        [attr.aria-label]="'Search ' + label()"
-        [value]="query()"
-        (input)="query.set($any($event.target).value)"
-        (keydown.escape)="query.set('')"
+        placeholder="Filter by key or value"
+        [label]="'Filter ' + label()"
+        [(value)]="query"
       />
       @if (query()) {
         <span class="count">{{ matches() }} {{ matches() === 1 ? 'match' : 'matches' }}</span>
@@ -191,17 +190,6 @@ export function stateRows(
     .tree-search {
       flex: 1 1 auto;
       min-width: 0;
-      height: var(--control-h);
-      padding: 0 10px;
-      border: 1px solid var(--control-border);
-      border-radius: var(--radius-sm);
-      background: var(--bg);
-      color: var(--text);
-      font: inherit;
-      font-size: 12px;
-    }
-    .tree-search:focus-visible {
-      @include m.field-focus;
     }
     .count {
       flex: none;

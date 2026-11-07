@@ -60,6 +60,7 @@ import { ForBlocksSection, type ForBlock } from './for-blocks-section';
 import { LeaksSection, type LeaksPage } from './leaks-section';
 import { VirtualWindow } from '../ui/virtual-window';
 import { keepBelowSticky, stickyClearance } from '../ui/sticky-clearance';
+import { SearchField } from '../ui/search-field';
 
 interface SourceComponent {
   selector: string;
@@ -226,6 +227,7 @@ function storedDirectiveHosts(): boolean {
 @Component({
   selector: 'app-component-tree',
   imports: [
+    SearchField,
     NgTemplateOutlet,
     Select,
     CdRecording,
@@ -249,28 +251,19 @@ function storedDirectiveHosts(): boolean {
       </p>
 
       <div class="toolbar">
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #filterInput
-            type="search"
-            placeholder="Filter: text, <tag> or [directive]…"
-            aria-label="Filter components by class, tag or directive"
-            aria-describedby="ct-filter-hint"
-            autocomplete="off"
-            spellcheck="false"
-            [value]="filter()"
-            (input)="setFilter($any($event.target).value)"
-            (keydown.escape)="setFilter('')"
-          />
-          <span id="ct-filter-hint" class="sr-only">
-            Type plain text, a tag such as &lt;button&gt;, or a directive such as [routerLink].
-            Combine them to narrow the tree.
-          </span>
-        </div>
+        <app-search-field
+          #filterInput
+          class="search"
+          placeholder="Filter by text, <tag> or [directive]"
+          describedBy="ct-filter-hint"
+          saveKey="components"
+          [value]="filter()"
+          (valueChange)="setFilter($event)"
+        />
+        <span id="ct-filter-hint" class="sr-only">
+          Type plain text, a tag such as &lt;button&gt;, or a directive such as [routerLink].
+          Combine them to narrow the tree.
+        </span>
         @if (pageOptions().length > 1) {
           <span class="sr-only" id="ct-page-label">Page</span>
           <app-select
@@ -597,23 +590,13 @@ function storedDirectiveHosts(): boolean {
               </dl>
 
               <div class="prop-filter">
-                <div class="search">
-                  <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="11" cy="11" r="7" />
-                    <path d="m20 20-3.5-3.5" />
-                  </svg>
-                  <input
-                    #propFilterInput
-                    type="search"
-                    placeholder="Filter values by name…"
-                    aria-label="Filter inputs, outputs and properties by name, including opened nested keys"
-                    autocomplete="off"
-                    spellcheck="false"
-                    [value]="propFilter()"
-                    (input)="propFilter.set($any($event.target).value)"
-                    (keydown.escape)="clearPropFilter($event)"
-                  />
-                </div>
+                <app-search-field
+                  #propFilterInput
+                  class="search"
+                  label="Filter values"
+                  placeholder="Filter inputs, outputs and properties by name"
+                  [(value)]="propFilter"
+                />
                 @if (propQuery()) {
                   <span class="count">{{ shownValues()?.count ?? 0 }} of {{ valueTotal() }}</span>
                 }
@@ -943,23 +926,13 @@ function storedDirectiveHosts(): boolean {
       }
 
       <div class="toolbar">
-        <div class="search">
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            #filterInput
-            type="search"
-            placeholder="Filter by selector, class or file…"
-            aria-label="Filter components by selector, class or file"
-            autocomplete="off"
-            spellcheck="false"
-            [value]="filter()"
-            (input)="filter.set($any($event.target).value)"
-            (keydown.escape)="filter.set('')"
-          />
-        </div>
+        <app-search-field
+          #filterInput
+          class="search"
+          placeholder="Filter by selector, class or file"
+          saveKey="components-source"
+          [(value)]="filter"
+        />
         @if (source().length) {
           <span class="count" aria-live="polite">
             @if (filter().trim()) {
@@ -1972,7 +1945,7 @@ export class ComponentTree {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
+  private readonly filterInput = viewChild<SearchField>('filterInput');
   private readonly cdRecording = viewChild(CdRecording);
   /** Whether the server sent the component tree state yet, so an empty one means no page. */
   protected readonly pagesKnown = signal(false);
@@ -2144,7 +2117,7 @@ export class ComponentTree {
   /** The detail's filter over input, output and property names and opened nested keys. */
   readonly propFilter = signal('');
   readonly propQuery = computed(() => this.propFilter().trim().toLowerCase());
-  private readonly propFilterInput = viewChild<ElementRef<HTMLInputElement>>('propFilterInput');
+  private readonly propFilterInput = viewChild<SearchField>('propFilterInput');
 
   /** Inputs, outputs, properties and directive inputs the filter keeps, and how many. */
   readonly shownValues = computed(() => {
@@ -2202,7 +2175,7 @@ export class ComponentTree {
       event.preventDefault();
     }
     this.propFilter.set('');
-    this.propFilterInput()?.nativeElement.focus();
+    this.propFilterInput()?.focus();
   }
 
   readonly rovingId = computed(() => {
@@ -2632,7 +2605,7 @@ export class ComponentTree {
   clearFilter() {
     if (this.live()) this.setFilter('');
     else this.filter.set('');
-    this.filterInput()?.nativeElement.focus();
+    this.filterInput()?.focus();
   }
 
   async pick() {

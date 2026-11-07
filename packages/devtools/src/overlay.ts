@@ -128,10 +128,13 @@ import { angularDeferInternals, loadDeferBlock, registerDeferLoad } from './defe
 import { LEASED_PUSH_MS, createPageLease, throttle } from './page-lease.ts';
 import { setTimeoutOutside } from './outside-angular.ts';
 import { createPageHeartbeat, keepaliveAfter } from './page-heartbeat.ts';
+import { selectedComponentSummary } from './element-sidebar.ts';
 
 declare global {
   interface Window {
     __pangularComponentOf?: (el: unknown) => string | null;
+    /** The masked summary of the component that owns an element, for the extension's Elements sidebar. */
+    __pangularComponentDetail?: (el: unknown) => ReturnType<typeof selectedComponentSummary>;
     __pangularPageId?: string;
   }
 }
@@ -847,9 +850,31 @@ async function startOverlay(
     plugins && paced(() => void plugins.push().catch(() => {})),
     startup && paced(() => void startup.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
-  const pushAll = () => collectors.forEach((run) => run());
+  // The counts on the launcher pill (`popup.ts`), handed over when they change.
+  let renders = 0;
+  let shownCounts = '';
+  const showCounts = () => {
+    const counts = { renders, errors: errors?.errorCount() ?? 0 };
+    const key = `${counts.renders}|${counts.errors}`;
+    if (key === shownCounts) return;
+    const popup = overlayPopup();
+    // No popup yet: leave shownCounts as it was, so a popup that loads later still gets the counts.
+    if (!popup) return;
+    shownCounts = key;
+    void popup.then((m) => m.setLauncherCounts(counts)).catch(() => {});
+  };
+  const pushAll = () => {
+    collectors.forEach((run) => run());
+    showCounts();
+  };
   pushAll();
-  const watch = () => watchChangeDetection({ getNg, refresh: pushAll, pollMs: limits.refreshMs });
+  const watch = () =>
+    watchChangeDetection({
+      getNg,
+      refresh: pushAll,
+      onRender: () => renders++,
+      pollMs: limits.refreshMs,
+    });
   refresher = watch();
 
   // A tab in the background runs its timers about once a minute, so it stops
@@ -1094,6 +1119,11 @@ async function startOverlay(
     window.__pangularComponentOf = componentOf;
     own(() => {
       if (window.__pangularComponentOf === componentOf) delete window.__pangularComponentOf;
+    });
+    const detailOf = (el: unknown) => selectedComponentSummary(getNg(), el);
+    window.__pangularComponentDetail = detailOf;
+    own(() => {
+      if (window.__pangularComponentDetail === detailOf) delete window.__pangularComponentDetail;
     });
     own(installSourceHelpers(pageId, getNg));
   }

@@ -171,6 +171,27 @@ The build deletes everything in `--outDir` before it writes the report. To prote
 - the working directory or one of its parents, even with `--force`. With `--root`, this covers both the folder you ran the command from and the `--root` folder,
 - a file, or a folder that is not empty and has no `__connection.json` (so it is not a previous report), unless you pass `--force`.
 
+### Build it from a script
+
+`buildReport()` from `@pangular-inspector/devtools/cli` writes the same report without the command line, for a CI script or a Vite or Analog build hook. It takes the same choices as the flags and runs the same output folder checks. It throws instead of setting the exit code, and it doesn't change the working directory.
+
+```ts
+import {buildReport} from '@pangular-inspector/devtools/cli';
+
+const {outDir} = await buildReport({outDir: 'dist/devtools-report'});
+```
+
+| Option    | What it does                                                                                                                                           |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `outDir`  | Output directory, relative to the working directory, not to `root` as with `pangular build --root`. The default is `dist-static`. It is emptied first. |
+| `root`    | The project folder to scan. The default is the working directory. `PANGULAR_ROOT` is not read.                                                         |
+| `config`  | The devtools config as an object, not a file path. Without it, `pangular.config.json` in `root` is read when it exists. `PANGULAR_CONFIG` is not.      |
+| `pretty`  | Pretty-print the data files.                                                                                                                           |
+| `force`   | Empty `outDir` even when it holds files that are not a previous report.                                                                                |
+| `distDir` | A folder with a panel build to copy instead of the one the package ships.                                                                              |
+
+It resolves to `{outDir, root}`, both absolute paths.
+
 ### Open or host it
 
 The output is static files. Open it offline or host it on any static file server. It is a snapshot of your source at build time, so rebuild it after code changes.

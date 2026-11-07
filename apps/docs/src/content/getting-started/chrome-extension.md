@@ -1,6 +1,6 @@
 ---
 title: Chrome extension
-description: Open the devtools as a panel inside Chrome DevTools.
+description: Open the devtools as a panel inside Chrome DevTools, see the selected component in the Elements panel, and check a tab from the toolbar.
 ---
 
 <ngmd-hero title="Chrome extension" logo="https://cdn.simpleicons.org/googlechrome/4285F4" gradient>
@@ -9,7 +9,7 @@ description: Open the devtools as a panel inside Chrome DevTools.
 
 # Chrome extension
 
-The Chrome extension adds a panel named **Pangular Inspector** to Chrome DevTools. The panel loads the devtools UI and connects it to the dev server of the page you are inspecting.
+The Chrome extension adds a panel named **Pangular Inspector** to Chrome DevTools. The panel loads the devtools UI and connects it to the dev server of the page you are inspecting. It also adds an **Angular component** pane to the Elements panel, and a toolbar button that tells you what it sees on the current tab.
 
 <ngmd-callout type="info" title="An extra, not a setup">
   The page still needs the devtools mounted on its server and the <a href="./overlay.md">overlay</a> loaded. The extension is one more way to open the devtools. It does not replace the setup. Start with <a href="./express.md">Angular CLI and Express</a> or <a href="./vite.md">Vite and Analog</a>.
@@ -68,6 +68,12 @@ pnpm extension:build
 
 When DevTools opens, the extension checks the inspected page for Angular: an `ng-version` attribute or a `window.ng` global. It retries for about five seconds for apps that bootstrap late, and checks again after each navigation. The extension creates the panel only on Angular pages. It runs nothing in pages while DevTools is closed.
 
+### Apps inside a frame
+
+When the top page has no Angular, the extension looks in its frames, such as a Storybook preview, a micro-frontend shell or an embedded preview. It checks up to 20 `http` and `https` frames in the order DevTools lists them, and uses the first one that runs Angular. The panel then reads that frame for everything: the page id, the Elements selection, **Reveal in Elements** and **Open source**. It looks for the devtools server on the frame's origin, not the top page's.
+
+The top page always wins when it runs Angular itself. The search gives up after 3 seconds and uses the top page. The **Angular component** pane in the Elements panel reads the top page only, since Chrome evaluates its expression there.
+
 ### Finding the server
 
 The panel looks for the devtools server on the origin of the inspected page. It tries these paths in order:
@@ -107,7 +113,9 @@ The overlay claims the id after it connects to the server, so it can come later 
 
 ### Navigation
 
-When the inspected page navigates, the panel shows "Detecting Angular app…", looks for the server again and reconnects.
+When the inspected page navigates, the panel shows "Detecting Angular app…", looks for the server again and reconnects. It reloads the devtools UI, so the tab, filter and selection start fresh. Keeping the UI across navigations is not planned: the page id changes on every load, and a kept UI would show the page before the reload.
+
+The panel always looks for the server at the paths above. The hub's path is fixed, so there is no setting for a custom base path and no list of paths to remember per origin.
 
 ### One-time code
 
@@ -134,6 +142,39 @@ While the **Components** tab is open, select an element in the Chrome **Elements
 
 This needs the overlay on the page, since the overlay answers which component hosts the element.
 
+### Angular component pane
+
+The extension adds an **Angular component** pane to the Elements panel, next to **Styles**. Select an element and the pane shows the component that hosts it, whatever tab the Pangular Inspector panel has open:
+
+| Field        | Shows                                                                                |
+| ------------ | ------------------------------------------------------------------------------------ |
+| `component`  | The class name.                                                                      |
+| `host`       | The host element's tag.                                                              |
+| `selected`   | The selected element's tag, when you selected an element inside the host.            |
+| `file`       | The component file and the line of its class, from Angular's development debug info. |
+| `inputs`     | Each input and its value, input signals included.                                    |
+| `signals`    | The other signals and resources that are fields, with their current value.           |
+| `properties` | The other fields, except injected services and methods.                              |
+| `outputs`    | The output names.                                                                    |
+| `directives` | The other directives on the host, when there are any.                                |
+
+The values are the ones the panel gets, with secrets masked by the same [redaction](../security.md) rules. The pane needs the overlay on the page and `inspectors.components` on. Without the overlay it says so. An element outside any component shows "No Angular component owns the selected element."
+
+### Toolbar button
+
+Click the Pangular Inspector button in the Chrome toolbar (pin it from the puzzle piece menu first) to see what the extension finds on the current tab:
+
+| Row                 | Shows                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **Angular**         | The version from the `ng-version` attribute, or **Not found**.                                                  |
+| **Build**           | **Development** when Angular's debug API is there, **Production** when it isn't. The devtools need development. |
+| **Devtools server** | The URL where a server answered, the status it refused with, or **No answer**.                                  |
+| **Overlay**         | **Connected** once the overlay on the page claimed its page id, or **Not loaded**.                              |
+
+Under the rows it says what to do next, such as running a development build or mounting the devtools in your dev server. It only looks at the top page; for an app inside a frame, open DevTools.
+
+**Site access** opens the [site access page](#site-access). The button reads the tab only when you click it, through the `activeTab` permission, and runs nothing in pages you don't click it on.
+
 ### Reveal and open source
 
 When you select a component in the **Components** tab, its header has two buttons:
@@ -149,9 +190,18 @@ Both buttons work only for components on the tab DevTools inspects. If the **Com
 
 ## Permissions
 
+### What the manifest asks for
+
+The manifest asks for two `permissions`, neither of which shows a warning when you install the extension:
+
+| Permission  | Why                                                                                         |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| `activeTab` | Lets the toolbar button read the tab you clicked it on, once.                               |
+| `scripting` | Runs that one read in the tab: the Angular version, the build and whether the overlay runs. |
+
 ### Host access
 
-The manifest asks for no `permissions`. Its host permissions cover loopback hosts only, over HTTP and HTTPS:
+Its host permissions cover loopback hosts only, over HTTP and HTTPS:
 
 | Host          | Covers                                                   |
 | ------------- | -------------------------------------------------------- |
@@ -160,6 +210,10 @@ The manifest asks for no `permissions`. Its host permissions cover loopback host
 | `[::1]`       | The IPv6 loopback address                                |
 
 Other hosts are optional host permissions. **Allow access** asks Chrome for the host of the inspected page only, on the scheme of that page (`http` or `https`) and on any port. The extension never asks for all hosts at once.
+
+### Site access
+
+The site access page lists the hosts you allowed with **Allow access**, each with a **Remove** button. Open it from **Site access** in the toolbar button, or from **Details** > **Extension options** in `chrome://extensions`. The loopback hosts are not listed: the manifest grants them on install and they can't be removed. After you remove a host, the panel asks again the next time you inspect a page on it.
 
 Granting the extension a host doesn't change what the devtools server accepts. The server still applies its own checks. The Vite plugin, for example, only answers requests from a loopback address. See [Access and redaction](../security.md).
 
@@ -189,7 +243,11 @@ A trusted extension origin passes the origin check only. With the one-time code 
 
 ### Pages you don't inspect
 
-The extension has no content scripts, so it runs nothing in the pages you browse. It reads a page only through DevTools, in the tab DevTools inspects, and only while DevTools is open. Chrome gives DevTools extensions that access without a host permission.
+The extension has no content scripts and no background worker, so it runs nothing in the pages you browse. It reads a page only through DevTools, in the tab DevTools inspects and only while DevTools is open, or once in the tab you click the toolbar button on. Chrome gives DevTools extensions that access without a host permission.
+
+### No server, no panel
+
+The panel needs a devtools server: it reads the page through the overlay and the server, not on its own. A mode that reads the page without a server is not planned for 1.x.
 
 ## FAQ
 
@@ -220,6 +278,12 @@ The extension has no content scripts, so it runs nothing in the pages you browse
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Open source opens compiled code">
     The source maps of the page don't list the component file, so the panel opened the class from the bundle. Turn on source maps for your development build.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="My app runs in an iframe">
+    The extension looks in the frames when the top page has no Angular, and the panel then reads that frame and looks for its server on the frame's origin. See <a href="#apps-inside-a-frame">Apps inside a frame</a>. The <strong>Angular component</strong> pane reads the top page only.
+  </ngmd-accordion-item>
+  <ngmd-accordion-item title="How do I take back access to a site?">
+    Open the <a href="#site-access">site access page</a> and click <strong>Remove</strong> next to it.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="Does the floating button go away?">
     No. The overlay still adds the button to the page. Use the button or the panel, whichever you prefer.
