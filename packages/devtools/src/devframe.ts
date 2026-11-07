@@ -2822,7 +2822,7 @@ const pangular = defineDevframe({
         return {
           text: liveResourceText(
             { source: scanPipes(ctx.cwd), ...live },
-            'pangular:explain-pipe and pangular:scan-pipe-usage',
+            'pangular:scan-pipes and pangular:explain-pipe',
           ),
         };
       },

@@ -216,8 +216,8 @@ export function pipeMigrationsText(
 ): string {
   const migrations = pipeMigrations(cwd, live, options);
   if (!migrations.length) {
-    const scope = options.name ? `for ${code(options.name)} ` : '';
-    return `No pipe-to-signal migrations to suggest ${scope}. No template uses \`| async\`, no custom pipe is impure or reads a signal${live ? ', and no recorded pipe churned or went stale' : ''}. Pure pipes, built-in ones included, are memoized already and can stay.`;
+    const scope = options.name ? ` for ${code(options.name)}` : '';
+    return `No pipe-to-signal migrations to suggest${scope}. No template uses \`| async\`, no custom pipe is impure or reads a signal${live ? ', and no recorded pipe churned or went stale' : ''}. Pure pipes, built-in ones included, are memoized already and can stay.`;
   }
   const head = `${migrations.length} suggestion(s). These are read-only: no file was changed. Apply them by hand and check the result with the app's tests.${
     live ? '' : ' No page reports pipes, so live churn and stale findings are left out.'
