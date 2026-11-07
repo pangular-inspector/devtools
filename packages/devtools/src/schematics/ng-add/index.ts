@@ -95,13 +95,16 @@ type Json = Record<string, unknown>;
  * still is not JSON. Strings are copied as they are, so a `//` inside a URL stays.
  */
 export function parseWorkspaceJson(text: string): unknown {
+  // One pass that knows when it is inside a string, so string content stays as written.
   let out = '';
+  let pendingComma = '';
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (ch === '"') {
       let j = i + 1;
       while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
-      out += text.slice(i, j + 1);
+      out += pendingComma + text.slice(i, j + 1);
+      pendingComma = '';
       i = j;
     } else if (ch === '/' && text[i + 1] === '/') {
       while (i < text.length && text[i] !== '\n') i++;
@@ -110,12 +113,22 @@ export function parseWorkspaceJson(text: string): unknown {
       const end = text.indexOf('*/', i + 2);
       if (end < 0) return undefined;
       i = end + 1;
-    } else {
+    } else if (ch === ',') {
+      // Held back until the next token shows whether it is a trailing comma.
+      out += pendingComma;
+      pendingComma = ',';
+    } else if (ch === '}' || ch === ']') {
+      pendingComma = '';
       out += ch;
+    } else if (/\s/.test(ch)) {
+      out += ch;
+    } else {
+      out += pendingComma + ch;
+      pendingComma = '';
     }
   }
   try {
-    return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'));
+    return JSON.parse(out + pendingComma);
   } catch {
     return undefined;
   }
@@ -149,8 +162,9 @@ export function detectSetup(tree: Tree, options: NgAddOptions = {}): Setup {
   let server: string | undefined;
   let project: string | undefined;
   const workspaceText = readText(tree, 'angular.json');
-  const workspace = workspaceText ? parseWorkspaceJson(workspaceText) : undefined;
-  if (workspaceText && !isObject(workspace)) {
+  // An empty angular.json is there but unreadable, not missing.
+  const workspace = workspaceText !== undefined ? parseWorkspaceJson(workspaceText) : undefined;
+  if (workspaceText !== undefined && !isObject(workspace)) {
     if (options.project) {
       throw new Error(
         `[pangular] Could not read angular.json: it is not valid JSON, even with comments and trailing commas allowed. Fix it, then run ng add again for project "${options.project}".`,

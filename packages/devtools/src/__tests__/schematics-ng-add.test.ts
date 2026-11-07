@@ -186,6 +186,26 @@ describe('detectSetup', () => {
     expect(parseWorkspaceJson('{"url": "http://a//b", }')).toEqual({ url: 'http://a//b' });
   });
 
+  it('keeps commas, brackets and slashes inside strings as written', () => {
+    expect(
+      parseWorkspaceJson(
+        '{"sourceRoot": "src,]", "a": "x,}", "url": "http://a//b", /* c */ "n": [1, 2,],}',
+      ),
+    ).toEqual({ sourceRoot: 'src,]', a: 'x,}', url: 'http://a//b', n: [1, 2] });
+    expect(parseWorkspaceJson('{"q": "say \\"hi\\", ]"}')).toEqual({ q: 'say "hi", ]' });
+  });
+
+  it('treats an empty angular.json as unreadable and changes nothing', () => {
+    for (const text of ['', '  \n']) {
+      const tree = workspace({ 'src/main.ts': MAIN }, null);
+      tree.create('angular.json', text);
+      expect(detectSetup(tree)).toEqual({ kind: 'unreadable' });
+      const { logs } = run(tree);
+      expect(logs()).toMatch(/Could not read angular\.json/);
+      expect(tree.readText('src/main.ts')).toBe(MAIN);
+    }
+  });
+
   it('changes nothing and prints the snippet when angular.json cannot be read', () => {
     const tree = workspace({ 'src/main.ts': MAIN }, null);
     tree.create('angular.json', '{ "projects": ');
