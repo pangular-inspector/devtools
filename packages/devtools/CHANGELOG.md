@@ -156,6 +156,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
+- **Forms:** a **Schema** view of the rules a Signal Form's schema sets on each field; edit a control's value, touched and dirty state in its row of the **Fields** view (behind `actions.forms`); a WebMCP tool's input schema, and **Try this tool** to run it on its form from the panel (`try-webmcp` in `run-form-action`); a form's history exported as a Playwright test from the **Timeline** view and from `export-form` (`format: "playwright"`); timeline origins worked out per form, so typing in one form no longer tags code changes in another form as user; the `missing-autocomplete` and `submit-disabled-while-invalid` accessibility rules in the forms lint; while a WebMCP call's submit runs, only its status and submit outcome is tagged agent, not values app code writes meanwhile.
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
 - **Pipes:** while recording, a pipe that returns an equal result 20 calls in a row is marked **churning**, in the panel and in `explain-pipe`. **Sort pipes** orders the list by calls or by time in `transform`, and **Called while recording** shows only the recorded pipes (#369).
 - **Components:** a **Pipes in template** block lists the pipes the selected component's template uses on the page, and opens one in the **Pipes** tab (#369).
@@ -209,6 +210,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Pages push deltas instead of full snapshots, at most about once a second, and idle pages send only a small heartbeat.
 - NgRx store updates no longer slow down as the store grows (#432).
 - The NgRx collector serializes a signal store or the classic `Store` only when its state, computed values or method stats changed, and the overlay compares a report version instead of the serialized report, so an unchanged store costs no serialization on each check. A change made in place, without a new state object, can show late (#368).
+- The forms collector skips reading and serializing the forms after change detection when nothing changed since the last read (no form event, input, DOM change, WebMCP call or panel action, and the same Signal Form values, errors and root flags), and reads again at least every 5 seconds (#368).
 - Collectors schedule their work outside the Angular zone, so an app that writes a signal or logs during change detection settles again on zone.js.
 - Long lists and trees in the panel render only the visible rows.
 - The pipe source scan behind `scan-pipes`, `explain-pipe`, the pipe lint and the audit keeps each file's result until the file or its `templateUrl` changes, and skips the walk while the Vite watcher saw no change (#369).
