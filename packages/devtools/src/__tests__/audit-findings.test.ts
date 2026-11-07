@@ -260,6 +260,22 @@ describe('buildAudit', () => {
     });
   });
 
+  it('does not add a second fetched-twice when the subject is cut to fit', () => {
+    const long = `/api/${'cities/'.repeat(40)}list`;
+    const state = http();
+    state.pages[0]!.calls = [call({ id: 'c1', url: long, at: NOW })] as never;
+    (state.pages[0] as { ssrRequestId?: string }).ssrRequestId = 'r1';
+    state.serverCalls = [
+      call({ side: 'server', url: long, cacheSkip: 'post', requestId: 'r1' }),
+    ] as never;
+    const report = buildAudit({ http: state }, 'tab1', {}, NOW);
+    const twice = report.findings.filter((f) => f.rule === 'fetched-twice');
+    expect(twice).toHaveLength(1);
+    // One call, found by the cache check: not counted twice, and it keeps that check's tool.
+    expect(twice[0]!.count ?? 1).toBe(1);
+    expect(twice[0]!.tool).toBe('pangular:explain-ssr-request');
+  });
+
   it('reports a server call made again from the lint when the cache check has no reason', () => {
     const state = http();
     state.pages[0]!.calls = [call({ id: 'c1', url: '/api/cities', at: NOW })] as never;

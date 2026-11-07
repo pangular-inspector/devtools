@@ -586,10 +586,13 @@ function httpLintFindings(
         }),
       );
     } else {
-      const subject = about(finding.callIds[1]);
-      const key = `${area}:fetched-twice:${subject ?? ''}`;
-      if (found.some((f) => f.key === key)) continue;
-      out.push(make(area, 'fetched-twice', 'warning', message, tool, { subject, args }));
+      // Built through make() first, so its key is normalized like the cache check's.
+      const made = make(area, 'fetched-twice', 'warning', message, tool, {
+        subject: about(finding.callIds[1]),
+        args,
+      });
+      if (found.some((f) => f.key === made.key)) continue;
+      out.push(made);
     }
   }
   return out;
