@@ -108,7 +108,7 @@ The hook does nothing when `ngDevMode` is off. Without it, only stores created a
     Check the Metro log for a <code>[pangular]</code> line. A warning about <code>--no-auth</code> means the server asked for a code. A warning about reaching the server means the address is wrong for where the app runs. See <a href="../guides/angular-native.md#where-the-overlay-connects">where the overlay connects</a>. A release build has no <code>ng</code> global, so nothing is collected there.
   </ngmd-accordion-item>
   <ngmd-accordion-item title="The Providers list of an injector is empty">
-    Angular records providers only when a <code>window</code> global exists as <code>mount()</code> creates the platform. If the list stays empty, check that <code>window</code> is defined before <code>mount()</code> runs.
+    Angular records providers only when a <code>window</code> global exists as <code>mount()</code> creates the platform. When <code>__DEV__</code> is <code>true</code> and no <code>window</code> exists, importing <code>&#64;pangular-inspector/devtools/overlay-angular-native</code> defines one until Angular publishes its debug utilities, then removes it. Keep the import at the top of <code>src/main.ts</code>, so it runs before <code>mount()</code>. If the list stays empty, check that <code>window</code> is defined before <code>mount()</code> runs.
   </ngmd-accordion-item>
 </ngmd-accordion>
 

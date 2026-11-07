@@ -19,11 +19,13 @@
     "./dist/capacitor-hook.mjs",
     "./dist/store-hook.mjs",
     "./dist/startup-hook.mjs",
+    "./dist/overlay-angular-native.mjs",
     "./src/overlay-auto.ts",
     "./src/popup.ts",
     "./src/capacitor-hook.ts",
     "./src/store-hook.ts",
-    "./src/startup-hook.ts"
+    "./src/startup-hook.ts",
+    "./src/overlay-angular-native.ts"
   ],
   "bin": {
     "pangular": "./bin.mjs"
