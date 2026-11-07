@@ -833,10 +833,12 @@ async function startOverlay(
   const onVisibility = () => {
     if (left) return;
     if (document.visibilityState === 'hidden') {
-      if (!refresher) return;
       heartbeat.pause();
-      refresher.stop();
+      refresher?.stop();
       refresher = undefined;
+      // Already marked hidden. A page that reconnects in the background has no
+      // refresher but is not marked yet, so this checks the mark, not the refresher.
+      if (stillHidden !== undefined) return;
       reportVisibility(true);
       stillHidden = outsideAngular(() =>
         setInterval(() => reportVisibility(true), HIDDEN_HEARTBEAT_MS),
@@ -846,6 +848,7 @@ async function startOverlay(
     outsideAngular(heartbeat.start);
     if (refresher) return;
     clearInterval(stillHidden);
+    stillHidden = undefined;
     reportVisibility(false);
     pushAll();
     refresher = watch();
@@ -1045,6 +1048,7 @@ async function startOverlay(
     refresher?.stop();
     refresher = undefined;
     clearInterval(stillHidden);
+    stillHidden = undefined;
     reportVisibility(false);
     pipes?.pause();
     forms?.leave();
@@ -1091,12 +1095,19 @@ async function startOverlay(
   };
   addEventListener('pageshow', resendConfig);
   // After a server restart: stop sending, then claim the page and send everything again.
+  let drops = 0;
   link.follow({
-    dropped: leave,
+    dropped: () => {
+      drops++;
+      leave();
+    },
     restored: async () => {
+      const at = drops;
       await claimPageOnServer(my.rpc, pageId, pageKey);
       // A failed call keeps the config the page already has.
       const next = await serverRedaction(my.rpc, fallbackRedaction);
+      // The link dropped again during the calls: stay quiet until the next `restored`.
+      if (drops !== at) return;
       if (next) setRedaction(next);
       resendConfig();
     },
