@@ -1,5 +1,10 @@
 import * as v from 'valibot';
-import type { DependencyInfo, InjectorTreeNode, ProviderInfo } from '../types.ts';
+import type {
+  DependencyInfo,
+  InjectorTreeLimits,
+  InjectorTreeNode,
+  ProviderInfo,
+} from '../types.ts';
 import { MAX_INJECTOR_NODES, MAX_SERVICE_DEPENDENCIES } from '../injector-tree.ts';
 
 /** Element injectors plus room for the environment injectors around them. */
@@ -9,6 +14,13 @@ const MAX_SELECTOR = 4000;
 const MAX_PROVIDERS = 1000;
 /** How deep an injector can sit before the server leaves it out. */
 export const MAX_INJECTOR_DEPTH = 1000;
+
+/** The caps a truncated report names (`InjectorTreeReport.limits`). */
+export const INJECTOR_TREE_LIMITS: InjectorTreeLimits = {
+  elements: MAX_INJECTOR_NODES,
+  injectors: MAX_REPORTED_INJECTORS,
+  depth: MAX_INJECTOR_DEPTH,
+};
 
 const clipped = (max: number) =>
   v.pipe(
@@ -33,6 +45,7 @@ const InjectorSchema = v.object({
   selector: v.optional(clipped(MAX_SELECTOR)),
   path: v.optional(texts(200)),
   host: v.optional(text),
+  inactive: v.optional(v.boolean()),
 });
 
 // `tokenId` is optional: reports from older overlays have none and match by name.

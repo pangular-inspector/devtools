@@ -29,19 +29,14 @@ import type { GraphLink } from './signal-graph-layout';
 import type { SignalFocus } from '../types/signal-focus.types';
 import { SignalGraphView } from './signal-graph-view';
 import { SearchField } from '../ui/search-field';
+import { jsonDiff, type JsonDiffEntry } from './json-diff';
+import type {
+  SignalChange,
+  SignalGraphElement,
+  SignalGraphNode,
+} from '@pangular-inspector/devtools/internal/types';
 
-interface SignalNode {
-  id: string;
-  kind: string;
-  label?: string;
-  epoch: number;
-  value?: unknown;
-  changes?: number;
-  /** Created by Angular's own code, hidden unless the user shows framework signals. */
-  framework?: boolean;
-  /** The component field that holds this writable signal, so history entries can be restored. */
-  locator?: { id: string; key: string };
-}
+type SignalNode = SignalGraphNode;
 
 interface RestoreResult {
   ok?: boolean;
@@ -52,16 +47,6 @@ interface RestoreResult {
 interface SignalEdge {
   consumer: number;
   producer: number;
-}
-
-interface SignalChange {
-  epoch: number;
-  value: unknown;
-  at: number;
-  source: 'write' | 'sample' | 'initial';
-  missed?: number;
-  /** First app frames of the code that set it, while write stacks are on. */
-  stack?: string[];
 }
 
 interface SignalResource {
@@ -90,6 +75,7 @@ interface SignalGraph {
   componentSelector?: string;
   component?: { id: string; name: string; tag: string; path: string };
   injector?: GraphInjector;
+  element?: SignalGraphElement;
   environments?: GraphInjector[];
   resources?: SignalResource[];
   nodeCount?: number;
@@ -236,6 +222,14 @@ const KIND_TOKENS: Record<string, string> = {
       <p class="showing">
         <span class="showing-name">{{ injectorLabel(injector) }}</span>
         <span class="source-note">environment injector</span>
+      </p>
+    } @else if (graph()?.element; as element) {
+      <p class="showing">
+        <span class="showing-name">{{
+          element.directives.join(', ') || '<' + element.tag + '>'
+        }}</span>
+        <span class="mono">&lt;{{ element.tag }}&gt;</span>
+        <span class="source-note">directives, no component</span>
       </p>
     }
     @if (graph() && picked() && graph()!.source !== 'selected') {
@@ -416,6 +410,29 @@ const KIND_TOKENS: Record<string, string> = {
                 }
               </span>
               <pre>{{ change.value | json }}</pre>
+              @if (diffs().get(change.epoch); as diff) {
+                <details class="diff">
+                  <summary>Changes from the entry before ({{ diff.length }})</summary>
+                  <ul class="diff-list">
+                    @for (d of diff; track d.path) {
+                      <li [class]="'diff-' + d.kind">
+                        <span class="diff-kind">{{ diffLabel(d.kind) }}</span
+                        ><span class="sr-only">: </span> <code class="diff-path">{{ d.path }}</code
+                        ><span class="sr-only">, </span>
+                        @if (d.kind !== 'added') {
+                          <code class="diff-old">{{ d.before | json }}</code>
+                        }
+                        @if (d.kind === 'changed') {
+                          <span class="sr-only">to</span><span aria-hidden="true">→</span>
+                        }
+                        @if (d.kind !== 'removed') {
+                          <code class="diff-new">{{ d.after | json }}</code>
+                        }
+                      </li>
+                    }
+                  </ul>
+                </details>
+              }
               @if (change.stack?.length) {
                 <ol class="stack" aria-label="Written from">
                   @for (frame of change.stack; track $index) {
@@ -752,6 +769,35 @@ const KIND_TOKENS: Record<string, string> = {
                   <dd>{{ selectedNode()!.kind }}</dd>
                   <dt>Epoch</dt>
                   <dd>{{ selectedNode()!.epoch }}</dd>
+                  @if (selectedNode()!.runs; as runs) {
+                    <dt>Runs</dt>
+                    <dd>
+                      {{ runs }}, {{ selectedNode()!.runMs ?? 0 }} ms in all, last
+                      {{ selectedNode()!.lastRunMs ?? 0 }} ms
+                    </dd>
+                  }
+                  @if (sourceMatch(); as match) {
+                    <dt>Source</dt>
+                    <dd class="source-matches">
+                      @if (match.exact) {
+                        <app-source-link [file]="match.exact.file" [line]="match.exact.line" />
+                      } @else {
+                        <span class="hint-inline"
+                          >{{ match.candidates.length }} declarations match this name:</span
+                        >
+                        <ul class="source-candidates">
+                          @for (c of match.candidates; track c.file + c.line) {
+                            <li>
+                              <app-source-link [file]="c.file" [line]="c.line" />
+                              @if (c.component) {
+                                <span class="hint-inline">in {{ c.component }}</span>
+                              }
+                            </li>
+                          }
+                        </ul>
+                      }
+                    </dd>
+                  }
                   @if (selectedNode()!.value !== undefined) {
                     <dt>Value</dt>
                     <dd>
@@ -1492,6 +1538,72 @@ const KIND_TOKENS: Record<string, string> = {
     .restore:focus-visible {
       @include m.focus-ring(-2px);
     }
+    .diff {
+      margin-top: 6px;
+      font-size: 12px;
+    }
+    .diff summary {
+      color: var(--text-2);
+      cursor: pointer;
+    }
+    .diff summary:focus-visible {
+      @include m.focus-ring;
+    }
+    .diff-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin: 6px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .diff-list li {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 8px;
+      min-width: 0;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+    .diff-kind {
+      padding: 0 6px;
+      border-radius: 5px;
+      font-size: 10px;
+      line-height: 16px;
+    }
+    .diff-added .diff-kind {
+      @include m.tint(ok);
+    }
+    .diff-removed .diff-kind {
+      @include m.tint(danger);
+    }
+    .diff-changed .diff-kind {
+      @include m.tint(accent);
+    }
+    .diff-path {
+      color: var(--text-strong);
+    }
+    .diff-old {
+      color: var(--text-2);
+      text-decoration: line-through;
+    }
+    .diff-new {
+      color: var(--text);
+    }
+    .source-matches {
+      min-width: 0;
+    }
+    .source-candidates {
+      margin: 4px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .hint-inline {
+      color: var(--text-2);
+      font-size: 12px;
+    }
     .restore-result {
       margin: 0;
       font-size: 12px;
@@ -1764,7 +1876,9 @@ export class SignalInspector {
   });
   private readonly graphOwner = computed(() => {
     const g = this.graph();
-    return g ? `${g.pageId ?? ''}|${g.component?.id ?? g.injector?.id ?? ''}` : null;
+    return g
+      ? `${g.pageId ?? ''}|${g.component?.id ?? g.injector?.id ?? g.element?.id ?? ''}`
+      : null;
   });
 
   // Component and injector ids belong to one page, so each page keeps its own pick.
@@ -1913,7 +2027,11 @@ export class SignalInspector {
   restorable(id: string): SignalNode | null {
     const g = this.graph();
     const node = g?.nodes.find((n) => n.id === id);
-    return node?.locator && g?.component && node.locator.id === g.component.id ? node : null;
+    if (!node?.locator) return null;
+    if (node.locator.owner === 'service') {
+      return g?.injector && node.locator.id === g.injector.id ? node : null;
+    }
+    return g?.component && node.locator.id === g.component.id ? node : null;
   }
 
   /** Writes the value the page kept for this entry back to the signal. */
@@ -1927,7 +2045,12 @@ export class SignalInspector {
     try {
       result = ((await client.scope('pangular').rpc.call('request-signal-restore', {
         pageId,
-        request: { component: locator.id, node: node.id, epoch: change.epoch },
+        request: {
+          component: locator.id,
+          ...(locator.owner === 'service' ? { owner: 'service' } : {}),
+          node: node.id,
+          epoch: change.epoch,
+        },
       })) ?? {}) as RestoreResult;
     } catch {
       result = { error: 'The devtools server did not answer. Try again.' };
@@ -1944,6 +2067,60 @@ export class SignalInspector {
     );
   }
 
+  /**
+   * What changed in each history entry of the selected node against the
+   * entry before it, by epoch. Only for entries whose values are both
+   * objects or arrays; a plain value already shows whole.
+   */
+  readonly diffs = computed(() => {
+    const id = this.selectedId();
+    const entries = id ? (this.graph()?.history?.[id] ?? []) : [];
+    const out = new Map<number, JsonDiffEntry[]>();
+    for (let i = 1; i < entries.length; i++) {
+      const before = entries[i - 1]!.value;
+      const after = entries[i]!.value;
+      if (!before || !after || typeof before !== 'object' || typeof after !== 'object') continue;
+      const diff = jsonDiff(before, after);
+      if (diff.length) out.set(entries[i]!.epoch, diff);
+    }
+    return out;
+  });
+
+  diffLabel(kind: JsonDiffEntry['kind']): string {
+    return kind === 'added' ? 'added' : kind === 'removed' ? 'removed' : 'changed';
+  }
+
+  /**
+   * The source declaration of the selected live node, from the source scan:
+   * declarations with the node's name and a matching kind, narrowed to the
+   * shown component's selector when some are in it. One left is `exact`;
+   * several are listed as `candidates`, since the name alone can't tell them
+   * apart.
+   */
+  readonly sourceMatch = computed<{
+    exact: SourceSignal | null;
+    candidates: SourceSignal[];
+  } | null>(() => {
+    const node = this.selectedNode();
+    const label = node?.label;
+    if (!node || !label) return null;
+    const kindMatches = (source: string) =>
+      source === node.kind ||
+      source.startsWith(`${node.kind} `) ||
+      source.startsWith(`${node.kind}.`) ||
+      (node.kind === 'signal' && source.startsWith('model')) ||
+      (node.kind === 'computed' && source === 'toSignal');
+    let found = this.sourceSignals().filter((s) => s.name === label && kindMatches(s.kind));
+    const g = this.graph();
+    const owner = g?.component?.tag ?? g?.element?.tag;
+    const own = owner ? found.filter((s) => s.component === owner) : [];
+    if (own.length) found = own;
+    if (!found.length) return null;
+    return found.length === 1
+      ? { exact: found[0]!, candidates: [] }
+      : { exact: null, candidates: found.slice(0, 5) };
+  });
+
   /** Why a writable signal has no exact set entries, when the panel can tell. */
   readonly writeHint = computed(() => {
     const node = this.selectedNode();
@@ -1951,7 +2128,7 @@ export class SignalInspector {
     if (!node || !g || g.writeHook === false) return '';
     if (node.kind !== 'signal' && node.kind !== 'linkedSignal') return '';
     if (!node.label) {
-      return "This signal has no name, so its history holds sampled values only. Pass a debugName in its options, for example signal(0, { debugName: 'count' }).";
+      return "This signal has no name, so its history holds sampled values only. From Angular 20.1 the compiler names a signal that initializes a field or variable, so this one was likely made in a factory or helper. Pass a debugName in its options, for example signal(0, { debugName: 'count' }).";
     }
     const history = g.history?.[node.id] ?? [];
     if (history.some((c) => c.source === 'write') || !history.some((c) => c.source === 'sample')) {
@@ -2022,8 +2199,7 @@ export class SignalInspector {
     const flat: LiveNode[] = [];
     const walk = (nodes: LiveNode[]) => {
       for (const node of nodes) {
-        // A directive host has no component signals to read.
-        if (node.kind !== 'directive') flat.push(node);
+        flat.push(node);
         walk(node.children);
       }
     };
@@ -2047,7 +2223,7 @@ export class SignalInspector {
       options.push({
         value: node.id,
         label: (totals.get(node.name) ?? 0) > 1 ? `${node.name} #${n}` : node.name,
-        hint: `<${node.tag}>`,
+        hint: node.kind === 'directive' ? `<${node.tag}> directive` : `<${node.tag}>`,
       });
     }
     return options;
