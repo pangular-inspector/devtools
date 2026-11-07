@@ -4,7 +4,7 @@ These rules go together with the Angular rules in [`AGENTS.md`](../../AGENTS.md)
 
 ## TypeScript
 
-- Strict mode everywhere. Avoid `any`; use `unknown` and narrow it, or a small local interface.
+- Strict mode everywhere. Avoid `any`; use `unknown` and narrow it, or a small local interface. `pnpm lint` (oxlint) warns on `any` and fails when a file gets more warnings than `lint-baseline.json` allows.
 - Prefer `const`. Use `readonly` for members that never change.
 - Names describe what a thing is or does. Spell words out. Booleans start with `is`, `has` or `should`.
 - No `I` prefix on interfaces and no `$` suffix on observables.

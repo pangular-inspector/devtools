@@ -241,6 +241,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 ### Release and CI
 
+- `pnpm lint` runs oxlint with a ratchet: CI fails when a file gets more warnings of a rule than `lint-baseline.json` allows (#373).
 - The `leaks-real` test expects the rows the collector really reports (#430).
 - Pull requests run the security and MCP end-to-end checks, and a weekly job runs the rest.
 - A CI job installs the packed package on Node.js 22.12.0, the `engines.node` floor, and loads its CLI and its `cli`, `hub`, `ssr` and `vite` entry points there (#373).
