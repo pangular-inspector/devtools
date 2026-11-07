@@ -219,7 +219,6 @@ export function redactText(
     });
     out = redactJwt(out).replace(BEARER, `Bearer ${REDACTED}`);
     out = out.replace(LONG_TOKEN, (token) => (isOpaqueToken(token) ? REDACTED : token));
-    out = maskEmails(out);
   } else {
     // Bearer tokens and JWTs first, so `token: Bearer abc` can't keep `abc` once `Bearer` is hidden.
     out = redactJwt(out).replace(BEARER, `Bearer ${REDACTED}`);
@@ -266,5 +265,6 @@ export function redactText(
       out = out.split(form).join(REDACTED);
     }
   }
-  return out;
+  // After the known secrets, so an address can't swallow the start of one and leave the rest readable.
+  return mode === 'url' ? maskEmails(out) : out;
 }

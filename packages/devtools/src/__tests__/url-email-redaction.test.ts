@@ -7,7 +7,7 @@ import { applyRouterEvent, redactUrl, type NavigationRecord } from '../router.ts
 import { explainNavigationText, type RouterPage } from '../rpc/router-tools.ts';
 import { listHttpCallsText } from '../rpc/http-tools.ts';
 import { lintRoutes } from '../rpc/router-config-tools.ts';
-import { maskEmails } from '../text-redact.ts';
+import { maskEmails, redactText } from '../text-redact.ts';
 
 describe('emails in URLs', () => {
   it('masks an address in a path segment, a query value and a fragment', () => {
@@ -58,6 +58,13 @@ describe('emails in URLs', () => {
     expect(redactUrl('https://ada:hunter22@api.example.com/u/ada@example.com')).toBe(
       'https://ada:[redacted]@api.example.com/u/[email]',
     );
+  });
+
+  it('hides a known secret whole when an address overlaps its start', () => {
+    const out = redactText('/files/a@bob.comXYZ123/raw', ['bob.comXYZ123'], 'url');
+    expect(out).not.toContain('XYZ');
+    expect(out).not.toContain('123');
+    expect(out).toContain('[redacted]');
   });
 
   it('stays fast on long text with many @ and %40 signs', () => {
