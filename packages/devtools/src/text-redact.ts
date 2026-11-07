@@ -166,6 +166,9 @@ type PairReplacer = (
  * strong secret name also takes the rest of its token (`=`) or line (`:`),
  * so a separator inside a password doesn't leave its tail readable.
  */
+/** A pair value that is one key name and its `:` or `=`, read again as the next pair. */
+const NEXT_KEY_VALUE = /^[\w$%.[\]-]+[:=]$/;
+
 function replacePairs(text: string, pair: PairReplacer): string {
   const re = new RegExp(TEXT_PAIR.source, TEXT_PAIR.flags);
   let out = '';
@@ -188,7 +191,8 @@ function replacePairs(text: string, pair: PairReplacer): string {
     // A value that is itself the next key (`Error: password: "x"` reads `password:` as the
     // value of `Error`) is read again from its start, so that pair is found too. A `key=`
     // value counts only after `: ` with a space, so `xmlns:auth="urn:a"` stays one name.
-    const nextKey = /:$/.test(value) || (/=$/.test(value) && /\s/.test(eq));
+    // Only a single key is read again, never a chain like `a:a:a:`, so the scan stays linear.
+    const nextKey = NEXT_KEY_VALUE.test(value) && (value.endsWith(':') || /\s/.test(eq));
     if (replaced === match && value && !/^["']/.test(value) && nextKey) {
       const valueAt = at + match.length - value.length;
       out += text.slice(last, valueAt);

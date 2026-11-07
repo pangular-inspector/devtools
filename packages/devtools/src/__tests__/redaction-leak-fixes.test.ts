@@ -49,3 +49,21 @@ describe('leaks found by the corpus', () => {
     expect(out['user']).toBe('ada');
   });
 });
+
+describe('a value read again as the next key', () => {
+  // Reading `password:` again as a key must not rescan the rest of a long chain of pairs.
+  it.each([
+    ['compact', 'a:'],
+    ['spaced', 'a: '],
+    ['spaced with =', 'a= '],
+  ])('stays linear on a %s chain of 20000 pairs', (_name, unit) => {
+    const started = performance.now();
+    redactText(unit.repeat(20_000), [], 'text');
+    expect(performance.now() - started).toBeLessThan(4000);
+  });
+
+  it('still finds a secret after a chain of plain pairs', () => {
+    const out = redactText(`${'a: '.repeat(50)}password: "hunter2"`, [], 'text');
+    expect(out).not.toContain('hunter2');
+  });
+});
