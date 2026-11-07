@@ -31,6 +31,7 @@ import { Select, type SelectOption } from '../ui/select';
 import { VirtualWindow } from '../ui/virtual-window';
 import { HttpHeadersView } from './http-headers';
 import { NetworkWaterfall } from './network-waterfall';
+import { CallCopy } from './network/call-copy';
 import { HarExport } from './network/har-export';
 import { RuleMatchCount } from './network/rule-match-count';
 import { RulePresets } from './network/rule-presets';
@@ -316,6 +317,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
 @Component({
   selector: 'app-network-inspector',
   imports: [
+    CallCopy,
     HarExport,
     JsonPipe,
     HttpHeadersView,
@@ -798,6 +800,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                     Copy
                   </button>
                 }
+                <app-call-copy [call]="detail" (done)="message.set($event)" />
                 <button
                   type="button"
                   class="ghost"

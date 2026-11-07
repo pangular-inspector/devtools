@@ -9,6 +9,7 @@ All notable changes to `@pangular-inspector/devtools` are listed here. The forma
 - **Live match count in the fault rule form.** Under **URL pattern**, the SSR & HTTP tab says how many of the recorded calls the pattern matches with the chosen method and side, as you type.
 - **Fault rule presets: Offline, Slow 3G and Flaky.** Each adds plain rules for every browser request: a network error, a 2000 ms delay, or a 503 for 30% of requests. Two rule fields make them possible and work on any rule: status `0` fails a request as a network error (an `HttpErrorResponse` with status 0), and `chance` (1 to 99) applies a rule to that share of matching requests. `set-http-rule` takes both.
 - **HAR export.** **Export HAR** in the SSR & HTTP tab saves the timeline as a HAR 1.2 file: the SSR request that served the page, then its server and client calls, with headers and response previews. Values are masked as in the panel.
+- **Copy as fetch and Copy as cURL.** The response preview copies the open call as a `fetch()` statement or a `curl` command, built from the masked copy, so secrets stay `[redacted]`. Nothing is sent.
 
 ## 1.0.0
 

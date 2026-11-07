@@ -360,3 +360,61 @@ export function harLog(input: HarInput): HarLog {
     },
   };
 }
+
+/** The fields of a recorded call the copy snippets read. */
+export type SnippetCall = Pick<RecordedCall, 'url' | 'method' | 'side' | 'requestHeaders'>;
+
+/** Methods whose request usually has a body, which the interceptor does not record. */
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function snippetNotes(call: SnippetCall, url: string, comment: string): string[] {
+  const notes: string[] = [];
+  const masked = /\[redacted\]|%5Bredacted%5D/i;
+  if (masked.test(url) || Object.values(call.requestHeaders ?? {}).some((v) => masked.test(v))) {
+    notes.push(`${comment} Masked values ([redacted]) must be filled in before it runs.`);
+  }
+  if (BODY_METHODS.has(call.method.toUpperCase())) {
+    notes.push(`${comment} The request body was not recorded.`);
+  }
+  return notes;
+}
+
+/**
+ * The call as a `fetch()` statement: method, URL and the request headers it
+ * had at `withPangular()`, all as recorded, so masked values stay
+ * `[redacted]`. It is text to read or edit; nothing runs it.
+ */
+export function fetchSnippet(call: SnippetCall, origin?: string): string {
+  const url = absoluteUrl(call.url, call.side === 'client' ? origin : undefined);
+  const method = call.method.toUpperCase();
+  const headers = call.requestHeaders ?? {};
+  const options: Record<string, unknown> = {
+    ...(method === 'GET' ? {} : { method }),
+    ...(Object.keys(headers).length ? { headers } : {}),
+  };
+  const args = Object.keys(options).length
+    ? `${JSON.stringify(url)}, ${JSON.stringify(options, null, 2)}`
+    : JSON.stringify(url);
+  return [...snippetNotes(call, url, '//'), `await fetch(${args});`].join('\n');
+}
+
+/** Quotes a value for a POSIX shell. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * The call as a `curl` command, built like {@link fetchSnippet}: masked
+ * values stay `[redacted]`, and nothing runs it.
+ */
+export function curlSnippet(call: SnippetCall, origin?: string): string {
+  const url = absoluteUrl(call.url, call.side === 'client' ? origin : undefined);
+  const method = call.method.toUpperCase();
+  const parts = [`curl ${shellQuote(url)}`];
+  if (method === 'HEAD') parts.push('--head');
+  else if (method !== 'GET') parts.push(`-X ${shellQuote(method)}`);
+  for (const [name, value] of Object.entries(call.requestHeaders ?? {})) {
+    parts.push(`-H ${shellQuote(`${name}: ${value}`)}`);
+  }
+  return [...snippetNotes(call, url, '#'), parts.join(' \\\n  ')].join('\n');
+}
