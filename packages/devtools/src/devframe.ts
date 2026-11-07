@@ -29,6 +29,7 @@ import { registerReduxStores } from './rpc/redux-stores-register.ts';
 import { registerTanstackQuery } from './rpc/query-register.ts';
 import { registerPlugins } from './rpc/plugins-register.ts';
 import { registerStartup } from './rpc/startup-register.ts';
+import { registerIonic } from './rpc/ionic-register.ts';
 import type { PangularServerPlugin } from './plugin.ts';
 import { registerAudit } from './rpc/audit-register.ts';
 import { inspectProvidersText } from './rpc/injector-tools.ts';
@@ -975,6 +976,10 @@ const pangular = defineDevframe({
           ttl: liveTtl,
         })
       : null;
+    // The `ion-router-outlet` stacks of Ionic pages, shown in the Capacitor tab.
+    const ionicInspector = on.capacitor
+      ? await registerIonic({ my, rpcHost: ctx.rpc, register, owns, mayForget, ttl: liveTtl })
+      : null;
     // A plugin tool's tier comes from the plugin; `pluginToolAllowed` checks it against the config.
     const pluginsInspector = on.plugins
       ? await registerPlugins({
@@ -1596,6 +1601,7 @@ const pangular = defineDevframe({
       reduxStores?.expire(now);
       tanstackQuery?.expire(now);
       startupInspector?.expire(now);
+      ionicInspector?.expire(now);
       pluginsInspector?.expire(now);
       componentDeltas.prune((id) => componentPages.has(id));
       injectorDeltas.prune((id) => injectorPages.has(id));
@@ -4925,6 +4931,7 @@ const pangular = defineDevframe({
           capacitor: withUrl(capacitorPages.values()),
           errors: withUrl(errorsInspector?.pages() ?? []),
           startup: withUrl(startupInspector?.pages() ?? []),
+          ionic: withUrl(ionicInspector?.pages() ?? []),
           plugins: withUrl(pluginsInspector?.pages() ?? []),
           analog: withUrl(on.analog ? analogPages() : []),
         },

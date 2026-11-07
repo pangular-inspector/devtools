@@ -18,6 +18,7 @@ import { attachErrors } from './errors-collector.ts';
 import { attachLeaks } from './leaks-collector.ts';
 import { attachPlugins } from './plugins-collector.ts';
 import { attachStartup } from './startup-timing.ts';
+import { attachIonic } from './ionic-collector.ts';
 import { attachBrowserTools } from './browser-tools.ts';
 import { attachAxe, axeOwnerNg } from './axe-runner.ts';
 import { createRecentWrites } from './error-explain.ts';
@@ -599,6 +600,8 @@ async function startOverlay(
       })
     : null;
   const startup = on.injectors ? attachStartup(my, pageId, getNg, { tickMs }) : null;
+  // Ionic's `ion-router-outlet` stacks, shown in the Capacitor tab.
+  const ionic = on.capacitor ? attachIonic(my, pageId, getNg, { tickMs }) : null;
   // Runs axe-core only when the panel or an agent asks; it loads axe-core then.
   // The component owning each element is component data: only with that inspector on.
   const axe = attachAxe(my, pageId, axeOwnerNg(on.components, getNg));
@@ -839,6 +842,7 @@ async function startOverlay(
       }),
     plugins && paced(() => void plugins.push().catch(() => {})),
     startup && paced(() => void startup.push().catch(() => {})),
+    ionic && paced(() => void ionic.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
   pushAll();
@@ -1113,6 +1117,7 @@ async function startOverlay(
     leaks?.leave();
     plugins?.leave();
     startup?.leave();
+    ionic?.leave();
     angularInfo.leave();
     browserTools.leave();
   };
@@ -1127,6 +1132,7 @@ async function startOverlay(
     leaks?.resume();
     plugins?.resume();
     startup?.resume();
+    ionic?.resume();
     browserTools.resume();
     void lease.refresh();
     left = false;
@@ -1170,6 +1176,7 @@ async function startOverlay(
     leaks?.stop();
     plugins?.stop();
     startup?.stop();
+    ionic?.stop();
     browserTools.stop();
     axe.stop();
     cd?.stop();

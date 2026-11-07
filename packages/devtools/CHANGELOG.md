@@ -152,6 +152,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Timeline:** one time axis with layers for the router, HTTP, NgRx, change detection, forms and signals.
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
+- **Ionic in the Capacitor tab:** an **Ionic page stacks** section with a card per `ion-router-outlet`: the pages in its stack, the active one, the direction of the last navigation and whether it can go back, read from `@ionic/angular`'s outlet directive or from the DOM. Hovering a page outlines it in the app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
 - **Pipes:** while recording, a pipe that returns an equal result 20 calls in a row is marked **churning**, in the panel and in `explain-pipe`. **Sort pipes** orders the list by calls or by time in `transform`, and **Called while recording** shows only the recorded pipes (#369).
