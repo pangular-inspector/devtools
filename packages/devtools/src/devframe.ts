@@ -124,6 +124,7 @@ import {
   expirePages,
   inspectFormsText,
   isPageReport,
+  matchForms,
   mergePageReport,
   type PageReport,
   type FormsState,
@@ -131,12 +132,14 @@ import {
   UNTRUSTED,
   untrusted,
 } from './rpc/forms-tools.ts';
+import { playwrightTestText } from './rpc/forms-playwright.ts';
 import {
   explainCustomControlText,
   explainFieldText,
   explainSubmitText,
   fieldOwner,
   exportFormText,
+  type FieldArgs,
   formDiffText,
   formHistoryText,
   formPayloadText,
@@ -2017,6 +2020,8 @@ const pangular = defineDevframe({
             return formPayloadText(state, target);
           case 'fixture':
             return exportFormText(state, { ...target, format: 'fixture' });
+          case 'playwright':
+            return playwrightTestText(state, { ...target, url: formPageUrl(state, target) });
           default:
             return explainFieldText(state, target);
         }
@@ -2629,6 +2634,12 @@ const pangular = defineDevframe({
         http: httpPages.values(),
         components: componentPages.values(),
       });
+    /** The address of the page a form is on, for the Playwright test export. */
+    function formPageUrl(state: FormsState, args: FieldArgs): string | undefined {
+      const forms = matchForms(state.forms, args.form, args.page);
+      const pageId = (forms[0]?.id ?? '').split('@')[1] ?? args.page;
+      return pageId ? livePageDetails().get(pageId)?.url : undefined;
+    }
     const withPageUrls = <T extends { pageId: string; reportedAt: number }>(pages: T[]) => {
       const details = livePageDetails();
       return pages.map((page) => {
@@ -4403,16 +4414,23 @@ const pangular = defineDevframe({
       id: 'pangular:export-form',
       title: 'Export a form',
       description:
-        'Export a form as a JSON snapshot (tree, status, raw value) or as a test fixture (setValue / signal model plus the expected status) with a repro header. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200) and notes what was cut.',
+        'Export a form as a JSON snapshot, a test fixture (setValue / signal model plus the expected status), or a Playwright test replaying its recorded history. Secret values stay [redacted]. A snapshot keeps as many fields as fit in 20,000 characters (at most 200).',
       inputSchema: {
         type: 'object',
         properties: {
           form: formProperty,
-          format: { type: 'string', enum: ['snapshot', 'fixture'] },
+          format: { type: 'string', enum: ['snapshot', 'fixture', 'playwright'] },
           page: formPageProperty,
         },
       },
-      handler: withForms(exportFormText),
+      handler: withForms((state, args: FieldArgs & { format?: string }) =>
+        args.format === 'playwright'
+          ? playwrightTestText(state, { ...args, url: formPageUrl(state, args) })
+          : exportFormText(state, {
+              ...args,
+              format: args.format === 'fixture' ? 'fixture' : 'snapshot',
+            }),
+      ),
     });
 
     // `wait-for` with `condition: "form"`: polls the forms state until the condition holds.

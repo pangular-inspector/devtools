@@ -98,6 +98,18 @@ Narrow the list with three filters. An event shows only when it passes all of th
 
 The list shows the latest 100 matching events. When more match, the count next to the filters says so, for example "Showing the latest 100 of 240 events". If the filters hide every event, click **Clear filters** to reset all three.
 
+#### Export the history as a Playwright test
+
+Above the timeline, **Copy Playwright test** copies a test that replays the form's history, and **Download test** saves it as a `.spec.ts` file. The test opens the page the form is on, replays the values typed, the submits and the resets that came from you, an agent or the panel, and checks the values and status the form ended with. Changes from app code are left out, and typing in one field becomes one `fill()` with its last value.
+
+| Form kind       | Selector the test uses                                                   |
+| --------------- | ------------------------------------------------------------------------ |
+| Reactive        | `formcontrolname`, inside its `formgroupname` and `formarrayname` groups |
+| Template-driven | `name`, inside its `ngmodelgroup` groups                                 |
+| Signal Forms    | The `name` the field gives its input                                     |
+
+A field with no such attribute, such as an array item bound with `[formControlName]="i"`, gets a `TODO` comment instead of a step. Secret fields are read from environment variables named after the field, such as `FORM_PASSWORD`, because their values are not recorded. Check the selectors and the `TODO` lines before you run the test. Agents get the same test from `pangular:export-form` with `format: "playwright"`.
+
 Check **Record details** to add the calling code of each change, validator changes, and component renders per keystroke. It is off by default and applies to the whole page.
 
 ### Submit view
@@ -223,7 +235,7 @@ You can also open a form from its component in the [Components tab](./components
 | `pangular:explain-form-changes`   | The net change since a marker.                                                                                                        |
 | `pangular:lint-forms`             | Form bugs and accessibility checks.                                                                                                   |
 | `pangular:explain-custom-control` | How a field binds to its element, and what is wrong with the binding.                                                                 |
-| `pangular:export-form`            | A JSON snapshot or a test fixture.                                                                                                    |
+| `pangular:export-form`            | A JSON snapshot, a test fixture or a Playwright test.                                                                                 |
 | `pangular:wait-for`               | With `condition: "form"`, waits until the form is settled, valid, not pending or submitted.                                           |
 
 ### Write tools

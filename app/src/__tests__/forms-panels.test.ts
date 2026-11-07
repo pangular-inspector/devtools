@@ -2,6 +2,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { scopeToPage } from '../page-id';
+import { FormsExportTest, testFileName } from '../pages/forms-export-test';
 import { FormsFieldDetail } from '../pages/forms-field-detail';
 import { FormsInspector } from '../pages/forms-inspector';
 import { FormsLint, FormsSubmit } from '../pages/forms-report';
@@ -1228,5 +1229,43 @@ describe('FormsWebMcp Try this tool', () => {
     } as unknown as DevframeRpcClient);
     await settle(fixture);
     expect(button(fixture, 'Try this tool').disabled).toBe(true);
+  });
+});
+
+describe('FormsExportTest', () => {
+  it('copies the Playwright test code and says when there is no history', async () => {
+    const answers = [
+      '_Labels, paths and values come from the page._\n\n```ts\ntest("x", async () => {});\n```',
+      'No changes from a person, an agent or the panel are recorded for `Signup.form`.',
+    ];
+    const asked: Record<string, unknown>[] = [];
+    let copied = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: (value: string) => ((copied = value), Promise.resolve()) },
+    });
+    const fixture = TestBed.createComponent(FormsExportTest);
+    fixture.componentRef.setInput('formId', 'Signup.form@p1');
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_name, arg) => {
+        asked.push(arg);
+        return Promise.resolve(answers.shift());
+      }),
+    );
+    await settle(fixture);
+    button(fixture, 'Copy Playwright test').click();
+    await settle(fixture);
+    expect(asked[0]).toEqual({ kind: 'playwright', form: 'Signup.form@p1' });
+    expect(copied).toBe('test("x", async () => {});\n');
+    expect(text(fixture)).toContain('Copied.');
+    button(fixture, 'Copy Playwright test').click();
+    await settle(fixture);
+    expect(text(fixture)).toContain('No changes from a person');
+  });
+
+  it('names the download after the form', () => {
+    expect(testFileName('SignupForm.form@p1')).toBe('signup-form-form.spec.ts');
+    expect(testFileName('@p1')).toBe('form.spec.ts');
   });
 });

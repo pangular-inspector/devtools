@@ -18,6 +18,7 @@ import { hostPageId } from '../page-id';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
 import { FormsActionBar } from './forms-action-bar';
+import { FormsExportTest } from './forms-export-test';
 import { FormsFields, matchesChip, type Chip, type FieldRow } from './forms-fields';
 import { FormsList } from './forms-list';
 import { FormsLint, FormsSubmit } from './forms-report';
@@ -69,6 +70,7 @@ function countFields(node: FormFieldNode): number {
   selector: 'app-forms-inspector',
   imports: [
     FormsActionBar,
+    FormsExportTest,
     FormsFields,
     FormsList,
     FormsSetupErrors,
@@ -261,6 +263,7 @@ function countFields(node: FormFieldNode): number {
                   />
                 }
                 @case ('timeline') {
+                  <app-forms-export-test [formId]="form.id" [rpc]="rpc()" />
                   <app-limit-note
                     [dropped]="droppedEvents()"
                     [max]="maxEvents()"

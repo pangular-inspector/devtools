@@ -59,7 +59,7 @@ function unmatchedForms(
     : 'No forms have been reported.';
 }
 
-function pickForm(state: FormsState, args: FieldArgs): CollectedForm | string {
+export function pickForm(state: FormsState, args: FieldArgs): CollectedForm | string {
   const forms = matchForms(state.forms, args.form, args.page);
   if (!forms.length) {
     return state.forms.length
