@@ -897,6 +897,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             <button
               type="submit"
               [disabled]="!canWrite() || !draftRule()"
+              [attr.aria-disabled]="addingRule() || null"
               [attr.aria-describedby]="canWrite() ? 'rule-hint' : 'http-writes-off'"
             >
               Add rule
@@ -1067,6 +1068,7 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
             <button
               type="submit"
               [disabled]="!canWrite() || !overrideReady()"
+              [attr.aria-disabled]="addingOverride() || null"
               [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
             >
               Add override
@@ -2208,6 +2210,11 @@ export class NetworkInspector {
   readonly serverDropped = signal(0);
   readonly requests = signal<SsrRequest[]>([]);
   readonly rules = signal<HttpRule[]>([]);
+  /** True while an added rule or override is being saved, so Add can't send it twice. */
+  readonly addingRule = signal(false);
+  readonly addingOverride = signal(false);
+  private ruleSaves = Promise.resolve(true);
+  private overrideSaves = Promise.resolve(true);
   readonly overrides = signal<SsrOverride[]>([]);
   readonly overrideDraft = signal<OverrideDraft>({ ...EMPTY_OVERRIDE });
   /** Set when the draft came from a TransferState entry, so the form can explain the empty value. */
@@ -2665,34 +2672,35 @@ export class NetworkInspector {
   async addRule(event: Event) {
     event.preventDefault();
     const draft = this.draftRule();
-    if (!draft) return;
+    if (!draft || this.addingRule()) return;
     const rule: HttpRule = {
       id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
       ...draft,
     };
-    if (await this.saveRules([...this.rules(), rule], 'Rule added.', rule)) {
+    this.addingRule.set(true);
+    const added = await this.saveRules((rules) => [[...rules, rule], rule], 'Rule added.');
+    this.addingRule.set(false);
+    if (added) {
       this.draft.set({ ...EMPTY_DRAFT });
       this.host.nativeElement.querySelector<HTMLInputElement>('#rule-pattern')?.focus();
     }
   }
 
   toggleRule(id: string) {
-    const rule = this.rules().find((r) => r.id === id);
-    if (!rule) return;
-    void this.saveRules(
-      this.rules().map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)),
-      'Rule updated.',
-      rule,
-    );
+    void this.saveRules((rules) => {
+      const rule = rules.find((r) => r.id === id);
+      if (!rule) return null;
+      return [rules.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)), rule];
+    }, 'Rule updated.');
   }
 
   async removeRule(id: string) {
-    const index = this.rules().findIndex((r) => r.id === id);
-    if (index < 0) return;
-    const rest = this.rules().filter((r) => r.id !== id);
-    if (await this.saveRules(rest, 'Rule removed.', this.rules()[index])) {
-      this.focusAfterRemove('[data-remove-rule]', index, '#rule-list-heading');
-    }
+    let index = -1;
+    const removed = await this.saveRules((rules) => {
+      index = rules.findIndex((r) => r.id === id);
+      return index < 0 ? null : [rules.filter((r) => r.id !== id), rules[index]];
+    }, 'Rule removed.');
+    if (removed) this.focusAfterRemove('[data-remove-rule]', index, '#rule-list-heading');
   }
 
   async clearCalls() {
@@ -2775,7 +2783,7 @@ export class NetworkInspector {
 
   async addOverride(event: Event) {
     event.preventDefault();
-    if (!this.overrideReady()) return;
+    if (!this.overrideReady() || this.addingOverride()) return;
     const d = this.overrideDraft();
     const next: SsrOverride = {
       id: `o${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
@@ -2786,7 +2794,13 @@ export class NetworkInspector {
       ...(d.kind === 'state-edit' ? { key: d.key.trim() } : {}),
       ...(d.kind === 'state-edit' && d.value.trim() ? { value: d.value.trim() } : {}),
     };
-    if (await this.saveOverrides([...this.overrides(), next], 'Override added. Reload the page.')) {
+    this.addingOverride.set(true);
+    const added = await this.saveOverrides(
+      (overrides) => [...overrides, next],
+      'Override added. Reload the page.',
+    );
+    this.addingOverride.set(false);
+    if (added) {
       this.overrideDraft.set({ ...EMPTY_OVERRIDE, kind: d.kind });
       this.overrideFromPayload.set(null);
       this.host.nativeElement.querySelector<HTMLInputElement>('#override-pattern')?.focus();
@@ -2795,16 +2809,21 @@ export class NetworkInspector {
 
   toggleOverride(id: string) {
     void this.saveOverrides(
-      this.overrides().map((o) => (o.id === id ? { ...o, enabled: !o.enabled } : o)),
+      (overrides) =>
+        overrides.some((o) => o.id === id)
+          ? overrides.map((o) => (o.id === id ? { ...o, enabled: !o.enabled } : o))
+          : null,
       'Override updated. Reload the page.',
     );
   }
 
   async removeOverride(id: string) {
-    const index = this.overrides().findIndex((o) => o.id === id);
-    if (index < 0) return;
-    const rest = this.overrides().filter((o) => o.id !== id);
-    if (await this.saveOverrides(rest, 'Override removed.')) {
+    let index = -1;
+    const removed = await this.saveOverrides((overrides) => {
+      index = overrides.findIndex((o) => o.id === id);
+      return index < 0 ? null : overrides.filter((o) => o.id !== id);
+    }, 'Override removed.');
+    if (removed) {
       this.focusAfterRemove('[data-remove-override]', index, '#override-list-heading');
     }
   }
@@ -2841,29 +2860,54 @@ export class NetworkInspector {
     );
   }
 
-  private async saveOverrides(next: SsrOverride[], done: string): Promise<boolean> {
-    try {
-      const saved = await call(this.rpc(), 'set-ssr-overrides', next);
-      this.overrides.set(Array.isArray(saved) ? (saved as SsrOverride[]) : next);
-      this.announce(done);
-      return true;
-    } catch {
-      this.message.set('Could not save the overrides.');
-      return false;
-    }
+  /**
+   * Saves run one after another, and each change is applied to the list the previous save left,
+   * so two quick changes never start from the same old list. `change` returns null when its
+   * override is gone by then.
+   */
+  private saveOverrides(
+    change: (overrides: SsrOverride[]) => SsrOverride[] | null,
+    done: string,
+  ): Promise<boolean> {
+    const save = this.overrideSaves.then(async () => {
+      const next = change(this.overrides());
+      if (!next) return false;
+      try {
+        const saved = await call(this.rpc(), 'set-ssr-overrides', next);
+        this.overrides.set(Array.isArray(saved) ? (saved as SsrOverride[]) : next);
+        this.announce(done);
+        return true;
+      } catch {
+        this.message.set('Could not save the overrides.');
+        return false;
+      }
+    });
+    this.overrideSaves = save;
+    return save;
   }
 
-  private async saveRules(rules: HttpRule[], done: string, changed: HttpRule): Promise<boolean> {
-    try {
-      const saved = await call(this.rpc(), 'set-http-rules', rules);
-      this.rules.set(Array.isArray(saved) ? (saved as HttpRule[]) : rules);
-      this.announce(
-        changed.target === 'client' ? done : `${done} Reload the page to apply it to SSR.`,
-      );
-      return true;
-    } catch {
-      this.message.set('Could not save the rules.');
-      return false;
-    }
+  /** Like `saveOverrides`; `change` also returns the rule it changed, for the message. */
+  private saveRules(
+    change: (rules: HttpRule[]) => [HttpRule[], HttpRule] | null,
+    done: string,
+  ): Promise<boolean> {
+    const save = this.ruleSaves.then(async () => {
+      const next = change(this.rules());
+      if (!next) return false;
+      const [rules, changed] = next;
+      try {
+        const saved = await call(this.rpc(), 'set-http-rules', rules);
+        this.rules.set(Array.isArray(saved) ? (saved as HttpRule[]) : rules);
+        this.announce(
+          changed.target === 'client' ? done : `${done} Reload the page to apply it to SSR.`,
+        );
+        return true;
+      } catch {
+        this.message.set('Could not save the rules.');
+        return false;
+      }
+    });
+    this.ruleSaves = save;
+    return save;
   }
 }
