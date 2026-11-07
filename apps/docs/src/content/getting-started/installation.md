@@ -141,7 +141,7 @@ It looks at the project and picks the setup this page describes for it:
 
 The overlay goes after bootstrap, behind the `ngDevMode` check shown in [Browser part](#browser-part). Pass `--project <name>` in a workspace with several applications. Without it, `ng add` takes the only application, or the first one.
 
-`ng add` only inserts lines next to code it recognizes, such as `import express from 'express'` and `const app = express()`. When a file looks different, it leaves the file alone and prints the snippet to add by hand. Running it again changes nothing: it skips files that already import the devtools. It saves the package as a dependency, which every setup works with. See [Dependency or dev dependency](#dependency-or-dev-dependency) to move it.
+`ng add` only inserts lines next to code it recognizes, such as `import express from 'express'` and `const app = express()`. When a file looks different, it leaves the file alone and prints the snippet to add by hand. It reads `angular.json` the way the Angular CLI does, with comments and trailing commas. When it can't read it, it changes nothing and prints the overlay snippet, and with `--project` it stops with an error that names `angular.json`. Running it again changes nothing: it skips files that already import the devtools. It saves the package as a dependency, which every setup works with. See [Dependency or dev dependency](#dependency-or-dev-dependency) to move it.
 
 ### Dependency or dev dependency
 
