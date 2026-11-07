@@ -30,6 +30,7 @@ import type { InjectorFocus } from '../types/injector-focus.types';
 import { storeFlag, storedFlag } from '../view-prefs';
 import { StartupSection } from './startup-section';
 import { SearchField } from '../ui/search-field';
+import { Splitter, storedPaneSize } from '../ui/splitter';
 
 interface ProviderInfo {
   token: string;
@@ -273,7 +274,7 @@ function isTree(value: unknown): value is InjectorNode[] {
         </div>
       }
 
-      <div class="layout">
+      <div class="layout" [style.--detail-size.px]="detailSize()">
         @if (!rows().length) {
           <div class="state">
             <p class="state-title">No injectors to show</p>
@@ -363,6 +364,14 @@ function isTree(value: unknown): value is InjectorNode[] {
             </div>
           }
         </div>
+        <app-splitter
+          view="injectors"
+          label="Resize the injector detail"
+          [min]="300"
+          [max]="900"
+          [defaultSize]="420"
+          [(size)]="detailSize"
+        />
 
         @if (gone(); as name) {
           <section class="detail gone" aria-labelledby="di-detail-title">
@@ -927,9 +936,23 @@ function isTree(value: unknown): value is InjectorNode[] {
       gap: 12px;
       align-items: start;
     }
+    .layout > app-splitter {
+      display: none;
+    }
     @media (min-width: 880px) {
       .layout {
-        grid-template-columns: minmax(0, 1fr) minmax(340px, 44%);
+        grid-template-columns: minmax(0, 1fr) auto min(var(--detail-size, 420px), 70%);
+      }
+      .layout > * {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .layout > app-splitter {
+        display: block;
+        grid-column: 2;
+      }
+      .layout > .detail {
+        grid-column: 3;
       }
       .detail {
         position: sticky;
@@ -1584,6 +1607,8 @@ export class DiInspector {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly view = signal<TreeView>('element');
   readonly query = signal('');
+  /** The detail width on wide panels, set by the splitter and saved per view. */
+  readonly detailSize = signal(storedPaneSize('injectors', 420));
   private readonly queryInput = viewChild<SearchField>('queryInput');
   readonly onlyProviding = signal(false);
   readonly componentsOnly = signal(true);

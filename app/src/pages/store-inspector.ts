@@ -43,6 +43,7 @@ import { SourceLink } from '../ui/source-link';
 import { StoreGlobal } from '../ui/store-global';
 import { reduxLiveStores, reduxLog, reduxPagesOf, type ReduxStoresPage } from './redux-stores';
 import { SearchField } from '../ui/search-field';
+import { Splitter, storedPaneSize } from '../ui/splitter';
 
 const KIND_COLORS: Record<string, string> = {
   action: '#f59e0b',
@@ -409,7 +410,7 @@ const CLASSIC_KINDS = new Set([
                   what="changes on this page"
                   limit="changeLog"
                 />
-                <div class="log-layout">
+                <div class="log-layout" [style.--log-list-size.px]="logListSize()">
                   <ul
                     #logList
                     class="log-list"
@@ -475,6 +476,15 @@ const CLASSIC_KINDS = new Set([
                       </li>
                     }
                   </ul>
+                  <app-splitter
+                    view="store-log"
+                    pane="before"
+                    label="Resize the change list"
+                    [min]="200"
+                    [max]="640"
+                    [defaultSize]="300"
+                    [(size)]="logListSize"
+                  />
 
                   @if (changeEntry(); as selected) {
                     <div id="ngrx-change-detail">
@@ -1505,7 +1515,7 @@ const CLASSIC_KINDS = new Set([
     }
     .log-layout {
       display: grid;
-      grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
+      grid-template-columns: min(var(--log-list-size, 300px), 60%) auto minmax(0, 1fr);
       gap: 16px;
       min-width: 0;
     }
@@ -1830,6 +1840,9 @@ const CLASSIC_KINDS = new Set([
       .log-layout {
         grid-template-columns: minmax(0, 1fr);
       }
+      .log-layout > app-splitter {
+        display: none;
+      }
       .store-list {
         border-right: none;
         border-bottom: 1px solid var(--border);
@@ -1858,6 +1871,8 @@ export class StoreInspector {
   protected readonly restoreOff = actionBlockedMessage('ngrx');
 
   readonly filter = signal('');
+  /** The change list width on wide panels, set by the splitter and saved. */
+  readonly logListSize = signal(storedPaneSize('store-log', 300));
   readonly kind = signal<string | null>(null);
   readonly sourceEntries = signal<NgrxStoreEntry[]>([]);
   readonly sourceLoaded = signal(false);
