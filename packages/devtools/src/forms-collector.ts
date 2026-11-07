@@ -524,7 +524,7 @@ export function attachForms(
       const forms = collectForms(found, (root) => idOf(root));
       for (const form of forms) stampPending(form.id, form.root, now);
       const streamed = new Set(Array.from(watched.values(), ({ formId }) => formId));
-      const agentSincePush = webMcp.takeActivity();
+      const agentTouch = webMcp.takeActivity();
       // A form recreated under the same id starts over instead of diffing against the old one.
       const comparable = lastForms.filter(
         (form) => lastRoots.get(form.id) === foundById.get(form.id)?.root,
@@ -533,15 +533,19 @@ export function attachForms(
       for (const event of diffForms(comparable, forms)) {
         if (!streamed.has(event.formId) || DIFFED_FOR_ALL.includes(event.type)) {
           const caller = signalCallers.get(event.formId);
+          // The agent's own write wins; user input wins over a call that is merely running.
+          const touch = agentTouch(foundById.get(event.formId)?.root);
           const origin: EventOrigin | undefined = devtoolsSincePush
             ? 'devtools'
-            : agentSincePush
+            : touch === 'wrote'
               ? 'agent'
               : userSincePush
                 ? 'user'
-                : caller !== undefined
-                  ? 'code'
-                  : undefined;
+                : touch
+                  ? 'agent'
+                  : caller !== undefined
+                    ? 'code'
+                    : undefined;
           const tagged: FormEvent = origin ? { ...event, origin } : event;
           if (caller && origin !== 'devtools') tagged.caller = caller;
           recordFormEvent(tagged, false);

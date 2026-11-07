@@ -11,7 +11,8 @@ import {
   NgIf,
   UpperCasePipe,
 } from '@angular/common';
-import { BehaviorSubject, of, type Observable } from 'rxjs';
+import { BehaviorSubject, Observable, ReplaySubject, of } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attachPipes } from '../pipes-collector.ts';
 import { createPageHeartbeat } from '../page-heartbeat.ts';
@@ -280,14 +281,14 @@ describe('pipes collector', () => {
 
   it('reports the latest async value and flags a duplicate subscription', async () => {
     class Feed {
-      shared$ = new BehaviorSubject('one');
+      cold$ = new Observable<string>((subscriber) => subscriber.next('one'));
       solo$ = new BehaviorSubject('solo');
     }
     Component({
       ...STANDALONE,
       selector: 'app-feed',
       imports: [AsyncPipe],
-      template: `<p>{{ shared$ | async }}</p><p>{{ shared$ | async }}</p><p>{{ solo$ | async }}</p>`,
+      template: `<p>{{ cold$ | async }}</p><p>{{ cold$ | async }}</p><p>{{ solo$ | async }}</p>`,
     })(Feed);
 
     await mount(Feed);
@@ -306,6 +307,38 @@ describe('pipes collector', () => {
     }
     expect(asyncUsages.some((a) => a.latestValue === 'one')).toBe(true);
     expect(asyncUsages.some((a) => a.latestValue === 'solo')).toBe(true);
+  });
+
+  it('does not flag sources whose subscribers share one execution', async () => {
+    class Shared {
+      subject$ = new BehaviorSubject('subject');
+      view$ = new ReplaySubject<string>(1).asObservable();
+      promise = Promise.resolve('promise');
+      mapped$ = of('mapped').pipe(map((v) => v));
+    }
+    Component({
+      ...STANDALONE,
+      selector: 'app-shared',
+      imports: [AsyncPipe],
+      template:
+        '<p>{{ subject$ | async }}</p><p>{{ subject$ | async }}</p>' +
+        '<p>{{ view$ | async }}</p><p>{{ view$ | async }}</p>' +
+        '<p>{{ promise | async }}</p><p>{{ promise | async }}</p>' +
+        '<p>{{ mapped$ | async }}</p><p>{{ mapped$ | async }}</p>',
+    })(Shared);
+
+    await mount(Shared);
+    const h = harness();
+    h.collector.push();
+    await Promise.resolve();
+
+    const asyncUsages = h.reports().at(-1)!.async ?? [];
+    expect(asyncUsages).toHaveLength(8);
+    // Only the cold `of(...).pipe(map(...))` source still counts as a possible duplicate.
+    expect(asyncUsages.filter((a) => a.duplicate)).toHaveLength(2);
+    expect(asyncUsages.filter((a) => a.duplicate).every((a) => a.latestValue === 'mapped')).toBe(
+      true,
+    );
   });
 
   it('flags a pure pipe fed a mutated-in-place argument (experimental stale check)', async () => {

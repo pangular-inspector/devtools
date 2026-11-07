@@ -1,4 +1,5 @@
 import { keepaliveAfter } from './page-heartbeat.ts';
+import { sharedSource } from './async-source.ts';
 import { elementId } from './element-id.ts';
 import type { HostTree } from './host-tree.ts';
 import { serialize } from './serialize.ts';
@@ -123,7 +124,7 @@ function asyncReportFor(
   const bySource = new Map<unknown, number>();
   for (const usage of asyncUsages) {
     const source = read(() => (usage.instance as { _obj?: unknown })._obj, undefined);
-    if (source === undefined || source === null) continue;
+    if (source === undefined || source === null || sharedSource(source)) continue;
     bySource.set(source, (bySource.get(source) ?? 0) + 1);
   }
   const resubscribing = new Map<AnyRecord, boolean>();

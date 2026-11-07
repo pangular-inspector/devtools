@@ -237,13 +237,56 @@ describe('watchWebMcp', () => {
     await tick();
     expect(activeInside).toBe(true);
     expect(watcher.active()).toBe(false);
-    expect(watcher.takeActivity()).toBe(true);
-    expect(watcher.takeActivity()).toBe(false);
+    const touched = watcher.takeActivity();
+    expect(touched(second)).toBe('wrote');
+    expect(touched(first)).toBeUndefined();
+    expect(watcher.takeActivity()(second)).toBeUndefined();
     const tool = watcher.describe(forms).forms.get(second);
     expect(tool?.calls).toEqual([
       expect.objectContaining({ outcome: 'failed', fields: ['name'], detail: 'name: is required' }),
     ]);
     expect(onChange).toHaveBeenCalled();
+  });
+
+  it('blames only the linked form while a call runs, and every form for a write it cannot place', async () => {
+    const { tools } = fakeContext();
+    const watcher = watch();
+    const target = fieldNode({ name: '' });
+    const other = fieldNode({ name: '' });
+    let finish!: () => void;
+    let linkIt = true;
+    await (navigator as any).modelContext.registerTool({
+      name: 'slow',
+      description: 'Slow submit',
+      inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: [] },
+      execute: () => {
+        if (linkIt) watcher.link(target);
+        return new Promise<unknown>((resolve) => (finish = () => resolve({ content: [] })));
+      },
+    });
+    void tools.get('slow')!.execute({ name: 'x' });
+    expect(watcher.takeActivity()(target)).toBe('wrote');
+    // Still running: only its own form is the agent's.
+    let touched = watcher.takeActivity();
+    expect(touched(target)).toBe('running');
+    expect(touched(other)).toBeUndefined();
+    finish();
+    await tick();
+    // The push after it settles still blames the target, then nothing.
+    expect(watcher.takeActivity()(target)).toBe('running');
+    expect(watcher.takeActivity()(target)).toBeUndefined();
+
+    linkIt = false;
+    await (navigator as any).modelContext.registerTool({
+      name: 'unplaced',
+      description: 'No form',
+      inputSchema: { type: 'string' },
+      execute: async () => ({ content: [] }),
+    });
+    void tools.get('unplaced')!.execute('x');
+    touched = watcher.takeActivity();
+    expect(touched(other)).toBe('maybe');
+    expect(touched(undefined)).toBe('maybe');
   });
 
   it('masks tokens in the description, error and call detail of a tool no form owns', async () => {

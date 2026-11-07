@@ -87,7 +87,10 @@ export interface AsyncUsageInfo {
   hasSource: boolean;
   /** Best-effort, size-capped description of the latest emitted value. */
   latestValue?: string;
-  /** Another `| async` usage on the page is subscribed to the same source. */
+  /** A possible duplicate: another `| async` usage on the page is subscribed to the same
+   * source, and the source is not known to share one execution (a Promise, a Subject, an
+   * operator-free view of one or an NgRx store select never count; `share()` and
+   * `shareReplay()` can't be seen, so a source piped through them still does). */
   duplicate: boolean;
   /** The source changed on several reports in a row, e.g. `getData() | async`
    * returning a new Observable on every check. */
