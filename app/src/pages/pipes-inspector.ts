@@ -557,7 +557,7 @@ const KIND_OPTIONS: readonly SelectOption<PipeKind>[] = [
                 <span class="chip">no source</span>
               }
               @if (a.duplicate) {
-                <span class="chip warn">duplicate subscription</span>
+                <span class="chip warn">possible duplicate subscription</span>
               }
               @if (a.resubscribing) {
                 <span class="chip warn">resubscribing</span>

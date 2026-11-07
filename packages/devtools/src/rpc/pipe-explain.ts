@@ -58,7 +58,7 @@ export function explainPipeText(
       const owners = [...new Set(duplicates.map((a) => a.component))].join(', ');
       lines.push(
         '',
-        `**Duplicate subscriptions:** ${duplicates.length} \`| async\` usage(s) subscribe to a source that another \`| async\` usage on the same page also subscribes to (${owners}). For a cold, unshared source each subscription repeats the work, for example a second HTTP request. Subscribe once with \`@let\`, share the source with \`shareReplay\`, or read it through \`toSignal()\`.`,
+        `**Possible duplicate subscriptions:** ${duplicates.length} \`| async\` usage(s) subscribe to a source that another \`| async\` usage on the same page also subscribes to (${owners}). Promises, Subjects, \`asObservable()\` views of a Subject and NgRx store selects are left out, because their subscribers share one execution. For a cold, unshared source each subscription repeats the work, for example a second HTTP request. A source already piped through \`share()\` or \`shareReplay()\` is fine, but the page can't tell. Otherwise subscribe once with \`@let\`, share the source with \`shareReplay\`, or read it through \`toSignal()\`.`,
       );
     }
     const resubscribing = live.async.filter((a) => a.resubscribing);
