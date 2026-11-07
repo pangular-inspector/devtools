@@ -171,6 +171,15 @@ interface PangularConfig {
     /** Rule status by rule name. `false` turns the rule off; `true` or omitted keeps it on. */
     rules?: Record<string, boolean>;
   };
+  ngrx?: {
+    /**
+     * Record where each NgRx change log entry came from: the app frames of the
+     * dispatch, method call or `patchState`, with origins and query strings
+     * removed and secrets masked. Off by default, since taking a stack on every
+     * write costs time.
+     */
+    trace?: boolean;
+  };
 }
 ```
 
@@ -227,6 +236,7 @@ interface ResolvedPangularConfig {
   lint: {
     rules: Record<string, boolean>;
   };
+  ngrx: {trace: boolean};
 }
 ```
 
