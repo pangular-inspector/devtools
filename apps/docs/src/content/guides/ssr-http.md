@@ -190,5 +190,5 @@ Open `http://localhost:4000/examples/http`. See [Demo apps](../contributing/demo
 <ngmd-pill-row>
   <ngmd-pill href="/inspectors/ssr-http" title="SSR & HTTP inspector"></ngmd-pill>
   <ngmd-pill href="/getting-started/express" title="Angular CLI and Express"></ngmd-pill>
-  <ngmd-pill href="/guides/analog" title="Set up Analog"></ngmd-pill>
+  <ngmd-pill href="/getting-started/vite" title="Vite and Analog"></ngmd-pill>
 </ngmd-pill-row>

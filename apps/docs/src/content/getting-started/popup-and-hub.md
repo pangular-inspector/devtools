@@ -156,7 +156,7 @@ When the page's server mounts the hub (`/__devframes/`), the button opens the wh
 | NgRx           | The Store tab                                                                                                                                                        |
 | Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                                           |
 | Angular Native | Components, Signals, Injectors, Store, Queries, Pipes and Errors for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
-| NativeScript   | Setup steps for [NativeScript apps](../guides/nativescript.md)                                                                                                       |
+| NativeScript   | Setup steps for [NativeScript apps](./nativescript.md)                                                                                                               |
 | Capacitor      | Plugin calls of a connected [Capacitor app](../inspectors/capacitor.md), or setup steps when none is connected                                                       |
 
 ### The full panel
@@ -174,6 +174,8 @@ The Analog, Angular Native and Capacitor docks open setup steps when their tool 
 | Analog         | `Analog: not an Analog app`        | The server restarts in an Analog app |
 | Angular Native | `Angular Native: no app connected` | An Angular Native app reports        |
 | Capacitor      | `Capacitor: no app connected`      | A Capacitor app reports              |
+
+The setup steps of the Angular Native, NativeScript and Capacitor docks end with a **Supported and planned platforms** link to [Platforms](./platforms.md).
 
 The tooltip comes back when the app stops reporting and its data expires. The Angular and NgRx docks always have data. The NativeScript dock always shows setup steps, because a NativeScript app's data shows in the Angular dock, so its tooltip stays **NativeScript**.
 
@@ -270,6 +272,8 @@ If the panel cannot reach the server when it opens, it says so and tries again a
 A browser tab in the background runs its timers about once a minute. The app page stops reading itself while its tab is hidden and tells the server, and the server keeps its last data instead of dropping it. The panel then says **Page in background, showing the last data.** When you switch back, the page sends fresh data. If a hidden tab stops answering for 5 minutes, the server drops it. The server drops a visible tab that crashes or is killed without closing, with the data of every inspector, 30 seconds after its last report or heartbeat.
 
 ## Troubleshooting
+
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
 
 <ngmd-accordion>
   <ngmd-accordion-item title="The button is in the way" open>

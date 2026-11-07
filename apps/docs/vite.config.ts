@@ -12,6 +12,7 @@ import {mdLinksPlugin} from './md-links.plugin.ts';
 import {sitemapPlugin} from './sitemap.plugin.ts';
 import {searchIndexPlugin} from './search-index.plugin.ts';
 import {rawMdPlugin} from './raw-md.plugin.ts';
+import {llmsTxtPlugin} from './llms-txt.plugin.ts';
 import {varsPlugin} from './vars.plugin.ts';
 import {apiGenPlugin} from './api-gen.plugin.ts';
 import {prerenderRoutes, withoutCode} from './plugin-utils.ts';
@@ -93,6 +94,7 @@ export default defineConfig(async () => ({
     }),
     sitemapPlugin({siteUrl: config.site.url}),
     rawMdPlugin(),
+    llmsTxtPlugin(config),
     searchIndexPlugin(),
     apiGenPlugin(),
     analog({

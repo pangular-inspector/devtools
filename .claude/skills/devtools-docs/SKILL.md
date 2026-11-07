@@ -27,7 +27,7 @@ Reviewers reject changes that break these.
 1. **No em dashes.** Use a period, comma or parentheses.
 2. **No first person** ("we", "our").
 3. **No future tense** ("will").
-4. **No time-relative claims** ("new", "recently", "upcoming", "now supports"). Use a sidebar `status` badge in `ngmd.config.ts` and the changelog instead.
+4. **No time-relative claims** ("new", "recently", "upcoming", "now supports"). Use a sidebar `status` badge in `ngmd.config.ts` and the changelog instead. A `new` or `updated` badge needs `until`: the minor after the release that ships the page (`until: '1.2.0'` for a page in 1.1), so it expires.
 5. **No comparisons with other devtools products.** Describe this project on its own terms.
 6. **No marketing words**: powerful, seamless, blazingly fast, simply, just, easy.
 7. **No invented features.** Every name, label, option, default, tool and argument must exist in the code.
