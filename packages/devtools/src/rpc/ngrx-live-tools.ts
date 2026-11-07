@@ -189,7 +189,8 @@ function entryLine(entry: NgrxLogEntry, showPage?: string): string {
         .join('; ') + (entry.diffTruncated ? `; ${moreChangesText(entry.diffTruncated)}` : '')
     : 'no state change';
   const kind = entry.source === 'store' ? 'action' : 'call';
-  return `- #${entry.seq} ${when}${page}: ${kind} ${code(entry.type)}${duration} on ${code(entry.storeId)}${caused}${restorable}: ${diffText}`;
+  const from = entry.trace?.length ? ` (from ${code(entry.trace[0])})` : '';
+  return `- #${entry.seq} ${when}${page}: ${kind} ${code(entry.type)}${duration} on ${code(entry.storeId)}${caused}${from}${restorable}: ${diffText}`;
 }
 
 /**

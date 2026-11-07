@@ -31,7 +31,9 @@ import {
   pretty,
   sameNgrxLog,
   short,
+  traceFrame,
   type LiveStore,
+  type NgrxActionStat,
   type NgrxActionOrigin,
   type NgrxLogEntry,
   type NgrxLogKey,
@@ -40,6 +42,7 @@ import {
   type NgrxStoreEntry,
 } from './store-types';
 import { SourceLink } from '../ui/source-link';
+import { StoreStateTree } from './store-state-tree';
 import { StoreGlobal } from '../ui/store-global';
 import { reduxLiveStores, reduxLog, reduxPagesOf, type ReduxStoresPage } from './redux-stores';
 
@@ -114,6 +117,7 @@ const CLASSIC_KINDS = new Set([
     StoreGlobal,
     EntryTabs,
     StoreSession,
+    StoreStateTree,
   ],
   template: `
     <p class="page-intro">
@@ -256,7 +260,17 @@ const CLASSIC_KINDS = new Set([
                       current.classic.devtools ? 'Store DevTools on' : 'Store DevTools off'
                     }}</span>
                   }
+                  @if (current.signal?.watchOnly) {
+                    <span class="chip">withDevtools: watched only</span>
+                  }
                 </div>
+                @if (current.signal?.watchOnly) {
+                  <p class="hint small">
+                    This store uses <code>withDevtools()</code>, so the inspector does not wrap its
+                    methods or signals. Changes are logged as <code>patchState</code> entries, and
+                    method calls are not counted.
+                  </p>
+                }
                 @if (current.signal?.references?.length) {
                   <p class="refs">
                     Referenced by
@@ -313,9 +327,12 @@ const CLASSIC_KINDS = new Set([
                       </button>
                     </div>
                   </div>
-                  <pre #stateTree class="tree" tabindex="0" aria-labelledby="ngrx-state-heading">{{
-                    stateText()
-                  }}</pre>
+                  <app-state-tree
+                    [value]="stateValue()"
+                    [changed]="changedPaths()"
+                    [label]="current.label + ' state'"
+                    (copied)="copyPath($event)"
+                  />
                 </section>
                 @if (current.signal; as info) {
                   <section class="fact" aria-labelledby="ngrx-computed-heading">
@@ -404,6 +421,96 @@ const CLASSIC_KINDS = new Set([
                 }
               </div>
 
+              @if (current.classic?.devtools) {
+                <section class="history" aria-labelledby="ngrx-devtools-heading">
+                  <h4 id="ngrx-devtools-heading">Store DevTools history</h4>
+                  <p class="hint small">
+                    {{
+                      current.classic!.recordingPaused
+                        ? 'Recording is paused: new actions change the state but are not recorded.'
+                        : 'Recording new actions.'
+                    }}
+                    @if (current.classic!.skipped?.length; as skippedCount) {
+                      {{ skippedCount }} skipped
+                      {{ skippedCount === 1 ? 'action is' : 'actions are' }} left out of the state.
+                    }
+                  </p>
+                  @if (confirmReset()) {
+                    <div
+                      class="confirm"
+                      role="group"
+                      aria-labelledby="ngrx-reset-text"
+                      (keydown.escape)="cancelReset($event)"
+                    >
+                      <p id="ngrx-reset-text">
+                        Reset puts the store back on its initial state and empties the Store
+                        DevTools history. Entries logged so far can no longer be restored.
+                      </p>
+                      <div class="actions">
+                        <button
+                          type="button"
+                          class="btn primary"
+                          [disabled]="busy()"
+                          (click)="devtoolsOp({ op: 'reset' })"
+                        >
+                          Reset history
+                        </button>
+                        <button type="button" class="btn" (click)="cancelReset()" #resetCancel>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="actions">
+                      <button
+                        type="button"
+                        class="btn"
+                        [disabled]="busy() || !canRestore()"
+                        [attr.aria-describedby]="canRestore() ? null : 'store-history-off'"
+                        (click)="
+                          devtoolsOp({ op: 'pause', paused: !current.classic!.recordingPaused })
+                        "
+                      >
+                        {{
+                          current.classic!.recordingPaused ? 'Resume recording' : 'Pause recording'
+                        }}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn"
+                        [disabled]="busy() || !canRestore()"
+                        [attr.aria-describedby]="canRestore() ? null : 'store-history-off'"
+                        (click)="devtoolsOp({ op: 'jump', index: 0 })"
+                      >
+                        Jump to committed state
+                      </button>
+                      <button
+                        type="button"
+                        class="btn"
+                        [disabled]="busy() || !canRestore()"
+                        [attr.aria-describedby]="canRestore() ? null : 'store-history-off'"
+                        (click)="devtoolsOp({ op: 'commit' })"
+                      >
+                        Commit
+                      </button>
+                      <button
+                        type="button"
+                        class="btn"
+                        [disabled]="busy() || !canRestore()"
+                        [attr.aria-describedby]="canRestore() ? null : 'store-history-off'"
+                        (click)="askReset()"
+                        #resetButton
+                      >
+                        Reset…
+                      </button>
+                    </div>
+                  }
+                  @if (!canRestore()) {
+                    <p id="store-history-off" class="hint small">{{ restoreOff }}</p>
+                  }
+                </section>
+              }
+
               <section class="log" aria-labelledby="ngrx-log-heading">
                 <h4 id="ngrx-log-heading">
                   {{ current.classic || current.redux ? 'Action log' : 'Change log' }}
@@ -456,6 +563,9 @@ const CLASSIC_KINDS = new Set([
                             }
                           </span>
                           <span class="log-meta">
+                            @if (isSkipped(entry.seq)) {
+                              <span class="tag">skipped</span>
+                            }
                             @if (entry.origin) {
                               <span class="tag">{{ entry.origin }}</span>
                             }
@@ -496,6 +606,61 @@ const CLASSIC_KINDS = new Set([
                   }
                 </div>
               </section>
+
+              @if (storeStats().length) {
+                <div class="stats">
+                  <h4 id="ngrx-stats-heading">Action frequency</h4>
+                  <p class="hint small">
+                    How often each {{ current.classic ? 'action' : 'change' }} ran since the page
+                    loaded, including entries the log no longer keeps.
+                  </p>
+                  <div
+                    class="table-wrap"
+                    tabindex="0"
+                    role="region"
+                    aria-labelledby="ngrx-stats-heading"
+                  >
+                    <table>
+                      <thead>
+                        <tr>
+                          <th scope="col">{{ current.classic ? 'Action' : 'Method or write' }}</th>
+                          <th scope="col" class="num">Count</th>
+                          <th scope="col" class="num">Avg</th>
+                          <th scope="col" class="num">Longest</th>
+                          <th scope="col" class="num">Peak per second</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (stat of storeStats(); track stat.type) {
+                          <tr>
+                            <th scope="row" class="mono">
+                              {{ stat.type }}
+                              @if (stat.loop) {
+                                <span class="loop">Possible effect loop</span>
+                              }
+                            </th>
+                            <td class="num">{{ stat.count }}</td>
+                            <td class="num">
+                              {{ stat.avgMs !== undefined ? formatDuration(stat.avgMs) : 'n/a' }}
+                            </td>
+                            <td class="num">
+                              {{ stat.maxMs !== undefined ? formatDuration(stat.maxMs) : 'n/a' }}
+                            </td>
+                            <td class="num">{{ stat.burst }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                  @if (hasLoop()) {
+                    <p class="hint small">
+                      A possible effect loop is an action an NgRx effect dispatched
+                      {{ loopBurst }} or more times within one second. Check the effect that
+                      dispatches it for a missing filter or a dispatch of its own trigger.
+                    </p>
+                  }
+                </div>
+              }
 
               @if (!current.redux) {
                 <app-store-session
@@ -660,6 +825,26 @@ const CLASSIC_KINDS = new Set([
             <dt>Duration</dt>
             <dd>{{ formatDuration(selected.durationMs) }}</dd>
           }
+          @if (selected.trace?.length) {
+            <dt>Called from</dt>
+            <dd>
+              <ol class="trace">
+                @for (frame of traceFrames(selected.trace); track $index) {
+                  <li>
+                    @if (frame.file) {
+                      <app-source-link [file]="frame.file" [line]="frame.line"
+                        >{{ frame.name ? frame.name + ' ' : '' }}({{ frame.file }}:{{
+                          frame.line
+                        }})</app-source-link
+                      >
+                    } @else {
+                      <code>{{ frame.name }}</code>
+                    }
+                  </li>
+                }
+              </ol>
+            </dd>
+          }
           @if (selected.source === 'event') {
             <ng-container
               [ngTemplateOutlet]="actionRowsTpl"
@@ -818,8 +1003,22 @@ const CLASSIC_KINDS = new Set([
             </div>
           </div>
         }
-        @if (confirmSeq() !== selected.seq && (selected.restorable || canAgain(selected))) {
+        @if (
+          confirmSeq() !== selected.seq &&
+          (selected.restorable || canAgain(selected) || canToggle(selected))
+        ) {
           <div class="entry-actions">
+            @if (canToggle(selected)) {
+              <button
+                type="button"
+                class="btn"
+                [disabled]="busy() || !canRestore()"
+                [attr.aria-describedby]="canRestore() ? null : idPrefix + '-writes-off'"
+                (click)="devtoolsOp({ op: 'toggle', seq: selected.seq })"
+              >
+                {{ isSkipped(selected.seq) ? 'Include this action' : 'Skip this action' }}
+              </button>
+            }
             @if (selected.restorable) {
               <button
                 type="button"
@@ -1694,6 +1893,77 @@ const CLASSIC_KINDS = new Set([
     .field-error:empty {
       display: none;
     }
+    .history,
+    .stats {
+      min-width: 0;
+      margin-top: 16px;
+    }
+    .history h4,
+    .stats h4 {
+      margin: 0 0 6px;
+    }
+    .history .actions {
+      margin-top: 8px;
+    }
+    .table-wrap {
+      max-height: 280px;
+      overflow: auto;
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .table-wrap:focus-visible {
+      @include m.focus-ring(-2px);
+    }
+    .stats table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .stats th,
+    .stats td {
+      padding: 5px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: baseline;
+    }
+    .stats thead th {
+      position: sticky;
+      top: 0;
+      background: var(--surface-2);
+      color: var(--text-2);
+      font-weight: 600;
+    }
+    .stats tbody th {
+      font-weight: 400;
+      color: var(--text-strong);
+      overflow-wrap: anywhere;
+    }
+    .stats .num {
+      text-align: right;
+      white-space: nowrap;
+    }
+    .mono {
+      font-family: var(--font-mono);
+    }
+    .loop {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 0 5px;
+      border: 1px solid;
+      border-radius: 4px;
+      font-family: var(--font-sans, inherit);
+      font-size: 10.5px;
+      @include m.tint(warn);
+    }
+    .trace {
+      display: grid;
+      gap: 2px;
+      margin: 0;
+      padding-left: 18px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
     .paused {
       display: flex;
       flex-wrap: wrap;
@@ -1906,7 +2176,17 @@ export class StoreInspector {
   private readonly focusConfirm = signal<'cancel' | 'restore' | null>(null);
   private readonly cancelButton = viewChild<ElementRef<HTMLButtonElement>>('cancelButton');
   private readonly restoreButton = viewChild<ElementRef<HTMLButtonElement>>('restoreButton');
-  private readonly stateTree = viewChild<ElementRef<HTMLElement>>('stateTree');
+  private readonly stateTree = viewChild(StoreStateTree);
+  private readonly resetButton = viewChild<ElementRef<HTMLButtonElement>>('resetButton');
+  private readonly resetCancel = viewChild<ElementRef<HTMLButtonElement>>('resetCancel');
+  /** The reset confirm is open; it closes when another store is shown. */
+  readonly confirmReset = linkedSignal<string | undefined, boolean>({
+    source: () => this.store()?.id,
+    computation: () => false,
+  });
+  private readonly focusReset = signal<'cancel' | 'reset' | null>(null);
+  /** How many effect dispatches within a second flag a loop (`NGRX_LOOP_BURST`). */
+  protected readonly loopBurst = 20;
   private readonly filterInput = viewChild<ElementRef<HTMLInputElement>>('filterInput');
   private readonly latestButton = viewChild<ElementRef<HTMLButtonElement>>('latestButton');
   readonly message = signal('');
@@ -2022,6 +2302,40 @@ export class StoreInspector {
       store.signal ? store.signal.state : store.redux ? store.redux.state : store.classic?.state,
     );
   });
+
+  /** The serialized state of the selected store, for the state tree. */
+  readonly stateValue = computed<unknown>(() => {
+    const store = this.store();
+    if (!store) return undefined;
+    return store.signal
+      ? store.signal.state
+      : store.redux
+        ? store.redux.state
+        : store.classic?.state;
+  });
+
+  /** The paths the newest change of the selected store wrote, marked in the state tree. */
+  readonly changedPaths = computed<string[]>(() => {
+    const store = this.store();
+    const log = store ? this.logOf(store) : [];
+    let newest: NgrxLogEntry | undefined;
+    for (let i = log.length - 1; i >= 0 && !newest; i--) if (log[i].diff.length) newest = log[i];
+    return (newest?.diff ?? []).map((d) => d.path);
+  });
+
+  /** The selected store's action stats, most frequent first. */
+  readonly storeStats = computed<NgrxActionStat[]>(() => {
+    const store = this.store();
+    if (!store || store.redux) return [];
+    const stats = this.page()?.stats;
+    return Array.isArray(stats) ? stats.filter((s) => s.storeId === store.id) : [];
+  });
+  readonly hasLoop = computed(() => this.storeStats().some((s) => s.loop));
+
+  private readonly skippedSeqs = computed(
+    () =>
+      new Set(Array.isArray(this.page()?.classic?.skipped) ? this.page()!.classic!.skipped : []),
+  );
 
   readonly computedEntries = computed(() =>
     Object.entries(this.store()?.signal?.computed ?? {}).map(([key, value]) => ({
@@ -2173,6 +2487,13 @@ export class StoreInspector {
       button.nativeElement.focus();
     });
     afterRenderEffect(() => {
+      const target = this.focusReset();
+      const button = target === 'cancel' ? this.resetCancel() : this.resetButton();
+      if (!target || !button) return;
+      this.focusReset.set(null);
+      button.nativeElement.focus();
+    });
+    afterRenderEffect(() => {
       const seq = this.focusEventSeq();
       const detail = this.eventDetailHeading();
       if (seq === null || !detail) return;
@@ -2255,14 +2576,18 @@ export class StoreInspector {
     return this.copyText(this.stateText());
   }
 
+  copyPath(path: string) {
+    return this.copyText(path, `Copied the path ${path}.`);
+  }
+
   copyDiff(entry: NgrxLogEntry) {
     return this.copyText(pretty(entry.diff));
   }
 
-  private async copyText(text: string) {
+  private async copyText(text: string, done = 'Copied.') {
     try {
       await navigator.clipboard.writeText(text);
-      this.message.set('Copied.');
+      this.message.set(done);
     } catch {
       this.message.set('The clipboard is not available here.');
     }
@@ -2298,7 +2623,7 @@ export class StoreInspector {
       this.busy.set(false);
       this.confirmSeq.set(null);
       this.focusLatest.set(paused);
-      if (!paused) this.stateTree()?.nativeElement.focus();
+      if (!paused) this.stateTree()?.focus();
     }
   }
 
@@ -2318,12 +2643,64 @@ export class StoreInspector {
         request: { type: 'latest' },
       })) as { ok?: boolean; message?: string; error?: string } | null;
       this.focusLatest.set(false);
-      this.stateTree()?.nativeElement.focus();
+      this.stateTree()?.focus();
       this.message.set(result?.error ?? result?.message ?? 'Back on the latest state.');
     } catch {
       this.message.set('Could not reach the page to go back to the latest state.');
     } finally {
       this.busy.set(false);
+    }
+  }
+
+  isSkipped(seq: number): boolean {
+    return this.skippedSeqs().has(seq);
+  }
+
+  /** An @ngrx/store action Store DevTools still holds, or one it skips, can be skipped or included. */
+  canToggle(entry: NgrxLogEntry): boolean {
+    return (
+      entry.source === 'store' &&
+      entry.action !== undefined &&
+      !!this.page()?.classic?.devtools &&
+      (entry.restorable || this.isSkipped(entry.seq))
+    );
+  }
+
+  traceFrames(trace: string[]) {
+    return trace.map(traceFrame);
+  }
+
+  askReset() {
+    this.confirmReset.set(true);
+    this.focusReset.set('cancel');
+  }
+
+  cancelReset(event?: Event) {
+    event?.preventDefault();
+    this.confirmReset.set(false);
+    this.focusReset.set('reset');
+  }
+
+  /** Runs a Store DevTools history operation on the shown page. */
+  async devtoolsOp(request: { op: string; seq?: number; index?: number; paused?: boolean }) {
+    const page = this.page();
+    if (!page || this.busy()) return;
+    const resetting = request.op === 'reset';
+    this.busy.set(true);
+    try {
+      const result = (await call(this.rpc(), 'request-ngrx-action', {
+        pageId: page.pageId,
+        request: { type: 'devtools', ...request },
+      })) as { ok?: boolean; message?: string; error?: string } | null;
+      this.message.set(result?.error ?? result?.message ?? 'Done.');
+    } catch {
+      this.message.set('Could not reach the page to change the Store DevTools history.');
+    } finally {
+      this.busy.set(false);
+      if (resetting) {
+        this.confirmReset.set(false);
+        this.focusReset.set('reset');
+      }
     }
   }
 
