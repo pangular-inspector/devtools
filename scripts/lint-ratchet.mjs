@@ -2,8 +2,10 @@
 // Runs oxlint and fails when a file has more warnings of a rule than
 // `lint-baseline.json` allows. The baseline only goes down: fix a warning and
 // run `pnpm lint --update` to lower it, so the old count can't come back.
+// The same ratchet keeps source files short: a file over MAX_LINES counts its
+// lines as `pangular(max-lines)`, so it can't grow and a new one can't start.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,22 +13,59 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE = join(ROOT, 'lint-baseline.json');
 /** The folders oxlint checks, relative to the repository root. */
 export const LINT_PATHS = ['packages', 'app', 'apps', 'src', 'examples', 'scripts', 'e2e'];
+/** Lines a source file may have before the ratchet holds it. */
+export const MAX_LINES = 1500;
+/** The folders whose source files the line limit covers; tests are left out. */
+export const LINE_PATHS = ['packages/devtools/src', 'app/src'];
+export const MAX_LINES_RULE = 'pangular(max-lines)';
+
+/**
+ * A pseudo diagnostic for each file over {@link MAX_LINES}, whose `count` is
+ * its line count, so the ratchet keeps it from growing.
+ * @param {{ file: string; lines: number }[]} files
+ * @returns {{ filename: string; code: string; count: number; message: string }[]}
+ */
+export function lineDiagnostics(files, max = MAX_LINES) {
+  return files
+    .filter((f) => f.lines > max)
+    .map((f) => ({
+      filename: f.file,
+      code: MAX_LINES_RULE,
+      count: f.lines,
+      message: `${f.lines} lines, over the limit of ${max}. Split the file instead of adding to it.`,
+    }));
+}
+
+function sourceFiles(dir) {
+  /** @type {{ file: string; lines: number }[]} */
+  const out = [];
+  for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      if (entry.name === '__tests__' || entry.name === 'node_modules') continue;
+      out.push(...sourceFiles(path));
+    } else if (entry.name.endsWith('.ts') && !/\.(test|spec|d)\.ts$/.test(entry.name)) {
+      out.push({ file: path, lines: readFileSync(join(ROOT, path), 'utf8').split('\n').length });
+    }
+  }
+  return out;
+}
 
 /**
  * Counts oxlint's diagnostics per file and rule, with `/` paths relative to
  * `root`, sorted so the baseline file diffs cleanly.
- * @param {{ filename: string; code?: string }[]} diagnostics
+ * @param {{ filename: string; code?: string; count?: number }[]} diagnostics
  * @param {string} root
  * @returns {Record<string, Record<string, number>>}
  */
 export function countDiagnostics(diagnostics, root = ROOT) {
   /** @type {Record<string, Record<string, number>>} */
   const counts = {};
-  for (const { filename, code } of diagnostics) {
+  for (const { filename, code, count } of diagnostics) {
     const file = relative(root, join(root, filename)).split(sep).join('/');
     const rule = code ?? 'unknown';
     const rules = (counts[file] ??= {});
-    rules[rule] = (rules[rule] ?? 0) + 1;
+    rules[rule] = (rules[rule] ?? 0) + (count ?? 1);
   }
   return sortCounts(counts);
 }
@@ -104,7 +143,7 @@ function readBaseline() {
 }
 
 function main(args) {
-  const diagnostics = runOxlint();
+  const diagnostics = [...runOxlint(), ...lineDiagnostics(LINE_PATHS.flatMap(sourceFiles))];
   const current = countDiagnostics(diagnostics);
   const baseline = readBaseline();
   const { added, fixed } = compareCounts(baseline, current);
