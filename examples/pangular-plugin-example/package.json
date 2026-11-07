@@ -1,0 +1,25 @@
+{
+  "name": "pangular-plugin-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An example library that ships its own Pangular Inspector tab and agent tools through the plugin API.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./pangular": "./src/pangular.ts",
+    "./pangular-server": "./src/pangular-server.ts"
+  },
+  "peerDependencies": {
+    "@pangular-inspector/devtools": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@pangular-inspector/devtools": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@pangular-inspector/devtools": "workspace:*"
+  }
+}

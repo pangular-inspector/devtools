@@ -155,6 +155,15 @@ h2 {
   font-size: 1.3rem;
 }
 
+.promo {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  text-align: center;
+}
+
 .hero {
   display: grid;
   justify-items: center;

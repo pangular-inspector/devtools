@@ -22,7 +22,7 @@ A plugin has up to two parts:
   </ngmd-card>
 </ngmd-card-grid>
 
-The demo app ships an example plugin for its `TravelStore`: `src/app/devtools/travel-plugin.ts` for the page and `src/app/devtools/travel-plugin.server.ts` for the server. This guide builds it step by step.
+The demo app ships an example plugin for its `TravelStore`: `src/app/devtools/travel-plugin.ts` for the page and `src/app/devtools/travel-plugin.server.ts` for the server. This guide builds it step by step. To publish a plugin with a library instead, see [Ship a plugin from a library](./ship-a-plugin.md).
 
 ## Write the page plugin
 

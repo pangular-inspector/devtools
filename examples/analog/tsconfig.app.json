@@ -2,9 +2,15 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./out-tsc/app",
+    "rootDir": "..",
     "types": [],
     "rewriteRelativeImportExtensions": true
   },
   "files": ["src/main.ts", "src/main.server.ts"],
-  "include": ["src/**/*.d.ts", "src/app/pages/**/*.page.ts", "src/server/**/*.ts"]
+  "include": [
+    "src/**/*.d.ts",
+    "src/app/pages/**/*.page.ts",
+    "src/server/**/*.ts",
+    "../pangular-plugin-example/src/**/*.ts"
+  ]
 }
