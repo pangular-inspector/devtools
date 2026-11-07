@@ -16,7 +16,13 @@
 //
 // Attempts the guard refuses are not checked, so they don't rotate the code
 // the developer is typing either.
-import { exchangeTempAuthCode } from 'devframe/node/auth';
+//
+// devframe answers `null` both for a wrong code and for the right code sent
+// after it expired. Only a wrong code counts: an attempt is left uncounted
+// when it carries exactly the code that was current when it arrived, which
+// only the developer (or a right guess) can send, so no guess goes uncounted.
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { exchangeTempAuthCode, getTempAuthCode } from 'devframe/node/auth';
 import { getInternalContext } from 'devframe/node/hub-internals';
 
 const EXCHANGE = 'anonymous:devframe:auth:exchange';
@@ -142,13 +148,34 @@ interface GuardContext {
   };
 }
 
-/** devframe's exchange: checks the code, and on a match stores and returns a new token. */
-export type CodeExchange = (params: ExchangeParams, session: AuthSession) => string | null;
+/**
+ * devframe's exchange: checks the code, and on a match stores and returns a
+ * new token. `'expired'` means the code was the current one but had expired,
+ * so devframe rotated it; `null` means a wrong code.
+ */
+export type CodeExchange = (
+  params: ExchangeParams,
+  session: AuthSession,
+) => string | null | 'expired';
+
+const digest = (value: string) => createHash('sha256').update(value).digest();
+
+/** Compares two codes in constant time, whatever their lengths. */
+function sameCode(a: string, b: string): boolean {
+  return timingSafeEqual(digest(a), digest(b));
+}
 
 function defaultExchange(ctx: GuardContext): CodeExchange {
   return (params, session) => {
     const storage = getInternalContext(ctx as never).storage.auth;
-    return exchangeTempAuthCode(params.code, session as never, params, storage);
+    // The code devframe checks against. Reading it changes nothing: devframe
+    // only creates one when there is none, as the exchange would.
+    const current = getTempAuthCode();
+    const authToken = exchangeTempAuthCode(params.code, session as never, params, storage);
+    if (authToken) return authToken;
+    // devframe accepts the current code unless it has expired, so a refused
+    // current code was an expired one.
+    return sameCode(params.code, current) ? 'expired' : null;
   };
 }
 
@@ -165,15 +192,17 @@ export function guardedExchange(
     if (typeof params?.code !== 'string' || guard.check(session.meta) !== 'ok') {
       return { authToken: null };
     }
-    const authToken = exchange(
+    const result = exchange(
       { code: params.code, ua: String(params.ua ?? ''), origin: String(params.origin ?? '') },
       session,
     );
-    if (authToken) {
+    // The right code, too late: not a guess, so neither counted nor trusted.
+    if (result === 'expired') return { authToken: null };
+    if (result) {
       guard.succeeded(session.meta);
       onTrusted?.();
     } else guard.failed(session.meta);
-    return { authToken };
+    return { authToken: result };
   };
 }
 
