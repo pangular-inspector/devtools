@@ -1013,7 +1013,8 @@ export type LanAddressOption = boolean | string;
 /** `lanAddress` once read: off, or on with the address to use when one was given. */
 export type ResolvedLanAddress = { on: false } | { on: true; address?: string };
 
-const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+// No leading zeros: `010.0.0.1` would read as octal in some tools, and `00.0.0.0` would dodge the unspecified check.
+const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
 /**
  * Reads `lanAddress`. Anything but `true` or a network IPv4 address, such as `192.168.1.20`,

@@ -62,7 +62,17 @@ describe('resolveLanAddress', () => {
   });
 
   it('refuses loopback, unspecified and malformed values with a warning', () => {
-    for (const value of ['127.0.0.1', '0.0.0.0', 'localhost', '192.168.1', 1, {}]) {
+    for (const value of [
+      '127.0.0.1',
+      '0.0.0.0',
+      '00.0.0.0',
+      '010.000.000.001',
+      '192.168.01.20',
+      'localhost',
+      '192.168.1',
+      1,
+      {},
+    ]) {
       const warn = vi.fn();
       expect(resolveLanAddress(value, warn)).toEqual({ on: false });
       expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^\[pangular\] Ignoring lanAddress/));
