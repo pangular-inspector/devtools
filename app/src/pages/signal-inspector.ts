@@ -1872,7 +1872,9 @@ export class SignalInspector {
   });
   private readonly graphOwner = computed(() => {
     const g = this.graph();
-    return g ? `${g.pageId ?? ''}|${g.component?.id ?? g.injector?.id ?? ''}` : null;
+    return g
+      ? `${g.pageId ?? ''}|${g.component?.id ?? g.injector?.id ?? g.element?.id ?? ''}`
+      : null;
   });
 
   // Component and injector ids belong to one page, so each page keeps its own pick.
