@@ -520,7 +520,7 @@ export function clearRouterNavigations(pages: Pages, pageId: string, now = Date.
       const { loops: _loops, ...fresh } = app;
       if (!fresh.navigations) return fresh;
       const { dropped: _dropped, ...rest } = fresh;
-      const kept = app.navigations.filter((nav) => nav.outcome === 'pending');
+      const kept = fresh.navigations.filter((nav) => nav.outcome === 'pending');
       return { ...rest, navigations: kept, loops: detectLoops(kept, app.config) };
     });
   }
