@@ -134,4 +134,39 @@ describe('request-signal-restore', () => {
     expect(await answer).toEqual({ error: expect.stringContaining('No page answered') });
     expect(restores.pendingCount()).toBe(0);
   });
+
+  it('sends a service restore only for a node with a service locator', async () => {
+    const broadcast = vi.fn();
+    const serviceGraph = {
+      pageId: 'p1',
+      nodes: [
+        {
+          id: '11',
+          kind: 'signal',
+          label: 'trips',
+          epoch: 2,
+          locator: { id: 'inj-2', key: 'trips', owner: 'service', service: 'TripStore' },
+        },
+      ],
+      edges: [],
+      injector: { id: 'inj-2', name: 'Root' },
+    };
+    const restores = createSignalRestores({
+      config: resolvePangularConfig(),
+      graphOf: () => serviceGraph as never,
+      broadcast,
+      answersFor: () => true,
+      timeoutMs: 20,
+    });
+    // Without `owner`, a service node is refused.
+    expect(await restores.request('p1', { component: 'inj-2', node: '11', epoch: 1 })).toEqual({
+      error: expect.stringContaining('shown component'),
+    });
+    void restores.request('p1', { component: 'inj-2', owner: 'service', node: '11', epoch: 1 });
+    expect(broadcast).toHaveBeenCalledWith('signal-restore', {
+      requestId: expect.any(String),
+      pageId: 'p1',
+      request: { component: 'inj-2', owner: 'service', node: '11', epoch: 1 },
+    });
+  });
 });

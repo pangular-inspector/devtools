@@ -51,12 +51,26 @@ export interface SignalGraphNode {
    * match (see `signal-locator.ts`).
    */
   locator?: SignalWriteLocator;
+  /**
+   * On an `effect` node: how many times it ran, and the total and last run
+   * time in ms. Only where Angular's profiler reports effect runs
+   * (`effect-runs.ts`); no Angular up to 22.1 does.
+   */
+  runs?: number;
+  runMs?: number;
+  lastRunMs?: number;
 }
 
-/** Where a writable signal lives: the component instance id and its property. */
+/**
+ * Where a writable signal lives: the component instance id and its property,
+ * or, with `owner: 'service'`, the environment injector id and the property
+ * of the service it created (`service` names its class).
+ */
 export interface SignalWriteLocator {
   id: string;
   key: string;
+  owner?: 'service';
+  service?: string;
 }
 
 export interface SignalGraphEdge {
@@ -81,6 +95,16 @@ export interface SignalChange {
 export interface SignalWatchReport {
   ids: string[];
   stacks: boolean;
+}
+
+export interface SignalGraphElement {
+  /** The host's id in the component tree. */
+  id: string;
+  tag: string;
+  /** The directive classes on the host. */
+  directives: string[];
+  /** The element injector id from the injector tree, when the graph was asked for by it. */
+  injectorId?: string;
 }
 
 export interface SignalGraphComponent {
@@ -125,6 +149,12 @@ export interface SignalGraph {
   component?: SignalGraphComponent;
   /** Set instead of `component` when the graph belongs to an environment injector. */
   injector?: SignalGraphInjector;
+  /**
+   * The element injector the graph was read from: set for a host with
+   * directives but no component (then without `component`), and for a graph
+   * asked for by an element injector id from the injector tree (`injectorId`).
+   */
+  element?: SignalGraphElement;
   /** Environment injectors (root and route) the page can report a graph for. */
   environments?: SignalGraphInjector[];
   resources?: SignalResource[];
@@ -223,6 +253,11 @@ export interface ComponentDetail {
   name: string;
   tag: string;
   path: string;
+  /**
+   * A CSS selector that finds the host again with `querySelector`, for the
+   * panel's "Copy host path". Left out where the host tree has no selectors.
+   */
+  selector?: string;
   source?: ComponentSource;
   changeDetection?: string;
   encapsulation?: string;
@@ -257,6 +292,11 @@ export interface DeferBlockInfo {
   /** Page clock, ms since epoch, when the state or hydration state last changed. */
   since: number;
   hydratedAt?: number;
+  /**
+   * The state changes the overlay saw, oldest first, on the page clock: the
+   * state it found, then each change. Left out until the block changed.
+   */
+  transitions?: { state: string; hydration: DeferBlockInfo['hydration']; at: number }[];
 }
 
 export interface ForBlockInfo {
@@ -340,6 +380,12 @@ export interface InjectorInfo {
   host?: string;
   /** Set by the server: one of Angular's own injectors (see `framework-tokens.ts`). */
   framework?: boolean;
+  /**
+   * On an environment injector: a lazy route's injector the router already
+   * created that no rendered element's lookup path goes through, such as
+   * the route the app navigated away from.
+   */
+  inactive?: boolean;
 }
 
 export interface ProviderInfo {
@@ -393,7 +439,21 @@ export interface InjectorTreeReport {
   roots: InjectorTreeNode[];
   environment: InjectorTreeNode[];
   truncated?: boolean;
+  /**
+   * Set by the server with `truncated`: the caps that cut the tree, so the
+   * panel and agents name the real numbers.
+   */
+  limits?: InjectorTreeLimits;
   zone?: ZoneMode;
+}
+
+export interface InjectorTreeLimits {
+  /** Most element injectors a page reports. */
+  elements: number;
+  /** Most injectors in all, element and environment. */
+  injectors: number;
+  /** Deepest an injector can sit before it is left out. */
+  depth: number;
 }
 
 export interface InjectorPage extends InjectorTreeReport {

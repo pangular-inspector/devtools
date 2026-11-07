@@ -65,7 +65,7 @@ export const SCAN_TOOLS: readonly ScanToolSpec[] = [
     id: 'pangular:scan-providers',
     title: 'Scan Angular DI providers',
     description:
-      'Source scan of DI providers as JSON: @Injectable services, inject() calls, constructor parameters of decorated classes and providers arrays, with token, file and where each is provided. pangular:inspect-providers reads the live injectors.',
+      'Source scan of DI providers as JSON: @Injectable services, inject() calls, constructor parameters of decorated classes and providers arrays, with token, file and where each is provided. Other provide*() calls have type `helper`. pangular:inspect-providers reads the live injectors.',
     definition: getProviders as unknown as ScanDefinition,
   },
   {

@@ -61,6 +61,15 @@ async function boot(config?: PangularConfig) {
 }
 
 describe('resolvePangularConfig', () => {
+  it('keeps ngrx.trace off unless it is true, and reports a wrong value', () => {
+    expect(resolvePangularConfig().ngrx).toEqual({ trace: false });
+    expect(resolvePangularConfig({ ngrx: { trace: true } }).ngrx).toEqual({ trace: true });
+    expect(resolvePangularConfig({ ngrx: { trace: 'yes' } }).ngrx).toEqual({ trace: false });
+    expect(pangularConfigProblems({ ngrx: { trace: 'yes' } })).toHaveLength(1);
+    expect(pangularConfigProblems({ ngrx: { trace: true } })).toEqual([]);
+    expect(pickPangularConfig({ ngrx: { trace: true } }).config.ngrx).toEqual({ trace: true });
+  });
+
   it('turns everything on by default', () => {
     const config = resolvePangularConfig();
     expect(Object.values(config.inspectors).every(Boolean)).toBe(true);
@@ -312,6 +321,8 @@ describe('agent tool and RPC registration', () => {
         'remove-http-rule',
         'remove-ssr-override',
         'ngrx-restore',
+        'load-defer-block',
+        'ngrx-store-devtools',
         'set-component-property',
         'set-http-rule',
         'set-signal',
@@ -436,6 +447,8 @@ describe('agent tool and RPC registration', () => {
         'remove-http-rule',
         'remove-ssr-override',
         'ngrx-restore',
+        'load-defer-block',
+        'ngrx-store-devtools',
         'set-component-property',
         'set-http-rule',
         'set-signal',
@@ -456,8 +469,14 @@ describe('agent tool and RPC registration', () => {
     const ngrx = await boot({ actions: { ngrx: false } });
     expect(ngrx.actionTools).not.toContain('ngrx-dispatch');
     expect(ngrx.actionTools).not.toContain('ngrx-restore');
+    expect(ngrx.actionTools).not.toContain('ngrx-store-devtools');
     expect(ngrx.tools).toEqual(
-      expect.arrayContaining(['ngrx-inspect-entry', 'ngrx-export-session', 'ngrx-generate-test']),
+      expect.arrayContaining([
+        'ngrx-inspect-entry',
+        'ngrx-export-session',
+        'ngrx-generate-test',
+        'ngrx-explain-change',
+      ]),
     );
     expect(ngrx.tools).toContain('ngrx-scan');
     const http = await boot({ actions: { http: false } });
@@ -472,6 +491,7 @@ describe('agent tool and RPC registration', () => {
     const components = await boot({ actions: { components: false } });
     expect(components.actionTools).not.toContain('set-component-property');
     expect(components.actionTools).not.toContain('set-signal');
+    expect(components.actionTools).not.toContain('load-defer-block');
     expect(components.tools).toContain('inspect-component');
     const queries = await boot({ actions: { tanstackQuery: false } });
     expect(queries.actionTools).not.toContain('tanstack-run-query');

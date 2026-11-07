@@ -242,7 +242,10 @@ describe('createCapacitorHook', () => {
     });
     await settle();
 
-    const text = JSON.stringify(hook.calls());
+    // Timing fields are zeroed, since a timestamp can contain the digits too.
+    const text = JSON.stringify(
+      hook.calls().map((call) => ({ ...call, startedAt: 0, durationMs: 0 })),
+    );
     expect(text).not.toContain('hunter2');
     expect(text).not.toContain('1234');
     expect(text).not.toContain(jwt);

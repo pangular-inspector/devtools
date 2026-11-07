@@ -2,6 +2,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { scopeToPage } from '../page-id';
+import { FormsExportTest, testFileName } from '../pages/forms-export-test';
 import { FormsFieldDetail } from '../pages/forms-field-detail';
 import { FormsInspector } from '../pages/forms-inspector';
 import { FormsLint, FormsSubmit } from '../pages/forms-report';
@@ -1053,5 +1054,306 @@ describe('FormsTimeline', () => {
     fixture.componentRef.setInput('recording', true);
     await settle(fixture);
     expect(box.checked).toBe(true);
+  });
+});
+
+describe('FormsFields inline editing', () => {
+  function client(call: Call, meta: Record<string, unknown> = {}): DevframeRpcClient {
+    const rpc = {
+      call,
+      callEvent: () => Promise.resolve(),
+      sharedState: () => Promise.resolve({ value: () => ({ forms: [form] }), on: () => () => {} }),
+    };
+    return { connectionMeta: meta, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+  }
+
+  it('edits the value, touched and dirty of a control in its row, then hands focus back', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      client((name, arg) => {
+        if (name === 'request-form-action') calls.push(arg);
+        return Promise.resolve({ ok: true, message: 'Done.' });
+      }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const edit = button(fixture, 'Edit email');
+    expect(edit.getAttribute('aria-expanded')).toBe('false');
+
+    edit.click();
+    await settle(fixture);
+    expect(edit.getAttribute('aria-expanded')).toBe('true');
+    const input = host.querySelector<HTMLInputElement>('#forms-inline-value')!;
+    expect(input.value).toBe('x');
+    expect(document.activeElement).toBe(input);
+
+    input.value = 'a@b.c';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    await settle(fixture);
+    expect(calls.at(-1)).toEqual({
+      action: 'set-value',
+      formId: form.id,
+      path: 'email',
+      value: 'a@b.c',
+      coerce: true,
+      mode: 'user',
+    });
+    expect(host.querySelector('.edit-row [role="status"]')?.textContent).toContain('Done.');
+
+    const [touched, dirty] = Array.from(
+      host.querySelectorAll<HTMLInputElement>('.edit-row input[type="checkbox"]'),
+    );
+    touched.click();
+    await settle(fixture);
+    expect(calls.at(-1)).toEqual({ action: 'mark-touched', formId: form.id, path: 'email' });
+    dirty.click();
+    await settle(fixture);
+    expect(calls.at(-1)).toEqual({ action: 'mark-dirty', formId: form.id, path: 'email' });
+
+    button(fixture, 'Done').click();
+    await settle(fixture);
+    expect(host.querySelector('#forms-inline-editor')).toBeNull();
+    expect(document.activeElement).toBe(edit);
+  });
+
+  it('puts a checkbox back when the page refuses the write', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      client(() => Promise.resolve({ ok: false, error: 'No field at email.' })),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    button(fixture, 'Edit email').click();
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const touched = host.querySelector<HTMLInputElement>('.edit-row input[type="checkbox"]')!;
+    touched.click();
+    await settle(fixture);
+    expect(touched.checked).toBe(false);
+    expect(text(fixture)).toContain('No field at email.');
+  });
+
+  it('turns Edit off when form writes are off', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput(
+      'rpc',
+      client(fail, { configs: { pangular: { actions: { forms: false } } } }),
+    );
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const edit = button(fixture, 'Edit email');
+    expect(edit.disabled).toBe(true);
+    expect(edit.getAttribute('aria-describedby')).toBe('forms-writes-off');
+  });
+});
+
+describe('FormsWebMcp Try this tool', () => {
+  const tool = {
+    name: 'sign_up',
+    description: 'Create an account',
+    status: 'registered' as const,
+    seen: 'register' as const,
+    inputs: ['name: string', 'age: number'],
+    schema: {
+      type: 'object',
+      properties: { name: { type: 'string' }, age: { type: 'number' } },
+      required: ['name'],
+    },
+    calls: [{ at: 0, outcome: 'submitted', tried: true }],
+  };
+
+  it('shows the input schema, starts from a sample input and asks before it runs the tool', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', tool);
+    fixture.componentRef.setInput('formId', 'signup@p1');
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_name, arg) => {
+        calls.push(arg);
+        return Promise.resolve({
+          ok: true,
+          message: 'The tool answered: Form submitted successfully',
+        });
+      }),
+    );
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.schema pre')?.textContent).toContain('"required"');
+    expect(text(fixture)).toContain('tried from the panel');
+    const input = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    expect(JSON.parse(input.value)).toEqual({ name: '', age: 0 });
+    expect(host.querySelector(`label[for="${input.id}"]`)?.textContent).toContain('Tool input');
+
+    input.value = '{"name": "Ada", "age": 3}';
+    input.dispatchEvent(new Event('input'));
+    button(fixture, 'Try this tool').click();
+    await settle(fixture);
+    expect(calls).toEqual([]);
+    button(fixture, 'Confirm try').click();
+    await settle(fixture);
+    expect(calls).toEqual([
+      { action: 'try-webmcp', formId: 'signup@p1', value: { name: 'Ada', age: 3 }, confirm: true },
+    ]);
+    expect(text(fixture)).toContain('Form submitted successfully');
+  });
+
+  it('runs a confirmed try once and keeps the button off until it answers', async () => {
+    const calls: Record<string, unknown>[] = [];
+    let answer!: (value: unknown) => void;
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', tool);
+    fixture.componentRef.setInput('formId', 'signup@p1');
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_name, arg) => {
+        calls.push(arg);
+        return new Promise((resolve) => (answer = resolve));
+      }),
+    );
+    await settle(fixture);
+    button(fixture, 'Try this tool').click();
+    await settle(fixture);
+    button(fixture, 'Confirm try').click();
+    await settle(fixture);
+    expect(calls).toHaveLength(1);
+    expect(button(fixture, 'Try this tool').disabled).toBe(true);
+    // A second try while the first runs, armed again, sends nothing.
+    fixture.componentInstance.armed.set(true);
+    await fixture.componentInstance.tryTool();
+    expect(calls).toHaveLength(1);
+    answer({ ok: true, message: 'The tool answered: Form submitted successfully' });
+    await settle(fixture);
+    expect(text(fixture)).toContain('Form submitted successfully');
+    expect(button(fixture, 'Confirm try').disabled).toBe(false);
+  });
+
+  it('refuses input that is not a JSON object', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', tool);
+    fixture.componentRef.setInput('formId', 'signup@p1');
+    fixture.componentRef.setInput('rpc', fakeClient(fail));
+    await settle(fixture);
+    const input = (fixture.nativeElement as HTMLElement).querySelector('textarea')!;
+    input.value = '[1';
+    input.dispatchEvent(new Event('input'));
+    button(fixture, 'Try this tool').click();
+    await settle(fixture);
+    expect(text(fixture)).toContain('not valid JSON');
+  });
+
+  it('offers no Try for a tool without a form, and turns it off when form writes are off', async () => {
+    const fixture = TestBed.createComponent(FormsWebMcp);
+    fixture.componentRef.setInput('tool', tool);
+    await settle(fixture);
+    expect(text(fixture)).not.toContain('Try this tool');
+    fixture.componentRef.setInput('formId', 'signup@p1');
+    fixture.componentRef.setInput('rpc', {
+      connectionMeta: { configs: { pangular: { actions: { forms: false } } } },
+      scope: () => ({ rpc: {} }),
+    } as unknown as DevframeRpcClient);
+    await settle(fixture);
+    expect(button(fixture, 'Try this tool').disabled).toBe(true);
+  });
+});
+
+describe('FormsExportTest', () => {
+  it('copies the Playwright test code and says when there is no history', async () => {
+    const answers = [
+      '_Labels, paths and values come from the page._\n\n```ts\ntest("x", async () => {});\n```',
+      'No changes from a person, an agent or the panel are recorded for `Signup.form`.',
+    ];
+    const asked: Record<string, unknown>[] = [];
+    let copied = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: (value: string) => ((copied = value), Promise.resolve()) },
+    });
+    const fixture = TestBed.createComponent(FormsExportTest);
+    fixture.componentRef.setInput('formId', 'Signup.form@p1');
+    fixture.componentRef.setInput(
+      'rpc',
+      fakeClient((_name, arg) => {
+        asked.push(arg);
+        return Promise.resolve(answers.shift());
+      }),
+    );
+    await settle(fixture);
+    button(fixture, 'Copy Playwright test').click();
+    await settle(fixture);
+    expect(asked[0]).toEqual({ kind: 'playwright', form: 'Signup.form@p1' });
+    expect(copied).toBe('test("x", async () => {});\n');
+    expect(text(fixture)).toContain('Copied.');
+    button(fixture, 'Copy Playwright test').click();
+    await settle(fixture);
+    expect(text(fixture)).toContain('No changes from a person');
+  });
+
+  it('names the download after the form', () => {
+    expect(testFileName('SignupForm.form@p1')).toBe('signup-form-form.spec.ts');
+    expect(testFileName('@p1')).toBe('form.spec.ts');
+  });
+});
+
+describe('FormsInspector schema view', () => {
+  const signalForm: CollectedForm = {
+    id: 'profile@p1',
+    kind: 'signal',
+    owner: 'Profile',
+    label: 'Profile.form',
+    root: {
+      ...field(''),
+      type: 'group',
+      rules: { tree: 1 },
+      children: [
+        field('name', { required: true, rules: { sync: 2 }, constraints: { minLength: 2 } }),
+        field('promo', { hidden: true, hiddenBy: 'self', rules: { hidden: 1 } }),
+        field('plain'),
+      ],
+    },
+  };
+
+  it('offers a Schema tab for a Signal Form with the rules of each field', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput('rpc', fakeClient(fail, [signalForm, form]));
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    const tab = host.querySelector<HTMLButtonElement>('#forms-tab-schema')!;
+    expect(tab.textContent?.trim()).toBe('Schema');
+    tab.click();
+    await settle(fixture);
+    const rows = Array.from(host.querySelectorAll('.schema tbody tr')).map((row) =>
+      Array.from(row.querySelectorAll('th, td'))
+        .map((cell) =>
+          Array.from(cell.children)
+            .map((part) => part.textContent?.trim())
+            .join(', '),
+        )
+        .join(' | '),
+    );
+    expect(rows).toEqual([
+      '(form), group | 1 cross-field rule |  | ',
+      'name, control | required, 2 validators | minLength 2 | ',
+      'promo, control | 1 hidden rule |  | hidden',
+    ]);
+  });
+
+  it('hides the Schema tab for other forms and falls back to Fields', async () => {
+    const fixture = TestBed.createComponent(FormsInspector);
+    fixture.componentRef.setInput('rpc', fakeClient(fail, [signalForm, form]));
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+    fixture.componentInstance.tab_.set('schema');
+    fixture.componentInstance.selectForm(form.id);
+    await settle(fixture);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#forms-tab-schema')).toBeNull();
+    expect(fixture.componentInstance.tab_()).toBe('fields');
   });
 });

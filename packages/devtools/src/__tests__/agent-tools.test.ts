@@ -978,7 +978,10 @@ describe('agent tools', () => {
       truncated: true,
     });
     const state = await injectorState();
-    expect(state).toMatchObject({ truncated: true, pages: { p1: { truncated: true } } });
+    expect(state).toMatchObject({
+      truncated: true,
+      pages: { p1: { truncated: true, limits: { elements: 2000, injectors: 2500, depth: 1000 } } },
+    });
     expect(await call('inspect-providers', '')).toMatch(
       /only part of its injector tree \(it keeps at most 2000 element injectors and 2500 in all, and leaves out injectors nested more than 1000 levels deep\)/,
     );
@@ -987,6 +990,9 @@ describe('agent tools', () => {
     );
     await push('push-injector-tree', { pageId: 'p1', roots: [injectorRoot('A')], environment: [] });
     expect(await injectorState()).toMatchObject({ truncated: false });
+    expect((await injectorState()) as { pages: { p1: { limits?: unknown } } }).not.toHaveProperty(
+      'pages.p1.limits',
+    );
     expect(await call('inspect-providers', '')).not.toMatch(/only part of its injector tree/);
   });
 

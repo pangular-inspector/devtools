@@ -2,7 +2,7 @@ import type { ComponentDebugNg } from './component-tree.ts';
 import { actionBlockedMessage } from './config.ts';
 import { elementById } from './element-id.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
-import { className } from './injector-tree.ts';
+import { className, createdServices, injectorKeyById } from './injector-tree.ts';
 import { serializeNamed } from './serialize.ts';
 import type { RawEntryLookup } from './signal-history.ts';
 import { boundField } from './signal-locator.ts';
@@ -17,8 +17,13 @@ import { boundField } from './signal-locator.ts';
  */
 
 export interface SignalRestoreRequest {
-  /** The component instance id from the node's `locator`. */
+  /**
+   * The component instance id from the node's `locator`; with
+   * `owner: 'service'` in the locator, the environment injector id.
+   */
   component: string;
+  /** `service` when the signal is a field of a service an environment injector created. */
+  owner?: 'service';
   /** The graph node id. */
   node: string;
   /** The `epoch` of the history entry to restore. */
@@ -58,7 +63,36 @@ export function toRestoreRequest(value: unknown): SignalRestoreRequest | null {
   if (typeof component !== 'string' || !component || component.length > 100) return null;
   if (typeof node !== 'string' || !node || node.length > 100) return null;
   if (typeof epoch !== 'number' || !Number.isInteger(epoch) || epoch < 0) return null;
-  return { component, node, epoch };
+  if (r['owner'] !== undefined && r['owner'] !== 'service') return null;
+  return r['owner'] === 'service'
+    ? { component, owner: 'service', node, epoch }
+    : { component, node, epoch };
+}
+
+/**
+ * The service and its writable field behind a node of an environment
+ * injector's graph: the created services of the injector with that id, the
+ * first one whose field the last collect bound to the node.
+ */
+function serviceField(
+  ng: ComponentDebugNg<object>,
+  injectorId: string,
+  node: string,
+): { owner: string; field: NonNullable<ReturnType<typeof boundField>> } | string {
+  const found = injectorKeyById(injectorId);
+  if (!found || found.element) {
+    return 'The injector is no longer on the page, so nothing was restored.';
+  }
+  for (const service of createdServices(found.key)) {
+    const field = boundField(ng, service, node);
+    if (field) {
+      return {
+        owner: className((service as { constructor: new () => unknown }).constructor),
+        field,
+      };
+    }
+  }
+  return 'This signal is not a writable field of a service the page could match, so it cannot be restored.';
 }
 
 export function restoreSignalEntry<H extends object>(
@@ -70,17 +104,26 @@ export function restoreSignalEntry<H extends object>(
   if (!ng?.getComponent) return fail('Angular debug APIs are not available on this page.');
   const wanted = toRestoreRequest(request);
   if (!wanted) return fail('Pass the component id, the signal node id and the entry epoch.');
-  const host = find(wanted.component);
-  const instance = host ? read(() => ng.getComponent?.(host) ?? null, null) : null;
-  if (!instance || typeof instance !== 'object') {
-    return fail('The component is no longer on the page, so nothing was restored.');
-  }
-  const component = className((instance as { constructor: new () => unknown }).constructor);
-  const field = boundField(ng, instance, wanted.node);
-  if (!field) {
-    return fail(
-      `This signal is not a writable field of ${component} the page could match, so it cannot be restored.`,
-    );
+  let component: string;
+  let field: ReturnType<typeof boundField>;
+  if (wanted.owner === 'service') {
+    const found = serviceField(ng as ComponentDebugNg<object>, wanted.component, wanted.node);
+    if (typeof found === 'string') return fail(found);
+    component = found.owner;
+    field = found.field;
+  } else {
+    const host = find(wanted.component);
+    const instance = host ? read(() => ng.getComponent?.(host) ?? null, null) : null;
+    if (!instance || typeof instance !== 'object') {
+      return fail('The component is no longer on the page, so nothing was restored.');
+    }
+    component = className((instance as { constructor: new () => unknown }).constructor);
+    field = boundField(ng, instance, wanted.node);
+    if (!field) {
+      return fail(
+        `This signal is not a writable field of ${component} the page could match, so it cannot be restored.`,
+      );
+    }
   }
   const entry = history.rawEntry(wanted.node, wanted.epoch);
   if (!entry.found) {

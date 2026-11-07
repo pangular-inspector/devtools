@@ -58,7 +58,9 @@ it('installed before core on Android, logs native calls once, as native, and kno
   ]);
   expect(nativePromise).toHaveBeenCalledTimes(2);
   // `pin` is a configured secret name: the value under it is masked both ways.
-  expect(JSON.stringify(hook.calls())).not.toContain('1234');
+  // Timing fields are zeroed, since a timestamp can contain the digits too.
+  const untimed = hook.calls().map((call) => ({ ...call, startedAt: 0, durationMs: 0 }));
+  expect(JSON.stringify(untimed)).not.toContain('1234');
 
   const plugins = readCapacitorInfo(globalThis as HookWindow)?.plugins ?? [];
   expect(plugins.find((p) => p.name === 'Preferences')?.registered).toBe(true);
