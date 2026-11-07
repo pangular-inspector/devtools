@@ -108,6 +108,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Keep trusted session tokens in a `0600` file per project, and expire them after 7 days.
 - Stop `server.allowedHosts: true` from turning off the origin checks, and warn about it.
 - Mask URL passwords and `Authorization` credentials (`Basic`, `Digest`, `Token`) in everything sent to the panel and to agents.
+- Mask email addresses in URLs as `[email]`, also with the `@` encoded as `%40`, in every redacted URL (router, HTTP, SSR, TransferState and the rest) and in the Analog server call log. An `@` that isn't an address, such as `/@angular/core`, and the user in a URL's authority stay (#372).
 - Mask more secrets: OpenAI, Anthropic, GitLab, npm, Hugging Face and SendGrid keys, Slack webhook URLs, the `Ocp-Apim-Subscription-Key` header, secret values that run past separators, secret XML elements and attributes, and token-like positional parts of TanStack Query keys and mutation variables.
 - Mark page text as untrusted in every agent tool answer.
 - Refuse writes when the target tab is unclear, instead of acting on whichever tab changed last.

@@ -48,6 +48,30 @@ const STRONG_PAIRS = new Set(['apikey', 'privatekey', 'secretkey', 'accesskey'])
 const URL_PAIR = /(^|[?&#;])((?:(?!%3D)[^=&#;?\s/])+)(=|%3D)([^&#;\s]*)/gi;
 const MAX_KNOWN_SECRETS = 100;
 
+/** What an email address in a URL becomes. */
+export const EMAIL_MASK = '[email]';
+/**
+ * An email address in a URL, with its `@` plain or encoded as `%40`. The local
+ * part only starts after a separator or a percent escape (not inside a run of
+ * address characters) and holds no `@` or `%40`, so each run is tried once and
+ * the scan stays linear. An optional leading `://` captures a URL's authority
+ * (`ssh://git@github.com`), which is left alone: its password is hidden by the
+ * credential pattern and its host stays readable.
+ */
+const EMAIL_IN_URL =
+  /((?:^|:)\/\/)?(?<=^|[^\w.+%-]|%(?!2b)[\da-f]{2})(?:[\w.+-]|%2b)+(?:@|%40)[a-z\d-]+(?:\.[a-z\d-]+)*\.[a-z]{2,}/gi;
+
+/** `url` with each email address in it (`a@b.com`, `a%40b.com`) replaced by `[email]`. */
+export function maskEmails(url: string): string {
+  if (!url.includes('@') && !url.includes('%40')) return url;
+  return url.replace(EMAIL_IN_URL, (match, authority?: string) => (authority ? match : EMAIL_MASK));
+}
+
+/** Whether `url` holds an email address or one `maskEmails` already masked. */
+export function hasEmail(url: string): boolean {
+  return url.includes(EMAIL_MASK) || url.includes('%5Bemail%5D') || maskEmails(url) !== url;
+}
+
 /** Secret values seen this session, such as secret route params, newest last. */
 export const knownSecrets = new Set<string>();
 
@@ -195,6 +219,7 @@ export function redactText(
     });
     out = redactJwt(out).replace(BEARER, `Bearer ${REDACTED}`);
     out = out.replace(LONG_TOKEN, (token) => (isOpaqueToken(token) ? REDACTED : token));
+    out = maskEmails(out);
   } else {
     // Bearer tokens and JWTs first, so `token: Bearer abc` can't keep `abc` once `Bearer` is hidden.
     out = redactJwt(out).replace(BEARER, `Bearer ${REDACTED}`);

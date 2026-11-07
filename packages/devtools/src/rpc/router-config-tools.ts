@@ -1,6 +1,7 @@
 import type { RouteNode } from '../router-config.ts';
 import type { NavigationRecord } from '../router.ts';
 import type { ServerRouteEntry } from './server-routes.ts';
+import { hasEmail, maskEmails } from '../text-redact.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import {
   capped,
@@ -45,13 +46,6 @@ export interface LintFinding {
 }
 
 const MAX_LIST = 400;
-const EMAIL_IN_URL = /[^/?&=]+@[^/?&=]+\.[a-z]{2,}/i;
-
-/** `url` with each email address in it, plain or with `@` encoded as
- * `%40`, replaced by `[email]`. */
-function maskEmails(url: string): string {
-  return url.replace(/[^/?&=]+(?:@|%40)[^/?&=]+\.[a-z]{2,}/gi, '[email]');
-}
 
 function walk(
   nodes: RouteNode[] | undefined,
@@ -544,7 +538,7 @@ export function lintRoutes(
       });
     }
   }
-  const emailed = page.navigations.find((nav) => EMAIL_IN_URL.test(nav.url));
+  const emailed = page.navigations.find((nav) => hasEmail(nav.url));
   if (emailed) {
     findings.push({
       rule: 'email-in-url',
