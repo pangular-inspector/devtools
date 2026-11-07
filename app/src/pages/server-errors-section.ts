@@ -103,9 +103,10 @@ export function serverErrorPlace(group: ServerErrorGroup): string {
             </li>
           }
         </ol>
-        <p class="sr-only" role="status">{{ status() }}</p>
       </section>
     }
+    <!-- Outside the section, so the confirmation is still read once the list is gone. -->
+    <p class="sr-only" role="status">{{ status() }}</p>
   `,
   styles: `
     @use 'mixins' as m;
