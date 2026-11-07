@@ -12,8 +12,10 @@ import {
   tone,
   type LoopHop,
   type NavigationLoop,
+  type NavigationCalls,
   type NavigationRecord,
   type RouterPage,
+  type TimelineCall,
 } from './router-types';
 
 const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
@@ -348,10 +350,50 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
               >
                 Copy repro
               </button>
+              <button
+                type="button"
+                class="small"
+                [attr.aria-expanded]="httpShown(nav)"
+                [attr.aria-controls]="'nav-http-' + nav.id"
+                [attr.aria-label]="'HTTP calls of navigation ' + nav.id"
+                (click)="toggleHttp(nav)"
+              >
+                HTTP calls
+              </button>
               @if (!replayable(nav)) {
                 <p id="replay-note-{{ nav.id }}" class="muted replay-note">
                   Replay is off: the URL is redacted or not relative.
                 </p>
+              }
+            </div>
+            <div [id]="'nav-http-' + nav.id" class="http" [hidden]="!httpShown(nav)">
+              @switch (httpState(nav)) {
+                @case ('loading') {
+                  <p class="muted">Loading the HTTP calls…</p>
+                }
+                @case ('failed') {
+                  <p class="muted">Could not load the HTTP calls.</p>
+                }
+                @case ('ready') {
+                  @let calls = httpOf(nav);
+                  @if (!calls.during.length && !calls.after.length) {
+                    <p class="muted">
+                      The HTTP inspector recorded no HttpClient call for this navigation.
+                    </p>
+                  }
+                  @for (group of httpGroups(calls); track group.label) {
+                    <p class="http-label">{{ group.label }}</p>
+                    <ul>
+                      @for (call of group.calls; track call.id) {
+                        <li>
+                          <code>{{ call.method }} {{ call.url }}</code
+                          >&ngsp;<span [class.bad]="isFailedCall(call)">{{ callStatus(call) }}</span
+                          >&ngsp;<span class="muted ms">{{ round(call.durationMs) }}ms</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                }
               }
             </div>
           </li>
@@ -632,6 +674,32 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
       padding-top: 12px;
       border-top: 1px solid var(--border);
     }
+    .http {
+      margin-top: 8px;
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+    .http[hidden] {
+      display: none;
+    }
+    .http p,
+    .http ul {
+      margin: 0;
+    }
+    .http ul {
+      padding-left: 20px;
+    }
+    .http li code {
+      overflow-wrap: anywhere;
+    }
+    .http p.http-label {
+      margin-top: 6px;
+      color: var(--text-3);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
     .replay-note {
       align-self: center;
       margin: 0;
@@ -781,6 +849,63 @@ export class RouteTimeline {
   }
 
   readonly time = time;
+
+  /** Per navigation id: the HTTP inspector's calls once loaded, or the load state. */
+  private readonly http = linkedSignal<
+    string,
+    Record<number, NavigationCalls | 'loading' | 'failed'>
+  >({ source: this.pageId, computation: () => ({}) });
+  private readonly httpOpen = linkedSignal<string, Record<number, boolean>>({
+    source: this.pageId,
+    computation: () => ({}),
+  });
+
+  protected readonly round = Math.round;
+
+  httpShown(nav: NavigationRecord): boolean {
+    return !!this.httpOpen()[nav.id];
+  }
+
+  httpState(nav: NavigationRecord): 'loading' | 'failed' | 'ready' | null {
+    const value = this.http()[nav.id];
+    if (value === undefined) return null;
+    return typeof value === 'string' ? value : 'ready';
+  }
+
+  httpOf(nav: NavigationRecord): NavigationCalls {
+    const value = this.http()[nav.id];
+    return typeof value === 'object' ? value : { during: [], after: [] };
+  }
+
+  httpGroups(calls: NavigationCalls) {
+    return [
+      { label: 'While it ran', calls: calls.during },
+      { label: 'After it ended', calls: calls.after },
+    ].filter((group) => group.calls.length);
+  }
+
+  callStatus(call: TimelineCall) {
+    return call.cancelled ? 'cancelled' : call.status ? String(call.status) : 'ERR';
+  }
+
+  isFailedCall(call: TimelineCall) {
+    return call.status === 0 || call.status >= 400 || !!call.error || call.cancelled === true;
+  }
+
+  /** Shows or hides the HTTP inspector's calls of a navigation, loading them each time it opens. */
+  async toggleHttp(nav: NavigationRecord) {
+    const open = !this.httpShown(nav);
+    this.httpOpen.update((all) => ({ ...all, [nav.id]: open }));
+    if (!open) return;
+    const pageId = this.pageId();
+    this.http.update((all) => ({ ...all, [nav.id]: 'loading' }));
+    const result = await routerCall<NavigationCalls>(this.rpc(), 'router-http', {
+      pageId,
+      id: nav.id,
+    });
+    if (pageId !== this.pageId()) return;
+    this.http.update((all) => ({ ...all, [nav.id]: result ?? 'failed' }));
+  }
 
   /** Counts instrument toggles so only the latest answer touches the checkbox. */
   private instrumentSeq = 0;

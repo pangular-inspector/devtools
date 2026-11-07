@@ -5,6 +5,13 @@ import type { RouterSetup } from '../router-setup.ts';
 import type { LinkInfo, OutletInfo } from '../router-links.ts';
 import type { PreloadRecord } from '../router-actions.ts';
 import type { PlatformNavigation } from '../router-platform-nav.ts';
+import type { HttpCall } from '../http-rules.ts';
+import {
+  callsForNavigation,
+  navigationCallsLines,
+  nextNavigation,
+  type NavigationCalls,
+} from './router-http.ts';
 import { PAGE_TTL_MS, fixedTtl, type PageTtl } from './page-ttl.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { callerPage } from './page-scope.ts';
@@ -763,7 +770,11 @@ export function loopsText(loops: NavigationLoop[]): string {
     : '';
 }
 
-export function describeNavigation(nav: NavigationRecord, page?: RouterPage): string {
+export function describeNavigation(
+  nav: NavigationRecord,
+  page?: RouterPage,
+  calls?: NavigationCalls,
+): string {
   const took =
     nav.beforeConnect && nav.endedAt === undefined && nav.outcome !== 'pending'
       ? ' (before Pangular Inspector connected, no details)'
@@ -845,7 +856,9 @@ export function describeNavigation(nav: NavigationRecord, page?: RouterPage): st
   }
   if (nav.lazyLoaded?.length) lines.push(`  - lazy loaded: ${list(nav.lazyLoaded)}`);
   if (nav.reused?.length) lines.push(`  - reused (component kept): ${list(nav.reused)}`);
-  if (nav.requests) {
+  const joined = calls ? navigationCallsLines(calls) : [];
+  if (joined.length) lines.push(...joined);
+  else if (nav.requests) {
     lines.push(`  - ${nav.requests.count} HTTP request(s) during it: ${list(nav.requests.urls)}`);
   }
   if (nav.scroll) lines.push(`  - scroll: ${nav.scroll}`);
@@ -904,6 +917,7 @@ export function explainNavigationText(
   args: { page?: string; url?: string; limit?: number; perf?: boolean; id?: number },
   now = Date.now(),
   maxNavigations = MAX_NAVIGATIONS,
+  httpFor?: (pageId: string) => readonly HttpCall[] | undefined,
 ): string {
   const page = pickPage(state, args.page);
   if (!page) return noPage(args.page, state);
@@ -928,6 +942,7 @@ export function explainNavigationText(
       : `No navigations recorded since Pangular Inspector connected on page ${code(page.pageId)}; earlier ones are not visible.${otherPages(state, page)}${freshness(page, now)}`;
   }
   const recent = matching.slice(-limit).reverse();
+  const httpCalls = httpFor?.(page.pageId);
   const loops = loopsOf(page).filter((loop) => recent.some((nav) => loop.ids.includes(nav.id)));
   const header = `Most recent ${recent.length} of ${matching.length} navigation(s), newest first. Guards lists the candidates: canDeactivate guards of the page being left (marked "leaving") and canActivate/canActivateChild guards of the target; without per-guard instrumentation the router reports one result for all of them. ${page.instrumented ? 'Instrumentation is on, so each guard and resolver run is listed with its verdict.' : 'Instrumentation is off: turn it on (navigate tool, action "instrument") to see each guard\'s verdict.'}`;
   const outside = outsideRouterLines(page);
@@ -935,7 +950,7 @@ export function explainNavigationText(
     ? `**History changes outside the router** (browser Navigation API, newest first)\n${outside.join('\n')}\n\n`
     : '';
   return capped(
-    `${UNTRUSTED}\n\n${header}\n\n${outsideText}${loopsText(loops)}${recent.map((nav) => describeNavigation(nav, page)).join('\n')}${droppedNote(page.dropped, 'navigations', 'navigations')}${otherPages(state, page)}${freshness(page, now)}`,
+    `${UNTRUSTED}\n\n${header}\n\n${outsideText}${loopsText(loops)}${recent.map((nav) => describeNavigation(nav, page, httpCalls && callsForNavigation(nav, nextNavigation(page.navigations, nav), httpCalls))).join('\n')}${droppedNote(page.dropped, 'navigations', 'navigations')}${otherPages(state, page)}${freshness(page, now)}`,
   );
 }
 

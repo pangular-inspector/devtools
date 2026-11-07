@@ -330,6 +330,7 @@ import {
 import { namingPageRead } from './rpc/page-read-scope.ts';
 import { routerActionAnswer } from './rpc/router-action-answer.ts';
 import { diffNavigationsText, navigationDiffResult } from './rpc/router-diff.ts';
+import { callsForNavigation, nextNavigation } from './rpc/router-http.ts';
 import { nameStoreTokens } from './rpc/store-tokens.ts';
 import { notAProjectText, readsSource, refusingTool } from './rpc/project-root.ts';
 import { STATE_READ_BY, stateReadTool } from './rpc/state-read-tool.ts';
@@ -1172,6 +1173,26 @@ const pangular = defineDevframe({
         const page = pageFor(message?.pageId);
         if (!page?.config || typeof message?.url !== 'string') return null;
         return matchUrl(page.config, message.url.slice(0, 2000));
+      },
+    });
+
+    /** The HTTP inspector's calls of a page, for the router's per-navigation HTTP join. */
+    const routerHttpCalls = (pageId: string) =>
+      on.http ? httpPages.get(pageId)?.calls : undefined;
+
+    register({
+      name: 'router-http',
+      type: 'query',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; id?: unknown }) => {
+        const page = pageFor(message?.pageId);
+        const nav = page?.navigations.find((n) => n.id === message?.id);
+        if (!page || !nav) return null;
+        return callsForNavigation(
+          nav,
+          nextNavigation(page.navigations, nav),
+          routerHttpCalls(page.pageId),
+        );
       },
     });
 
@@ -3764,7 +3785,15 @@ const pangular = defineDevframe({
           if (args.perf) return { markdown: refusal('Pass either `perf` or `format: "repro"`.') };
           return { markdown: exportNavigationText(state, { page: args.page, id: args.id }) };
         }
-        return { markdown: explainNavigationText(state, args, Date.now(), limits.navigations) };
+        return {
+          markdown: explainNavigationText(
+            state,
+            args,
+            Date.now(),
+            limits.navigations,
+            routerHttpCalls,
+          ),
+        };
       },
     });
 

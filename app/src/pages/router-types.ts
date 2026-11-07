@@ -248,6 +248,24 @@ export interface MatchedRoute {
   data?: Record<string, string>;
 }
 
+/** An HttpClient call as the `router-http` RPC returns it. */
+export interface TimelineCall {
+  id: string;
+  url: string;
+  method: string;
+  status: number;
+  durationMs: number;
+  at: number;
+  cancelled?: boolean;
+  error?: string;
+}
+
+/** The HTTP inspector's calls of one navigation (`router-http` RPC). */
+export interface NavigationCalls {
+  during: TimelineCall[];
+  after: TimelineCall[];
+}
+
 export const routerCall = rpcTry;
 
 export function isReplayableUrl(url: string): boolean {

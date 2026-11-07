@@ -4,8 +4,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { RouteTimeline } from '../pages/route-timeline';
 import type { NavigationRecord, RouterPage } from '../pages/router-types';
 
-function fakeClient(): DevframeRpcClient {
-  const rpc = { call: () => Promise.resolve(undefined), callEvent: () => Promise.resolve() };
+function fakeClient(
+  call: (name: string, arg: unknown) => Promise<unknown> = () => Promise.resolve(undefined),
+): DevframeRpcClient {
+  const rpc = { call, callEvent: () => Promise.resolve() };
   return { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
 }
 
@@ -28,7 +30,7 @@ function nav(extra: Partial<NavigationRecord> = {}): NavigationRecord {
   };
 }
 
-function mount(page: Partial<RouterPage>) {
+function mount(page: Partial<RouterPage>, call?: (name: string, arg: unknown) => Promise<unknown>) {
   const fixture = TestBed.createComponent(RouteTimeline);
   fixture.componentRef.setInput('page', {
     pageId: 'p1',
@@ -37,7 +39,7 @@ function mount(page: Partial<RouterPage>) {
     navigations: [],
     ...page,
   });
-  fixture.componentRef.setInput('rpc', fakeClient());
+  fixture.componentRef.setInput('rpc', fakeClient(call));
   document.body.append(fixture.nativeElement as HTMLElement);
   return fixture;
 }
@@ -86,5 +88,36 @@ describe('RouteTimeline extras', () => {
     expect(text(fixture)).toContain('History changes outside the router');
     expect(text(fixture)).toContain('replace to /orders/7#notes');
     expect(text(fixture)).not.toContain('traverse to /orders/7 ');
+  });
+
+  it('loads the HTTP inspector calls of a navigation on demand', async () => {
+    const calls: unknown[] = [];
+    const fixture = mount({ navigations: [nav()] }, (name, arg) => {
+      calls.push([name, arg]);
+      return Promise.resolve({
+        during: [
+          { id: 'c1', url: '/api/orders/7', method: 'GET', status: 200, durationMs: 31.6, at: 1 },
+        ],
+        after: [{ id: 'c2', url: '/api/notes', method: 'POST', status: 500, durationMs: 4, at: 3 }],
+      });
+    });
+    await settle(fixture);
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[aria-label="HTTP calls of navigation 1"]',
+    )!;
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    button.click();
+    await settle(fixture);
+    expect(calls).toEqual([['router-http', { pageId: 'p1', id: 1 }]]);
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(text(fixture)).toContain('While it ran');
+    expect(text(fixture)).toContain('GET /api/orders/7 200 32ms');
+    expect(text(fixture)).toContain('After it ended');
+    expect(text(fixture)).toContain('POST /api/notes 500 4ms');
+    button.click();
+    await settle(fixture);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('#nav-http-1')!.hidden,
+    ).toBe(true);
   });
 });

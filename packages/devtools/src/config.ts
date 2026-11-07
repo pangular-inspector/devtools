@@ -1451,6 +1451,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'router-match': 'router',
   'router-export': 'router',
   'router-diff': 'router',
+  'router-http': 'router',
   'forget-router-page': 'router',
   'clear-router-navigations': 'router',
   'get-pipes': 'pipes',
