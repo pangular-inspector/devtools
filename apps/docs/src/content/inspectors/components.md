@@ -139,6 +139,10 @@ Set [`actions.components`](../getting-started/configuration.md#actions) to `fals
 
 **Injected** lists each token the component class injects, with its flags and the injector that provided it. The block marks a token nobody provides as **not provided**. The block leaves out tokens that host directives inject. Use the [Injectors tab](./injectors.md) for those.
 
+### Pipes in template
+
+**Pipes in template** lists the pipes the selected component's template uses on the page, from the live data of the [Pipes tab](./pipes.md): each pipe's name, how many times the template uses it, and **impure**, **churning** or **stale?** flags. While recording pipe calls, a row also shows the pipe's call count, which covers every component that uses the pipe. Click a pipe to open it in the Pipes tab. The list follows the component class, since every instance shares its template, and it holds only pipes in the rendered part of the template, so a pipe in an `@if` branch that is not shown is left out. The block is missing when the Pipes inspector is off.
+
 ### Defer blocks
 
 When the page renders `@defer` blocks, a **Defer blocks** list follows the tree. Each row shows the component whose template holds the block, its state (`placeholder`, `loading`, `complete` or `error`) and its triggers. With [incremental hydration](https://angular.dev/guide/incremental-hydration), a row also shows `dehydrated` or `hydrated`, and a **hydrate never** flag marks a block that stays as server HTML.

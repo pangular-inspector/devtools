@@ -544,10 +544,12 @@ function readView(): View | null {
                 [focus]="componentFocus()"
                 [command]="componentCommand()"
                 [canShowInjector]="config().inspectors.injectors"
+                [canShowPipes]="config().inspectors.pipes"
                 (focusHandled)="componentFocus.set(null)"
                 (commandHandled)="componentCommand.set(null)"
                 (showForm)="showForm($event)"
                 (showInjector)="showInjector($event)"
+                (showPipe)="showPipe($event)"
               />
             }
             @case ('routes') {
@@ -582,7 +584,11 @@ function readView(): View | null {
               />
             }
             @case ('pipes') {
-              <app-pipes-inspector [rpc]="rpc()" />
+              <app-pipes-inspector
+                [rpc]="rpc()"
+                [focus]="pipeFocus()"
+                (focusHandled)="pipeFocus.set(null)"
+              />
             }
             @case ('analog') {
               <app-analog-inspector [rpc]="rpc()" />
@@ -1708,6 +1714,19 @@ export class App implements OnInit, OnDestroy {
     source: this.tab,
     computation: () => null,
   });
+
+  // Belongs to the Pipes tab that received it, like `componentFocus`.
+  readonly pipeFocus = linkedSignal<Tab, string | null>({
+    source: this.tab,
+    computation: () => null,
+  });
+
+  showPipe(name: string) {
+    if (!this.config().inspectors.pipes) return;
+    // Switch first: the focus belongs to the tab, so the switch would clear it.
+    this.switchTab('pipes');
+    this.pipeFocus.set(name);
+  }
 
   showForm(formId: string) {
     this.formFocus.set({ id: formId });
