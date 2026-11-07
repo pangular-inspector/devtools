@@ -59,6 +59,8 @@ export interface NavigationRecord {
   earlier?: number;
   probe?: boolean;
   routes?: MatchedRoute[];
+  /** The target came from a query param of the URL: a possible open redirect. */
+  queryRedirect?: { param: string; by: string };
 }
 
 export interface LoopHop {

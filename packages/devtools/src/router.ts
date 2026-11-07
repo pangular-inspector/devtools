@@ -4,6 +4,11 @@ import { REDACTED, serializeFormValue } from './forms.ts';
 import { decode, isSecretKey, knownSecrets, redactText, rememberSecret } from './text-redact.ts';
 import { clip } from './text.ts';
 import { matchedRoutesOf, type MatchedRoute } from './router-matched.ts';
+import {
+  navigationFromQuery,
+  redirectFromQuery,
+  type QueryRedirect,
+} from './router-open-redirect.ts';
 
 export interface RouteGuards {
   canActivate?: string[];
@@ -87,6 +92,8 @@ export interface NavigationRecord {
   probe?: boolean;
   /** The routes it activated, for comparing two navigations (`router-diff.ts`). */
   routes?: MatchedRoute[];
+  /** Its target came from a query param: a possible open redirect (`router-open-redirect.ts`). */
+  queryRedirect?: QueryRedirect;
 }
 
 export interface RouterDebugApi {
@@ -712,7 +719,15 @@ function linkCancelledRedirect(navigations: NavigationRecord[], nav: NavigationR
   }
   source.redirectTo = nav.url;
   source.redirectKind = redirectKindOf(source);
+  noteQueryRedirect(source);
   nav.redirectedFrom = source.id;
+}
+
+/** Flags a redirect whose target is one of the query params of the URL it left. */
+function noteQueryRedirect(source: NavigationRecord) {
+  if (!source.redirectTo) return;
+  const found = redirectFromQuery(source.url, source.redirectTo, source.redirectKind, source.runs);
+  if (found) source.queryRedirect = found;
 }
 
 function redirectKindOf(nav: NavigationRecord): string {
@@ -970,6 +985,7 @@ export function applyRouterEvent(
         source.outcome === 'failed' || stateOf(source).handled?.redirected
           ? 'error handler'
           : redirectKindOf(source);
+      noteQueryRedirect(source);
       const follower = navigations.find(
         (nav) =>
           nav.id > source!.id && nav.outcome === 'pending' && nav.redirectedFrom === undefined,
@@ -1015,6 +1031,10 @@ export function applyRouterEvent(
       pendingRedirect = null;
     } else {
       linkCancelledRedirect(navigations, nav);
+    }
+    if (nav.trigger === 'imperative' && nav.redirectedFrom === undefined) {
+      const found = navigationFromQuery(nav.from, nav.url, nav.caller);
+      if (found) nav.queryRedirect = found;
     }
     navigations.push(nav);
     return true;

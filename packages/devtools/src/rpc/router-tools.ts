@@ -288,6 +288,13 @@ function isNavigation(value: unknown): boolean {
         isNames((v as { urls?: unknown }).urls, 10, 2001),
     ) &&
     optional(nav.runs, (v) => Array.isArray(v) && v.length <= 40 && v.every(isRun)) &&
+    optional(
+      nav.queryRedirect,
+      (v) =>
+        isRecord(v) &&
+        isText((v as { param?: unknown }).param, 101) &&
+        isText((v as { by?: unknown }).by, 201),
+    ) &&
     optional(nav.routes, (v) => Array.isArray(v) && v.length <= 30 && v.every(isMatchedRoute)) &&
     optional(
       nav.guards,
@@ -730,6 +737,11 @@ export function describeNavigation(nav: NavigationRecord, page?: RouterPage): st
   }
   if (nav.redirectTo) {
     lines.push(`  - ${nav.redirectKind ?? 'router'} redirect to ${code(nav.redirectTo)}`);
+  }
+  if (nav.queryRedirect) {
+    lines.push(
+      `  - **possible open redirect**: the target came from query param ${code(nav.queryRedirect.param)} (${code(nav.queryRedirect.by)}); check it against an allow list`,
+    );
   }
   const loop = page && loopsOf(page).find((l) => l.ids.includes(nav.id));
   if (loop) {

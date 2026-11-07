@@ -549,7 +549,19 @@ export function lintRoutes(
       angular: 'silent',
     });
   }
-  for (const nav of page.navigations) {
+  const flagged = page.navigations.filter((nav) => nav.queryRedirect);
+  for (const nav of flagged.slice(-5)) {
+    const target = nav.redirectTo ?? nav.url;
+    findings.push({
+      rule: 'redirect-from-query',
+      severity: 'warning',
+      route: maskEmails(target),
+      message: `Navigation #${nav.id} went to ${code(maskEmails(target))}, the value of query param ${code(nav.queryRedirect!.param)}, through ${code(nav.queryRedirect!.by)}. Whoever writes the link chooses where the app goes.`,
+      fix: 'Validate return URLs against an allow list of app paths before redirecting to them.',
+      angular: 'silent',
+    });
+  }
+  for (const nav of flagged.length ? [] : page.navigations) {
     const target = nav.redirectTo ?? nav.url;
     const from = nav.from ?? '';
     const query = from.split('?')[1]?.split('#')[0] ?? '';

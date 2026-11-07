@@ -35,10 +35,22 @@ Every navigation as one story:
 - Guards and resolvers, lazy loads, reused components, HTTP requests, scroll, and the title afterwards.
 - Router warnings, and the cancel or error reason. The tab explains NG04xxx errors.
 - When the navigation error handler redirects, the navigation names the error handler as the cause and keeps the error that triggered it, with its error code.
+- An **open redirect risk** badge when the target came from a query param. See [Open redirect check](#open-redirect-check).
 
 Filter by URL, or check **Only problems** to keep the navigations that did not succeed and the ones in a loop. **Only problems** leaves out the navigations that **Probe in app** cancels, the way the problem count on the **Navigations** tab does. Each row has **Replay**, **Compare** (opens the [Compare view](#compare) with this navigation as the later one) and **Copy repro** (a markdown repro). **Replay** is off for a navigation whose URL is redacted or not relative, and a note under the row says why. **Export JSON** saves the list.
 
 **Clear** empties the list and its loop warnings for the page you are looking at, so you can test a flow from a clean list without reloading the app. Other tabs keep their navigations. A navigation still running stays in the list. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, **Clear** is off.
+
+### Open redirect check
+
+The page checks each navigation as it happens for a target taken from a query param, such as `/login?returnUrl=%2Fadmin` going to `/admin`. Whoever writes such a link chooses where the app sends the user, so the value needs an allow list:
+
+| Case                                                        | What counts                                                                                                                                                                |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A guard, resolver or the navigation error handler redirects | The redirect target equals the value of any query param of the URL being navigated to. With guard recording on, it names the guard.                                        |
+| Your code calls `navigate` or `navigateByUrl`               | The new URL equals the value of a query param of the current URL whose name reads like a return URL, such as `returnUrl`, `redirect` or `next`. Clicked links don't count. |
+
+A value that is a full URL counts when its path matches. A target of `/` alone never counts. A flagged navigation gets the badge and an **Open redirect** row in **Navigations**, a warning in the hub's **Messages** dock, a line in `explain-navigation`, and a `redirect-from-query` warning in **Lint**.
 
 ### Loop detection
 
@@ -116,7 +128,7 @@ Route config mistakes, each with a fix:
 - Lazy chunks downloaded before a rejecting `canActivate`.
 - Missing or duplicate titles, and param or input typos.
 - `routerLinkActive` without `ariaCurrentWhenActive`. The check covers every `RouterLink` on the page, also one bound as `[routerLink]` on an element that isn't an anchor.
-- Emails in URLs, and return URLs taken from query params.
+- Emails in URLs, and return URLs taken from query params. A navigation the [open redirect check](#open-redirect-check) flagged is a warning that names the param and the guard or code. Without one, the rule falls back to comparing each navigation with the query of the URL it left, as info.
 
 Each finding says whether Angular throws, warns or does not warn. The lint skips lazy routes that have not loaded. It runs again after each navigation and config change, and keeps the current findings on screen while it does. Click **Check again** to rerun it.
 

@@ -149,6 +149,9 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
                 @if (nav.probe) {
                   <span class="tag">probe</span>
                 }
+                @if (nav.queryRedirect) {
+                  <span class="badge" data-tone="warn">open redirect risk</span>
+                }
                 @if (loopOf(nav); as loop) {
                   <span class="badge" data-tone="bad"
                     >loop<span class="visually-hidden"
@@ -205,6 +208,13 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
                 <dt>Redirects to</dt>
                 <dd>
                   <code>{{ nav.redirectTo }}</code> ({{ nav.redirectKind }})
+                </dd>
+              }
+              @if (nav.queryRedirect; as risk) {
+                <dt>Open redirect</dt>
+                <dd class="reason">
+                  The target came from query param <code>{{ risk.param }}</code> ({{ risk.by }}).
+                  Check return URLs against an allow list.
                 </dd>
               }
               @if (nav.guards && (nav.guards.names.length || nav.guards.passed === false)) {

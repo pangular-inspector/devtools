@@ -7,6 +7,7 @@ All notable changes to `@pangular-inspector/devtools` are listed here. The forma
 ### Added
 
 - **Compare two navigations.** The Routes tab has a **Compare** view, and each navigation a **Compare** button, that list which query params, route params, route data, outlets, components, guard and resolver verdicts and phase timings changed between two recorded navigations. Agents get the same answer from `pangular:diff-navigations`. Each navigation now keeps the routes it activated, with redacted params and data.
+- **Live open redirect check.** A guard, resolver or error handler redirect whose target is the value of a query param, and code that navigates to the value of a return-URL query param, are flagged as they happen: an **open redirect risk** badge in **Navigations**, a warning in the hub's **Messages** dock, a line in `pangular:explain-navigation`, and a `redirect-from-query` lint warning that names the guard or code.
 
 ## 1.0.0
 
