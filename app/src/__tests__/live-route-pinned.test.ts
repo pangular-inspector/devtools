@@ -9,6 +9,7 @@ function routerPage(pageId: string): RouterPage {
   return {
     pageId,
     reportedAt: 1,
+    changedAt: 1,
     snapshot: {
       url: `/${pageId}`,
       queryParams: {},

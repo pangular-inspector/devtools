@@ -94,13 +94,11 @@ export function validate(message, { requireBody = true, allowGitPrefixes = true 
   return errors;
 }
 
-let warnOnly = false;
-
 function report(label, errors) {
   if (!errors.length) return true;
-  if (warnOnly && process.env.GITHUB_ACTIONS) {
+  if (process.env.GITHUB_ACTIONS) {
     const text = `${label} ${errors.join(' ')}`.replace(/%/g, '%25').replace(/\r?\n/g, '%0A');
-    console.log(`::warning title=Commit message::${text}`);
+    console.log(`::error title=Commit message::${text}`);
   }
   console.error(`\n${label}`);
   for (const error of errors) console.error(`  - ${error}`);
@@ -158,7 +156,7 @@ function main(args) {
   }
 
   console.error(
-    'Usage: commit-message.mjs --file <path> | --title <title> | --range <a..b> | --branch [--warn]',
+    'Usage: commit-message.mjs --file <path> | --title <title> | --range <a..b> | --branch',
   );
   return false;
 }
@@ -172,9 +170,5 @@ function isEntryPoint() {
 }
 
 if (isEntryPoint()) {
-  const args = process.argv.slice(2);
-  warnOnly = args.includes('--warn');
-  const ok = main(args.filter((arg) => arg !== '--warn'));
-  if (!ok && warnOnly) console.error('Warn-only mode: not failing the check.');
-  process.exit(ok || warnOnly ? 0 : 1);
+  process.exit(main(process.argv.slice(2)) ? 0 : 1);
 }

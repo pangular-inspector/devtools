@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { harLog, type RecordedCall } from '../http-data.ts';
-import { redactCall } from '../http-redact.ts';
+import { redactCall } from '../redaction.ts';
 
 const recorded = (overrides: Partial<RecordedCall> = {}): RecordedCall => ({
   id: 'c1',

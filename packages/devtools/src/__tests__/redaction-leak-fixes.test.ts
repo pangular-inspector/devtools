@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { setRedaction } from '../forms-privacy.ts';
 import { redactText } from '../text-redact.ts';
 import { redactBody, redactMessage } from '../analog-server-log.ts';
-import { redactHeaders } from '../http-redact.ts';
+import { redactHeaders } from '../redaction.ts';
 import { serialize as ngrxSerialize } from '../ngrx-shared.ts';
 
 afterEach(() => setRedaction());

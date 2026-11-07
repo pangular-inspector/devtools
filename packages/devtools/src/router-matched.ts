@@ -8,21 +8,8 @@ import {
   redactRecord,
   type AnyRecord,
 } from './router.ts';
-
-/**
- * One route a navigation activated, kept on its record so two navigations
- * can be compared later. Params and data are redacted, and each value is
- * short JSON text, so the record stays small and comparable as strings.
- */
-export interface MatchedRoute {
-  /** Full path of the route config, such as `/users/:id`. */
-  path: string;
-  /** Left out for the primary outlet. */
-  outlet?: string;
-  component?: string;
-  params?: Record<string, string>;
-  data?: Record<string, string>;
-}
+import type { MatchedRoute } from './router-types.ts';
+export type { MatchedRoute } from './router-types.ts';
 
 /** Most routes one navigation keeps. */
 export const MAX_MATCHED_ROUTES = 30;

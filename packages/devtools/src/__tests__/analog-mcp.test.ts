@@ -15,7 +15,7 @@ import {
 } from '../rpc/analog-tools.ts';
 import { scanAnalog } from '../rpc/analog-scan.ts';
 import type { AnalogRuntimeReport } from '../analog-runtime.ts';
-import { redactAnalogReport } from '../analog-redact.ts';
+import { redactAnalogReport } from '../redaction.ts';
 import { BASE_FILES, BROKEN_FILES, makeProject } from './analog-fixture.ts';
 import { answerText } from './tool-answer.ts';
 import { toolAnswer } from './tool-answer.ts';

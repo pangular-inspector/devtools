@@ -3,7 +3,7 @@
 // config gives the route.
 
 import { DEVTOOLS_HEADER, devOrigin } from '../analog-server-log.ts';
-import { redactHeaders } from '../http-redact.ts';
+import { redactHeaders } from '../redaction.ts';
 import { modeOf, type RenderMode } from './analog-tools.ts';
 import type { AnalogProject } from './analog-scan.ts';
 

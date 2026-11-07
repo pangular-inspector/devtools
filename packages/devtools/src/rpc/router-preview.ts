@@ -17,53 +17,20 @@ import {
   type RouterState,
 } from './router-tools.ts';
 import type { ServerRouteEntry } from './server-routes.ts';
-
-/** A redirect the prediction followed: from one URL to the next, through a `redirectTo` route. */
-export interface PreviewHop {
-  from: string;
-  to: string;
-  route: string;
-}
-
-/** One route of the matched chain, parent first. */
-export interface PreviewRoute {
-  path: string;
-  component?: string;
-  outlet?: string;
-  lazy?: 'unloaded' | 'loaded';
-  title?: string;
-  source?: string;
-  /** The route is active now, so it keeps its component and reruns guards only when its params change. */
-  active?: boolean;
-}
-
-/** One phase of the navigation, in the order the router runs them, with what runs in it. */
-export interface PreviewStep {
-  phase: string;
-  items: string[];
-}
-
-/**
- * What going to a URL would do, predicted from the live route config
- * without navigating: the redirects it follows, the route chain it ends
- * on, and the guards, lazy chunks, resolvers and components of each phase.
- */
-export interface RoutePreview {
-  url: string;
-  finalUrl: string;
-  matched: boolean;
-  hops: PreviewHop[];
-  chain: PreviewRoute[];
-  params: Record<string, string>;
-  steps: PreviewStep[];
-  renderMode?: { mode: string; path: string; file: string };
-  /** Where the prediction stopped short: a function redirect, an unloaded lazy route, a redirect loop. */
-  stopped?: string;
-  notes: string[];
-  nearest: string[];
-}
-
-export type RoutePreviewResult = RoutePreview | { error: string };
+import type {
+  PreviewHop,
+  PreviewRoute,
+  PreviewStep,
+  RoutePreview,
+  RoutePreviewResult,
+} from '../router-types.ts';
+export type {
+  PreviewHop,
+  PreviewRoute,
+  PreviewStep,
+  RoutePreview,
+  RoutePreviewResult,
+} from '../router-types.ts';
 
 const MAX_HOPS = 5;
 

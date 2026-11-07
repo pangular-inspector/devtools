@@ -1436,6 +1436,14 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
     page: true,
   },
   'inspect-transfer-state': { kind: 'tool', inspectors: ['http'], page: true },
+  // Renders the page's URL again on the server, with the tab's cookies.
+  'refetch-transfer-state': {
+    kind: 'tool',
+    inspectors: ['http'],
+    safety: 'action',
+    actions: ['http'],
+    page: true,
+  },
   'list-ssr-overrides': { kind: 'tool', inspectors: ['http'], page: true },
   'set-ssr-override': {
     kind: 'tool',
@@ -1581,7 +1589,7 @@ export function actionBlockedMessage(action: PangularAction): string {
     forms: 'Writing to forms',
     router: 'Navigating and clearing navigations',
     ngrx: 'Restoring NgRx state, dispatching actions and changing the Store DevTools history',
-    http: 'Changing HTTP mock rules and SSR overrides, and clearing HTTP calls',
+    http: 'Changing HTTP mock rules and SSR overrides, refetching the TransferState payload, and clearing HTTP calls',
     analog:
       'Calling API routes, clearing server calls, running Nitro tasks and purging the Nitro cache',
     components: 'Editing component properties and signals',
@@ -1742,6 +1750,9 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'set-http-rules': 'http',
   'set-ssr-overrides': 'http',
   'clear-http-calls': 'http',
+  // The panel's and agents' payload refetch, and the page's answer to it.
+  'request-http-payload-refetch': 'http',
+  'http-payload-refetch-result': 'http',
   'push-capacitor': 'capacitor',
   'forget-capacitor-page': 'capacitor',
   'push-ionic': 'capacitor',

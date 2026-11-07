@@ -1,7 +1,7 @@
 // Request and response headers of recorded HttpClient calls. The interceptor
 // only keeps a reference to the `HttpHeaders` objects Angular already built;
 // they are read and capped when a call leaves the page or the
-// server process (`redactHeaders` in `http-redact.ts` masks them), so a page with no devtools connected copies nothing.
+// server process (`redactHeaders` in `redaction.ts` masks them), so a page with no devtools connected copies nothing.
 
 import type { HttpCall } from './http-rules.ts';
 import { clip } from './text.ts';

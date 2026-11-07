@@ -35,6 +35,7 @@ function mount(page: Partial<RouterPage>, call?: (name: string, arg: unknown) =>
   fixture.componentRef.setInput('page', {
     pageId: 'p1',
     reportedAt: 1,
+    changedAt: 1,
     snapshot: null,
     navigations: [],
     ...page,

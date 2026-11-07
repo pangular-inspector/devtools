@@ -1,22 +1,6 @@
 import { nameOf, providerOf, read, type AnyRecord, type RouterDebugApi } from './router.ts';
-
-export interface RouterOption {
-  name: string;
-  value: string;
-  set: boolean;
-}
-
-export interface RouterSetup {
-  mode: 'full' | 'events-only';
-  setupKind: 'provideRouter' | 'forRoot or other' | 'unknown';
-  routers: number;
-  angularVersion?: string;
-  options: RouterOption[];
-  features: Record<string, string>;
-  strategies: Record<string, string>;
-  baseHref?: string;
-  hydrated?: number;
-}
+import type { RouterOption, RouterSetup } from './router-types.ts';
+export type { RouterOption, RouterSetup } from './router-types.ts';
 
 const OPTION_DEFAULTS: [string, string][] = [
   ['onSameUrlNavigation', 'ignore'],

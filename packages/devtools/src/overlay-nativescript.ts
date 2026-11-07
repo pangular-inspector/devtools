@@ -7,7 +7,7 @@
 // `@valor/nativescript-websockets` in `polyfills.ts`).
 
 import { outsideAngular, setTimeoutOutside } from './outside-angular.ts';
-import { Application, isAndroid } from '@nativescript/core';
+import { Application, isAndroid, Utils } from '@nativescript/core';
 import { connectDevframe } from 'devframe/client';
 import { keepaliveDue } from './change-detection.ts';
 import { collectComponentTree, type ComponentDebugNg } from './component-tree.ts';
@@ -50,6 +50,13 @@ import {
 } from './overlay-nativescript-views.ts';
 import { claimPageOnServer, newPageId, newPageKey } from './page-id.ts';
 import { lanDevtoolsURL } from './lan-url.ts';
+import { clearNativeHighlight, registerNativePick, showNativeHighlight } from './native-pick.ts';
+import {
+  androidPlatform,
+  iosPlatform,
+  nativeScriptSurface,
+  type NativeScriptPlatform,
+} from './overlay-nativescript-surface.ts';
 
 export { lanDevtoolsURL };
 
@@ -224,6 +231,8 @@ async function startSession(
   const title = `NativeScript (${isAndroid ? 'Android' : 'iOS'})`;
 
   const tree = nativeScriptTree(angularDebugApi, () => Application.getRootView() as NativeView);
+  // The highlight box and the tap catcher are native views over the window.
+  const surface = nativeScriptSurface(tree, devicePlatform());
   if (!on.ngrx) uninstallReduxDevtoolsHook();
   const diagnostics = attachNativeDiagnostics(my, pageId, {
     getNg: angularDebugApi,
@@ -405,6 +414,7 @@ async function startSession(
       const wanted = typeof request === 'string' ? { selector: request } : request;
       if (wanted?.pageId && wanted.pageId !== pageId) return;
       clearFlash();
+      clearNativeHighlight();
       if (!wanted) return;
       const host =
         typeof wanted.id === 'string'
@@ -412,9 +422,26 @@ async function startSession(
           : typeof wanted.selector === 'string' && wanted.selector
             ? hostBySelector(tree, wanted.selector)
             : null;
-      if (host && tree.isHost(host)) flash(renderedView(host), wanted.durationMs);
+      if (!host || !tree.isHost(host)) return;
+      // A box in its own layer; the border on the view is the fallback when no box can be drawn.
+      if (!showNativeHighlight(surface, host, wanted.durationMs ?? FLASH_MS)) {
+        flash(renderedView(host), wanted.durationMs);
+      }
     },
   });
+
+  // Tap-to-pick: the panel's Pick button catches the next tap on the device.
+  const stopPick = on.components
+    ? registerNativePick(my.rpc, pageId, {
+        getNg: angularDebugApi,
+        tree,
+        surface,
+        picked: (id) => {
+          componentTarget = id;
+          void pushTree(true).catch(() => {});
+        },
+      })
+    : null;
 
   my.rpc.register({
     name: 'select-signal-component',
@@ -447,6 +474,8 @@ async function startSession(
 
   return (forget) => {
     clearInterval(interval);
+    stopPick?.();
+    clearNativeHighlight();
     clearFlash();
     restoreSignalHook?.();
     ngrx?.stop();
@@ -472,6 +501,28 @@ async function startSession(
 
 function angularDebugApi(): DebugNg | undefined {
   return nativeDebugApi<DebugNg>();
+}
+
+type Native = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** The platform that draws the box and catches taps, or null when its classes are missing. */
+function devicePlatform(): NativeScriptPlatform | null {
+  const g = globalThis as Native;
+  if (isAndroid) {
+    if (!g['android']?.view?.View) return null;
+    return androidPlatform(
+      g,
+      () => (Application as unknown as Native)['android']?.foregroundActivity,
+      () => Utils.layout.getDisplayDensity(),
+    );
+  }
+  if (!g['UIView'] || !g['CGRectMake']) return null;
+  return iosPlatform(
+    g,
+    () =>
+      (Application.getRootView() as unknown as Native | undefined)?.['ios']?.window ??
+      g['UIApplication']?.sharedApplication?.keyWindow,
+  );
 }
 
 let flashed: {

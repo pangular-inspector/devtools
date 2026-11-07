@@ -79,6 +79,29 @@ If you change `panel.html`, `panel-bridge.js` or a status message, run `pnpm tes
 
 After a rebuild, click the reload icon on the extension card, then reopen DevTools.
 
+## Build for Firefox
+
+```bash
+pnpm extension:build:firefox
+```
+
+This runs `extension:build`, then copies `extension/` to `dist/extension-firefox` with a Firefox manifest. Nothing else in the copy changes. `scripts/extension-firefox.mjs` makes these changes to the manifest:
+
+| Change                                                         | Why                                                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Drops `key` and `minimum_chrome_version`                       | Only Chrome reads them.                                                                                |
+| Adds `browser_specific_settings.gecko`                         | Firefox needs the add-on ID (`pangular-inspector@pangular-inspector.dev`) and the oldest version, 140. |
+| Declares `data_collection_permissions: { required: ["none"] }` | Firefox asks every add-on what it collects. The extension sends data only to the devtools server.      |
+| Turns `background.service_worker` into `scripts`               | Firefox runs background scripts, not a service worker. The manifest has no background today.           |
+
+`dist/` is not committed, and CI does not build the Firefox copy. `extension-firefox.test.ts` checks the manifest it writes.
+
+To try it, open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick `dist/extension-firefox/manifest.json`. Then open the Firefox developer tools on an Angular app.
+
+<ngmd-callout type="warning" title="Trust the Firefox origin">
+  Firefox gives an extension a <code>moz-extension://</code> origin with an ID of its own on each install, so the devtools server does not trust it the way it trusts the Chrome extension ID. If the panel says the server refused the request, add the origin it names to <code>allowedOrigins</code>.
+</ngmd-callout>
+
 ## Package for the Chrome Web Store
 
 ```bash

@@ -1,10 +1,83 @@
+/**
+ * The redaction helpers for recorded HTTP calls, JSON text and Analog page
+ * reports, in one place: `redactJsonText` masks `"key": value` pairs in JSON
+ * that may be clipped, `redactPreview`, `redactHeaders` and `redactCall` mask
+ * what the HTTP inspector records, and `redactAnalogReport` masks an Analog
+ * page report. They build on the shared text masking (`text-redact.ts`, via
+ * `redactText` and `redactUrl`), the secret key rules (`forms-privacy.ts`) and
+ * `serialize`, so `redaction.secretNames`, JWTs and bearer tokens are masked
+ * the same way everywhere. `countRedacted` and `countRedactedText` count the
+ * masks they left, for the counts the panel and agent answers show.
+ */
+import type { AnalogRuntimeReport } from './analog-runtime.ts';
 import { REDACTED, isRedactedKey } from './forms-privacy.ts';
 import { MAX_HEADERS, MAX_HEADER_VALUE, type HeaderRecord } from './http-headers.ts';
 import type { HttpCall } from './http-rules.ts';
-import { redactJsonText } from './json-text-redact.ts';
 import { redactText, redactUrl } from './router.ts';
 import { serialize } from './serialize.ts';
 import { clip } from './text.ts';
+
+export { countRedacted, countRedactedText, redactionNote } from './redaction-count.ts';
+
+// JSON text
+
+const REDACTED_VALUE = JSON.stringify(REDACTED);
+
+function stringEnd(text: string, start: number): number {
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === '\\') i++;
+    else if (text[i] === '"') return i + 1;
+  }
+  return text.length;
+}
+
+function valueEnd(text: string, start: number): number {
+  const first = text[start];
+  if (first === '"') return stringEnd(text, start);
+  if (first !== '{' && first !== '[') {
+    const stop = text.slice(start).search(/[,}\]]/);
+    return stop < 0 ? text.length : start + stop;
+  }
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') i = stringEnd(text, i) - 1;
+    else if (ch === '{' || ch === '[') depth++;
+    else if ((ch === '}' || ch === ']') && --depth === 0) return i + 1;
+  }
+  return text.length;
+}
+
+export function redactJsonText(text: string, isSecret: (key: string) => boolean): string {
+  const colon = /\s*:\s*/y;
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== '"') {
+      out += text[i++];
+      continue;
+    }
+    const end = stringEnd(text, i);
+    const token = text.slice(i, end);
+    out += token;
+    i = end;
+    colon.lastIndex = i;
+    const sep = colon.exec(text);
+    if (!sep) continue;
+    let key: string;
+    try {
+      key = String(JSON.parse(token));
+    } catch {
+      key = token.slice(1, -1);
+    }
+    if (!isSecret(key)) continue;
+    out += `${sep[0]}${REDACTED_VALUE}`;
+    i = valueEnd(text, i + sep[0].length);
+  }
+  return out;
+}
+
+// HTTP calls
 
 const PREVIEW_MAX = 2001;
 
@@ -101,5 +174,55 @@ export function redactCall(call: HttpCall): HttpCall {
     ...(call.preview === undefined ? {} : { preview: redactPreview(call.preview) }),
     ...(call.requestHeaders ? { requestHeaders: redactHeaders(call.requestHeaders) } : {}),
     ...(call.responseHeaders ? { responseHeaders: redactHeaders(call.responseHeaders) } : {}),
+  };
+}
+
+// Analog page reports
+
+/** Longest URL, `load()` preview and file path kept from a page report. */
+const MAX_URL = 2000;
+const MAX_PREVIEW = 1001;
+const MAX_PATH = 500;
+const MAX_ERROR = 300;
+
+/** A JWT cut before its signature, which the JWT pattern no longer matches. */
+const PARTIAL_JWT = /eyJ[\w-]*(?:\.[\w-]*)?$/;
+
+/**
+ * Clips `value` to twice `max` before redacting it, so an oversized field
+ * costs little to redact, and to `max` after. A JWT that the first cut splits
+ * is dropped, so its header and claims cannot slip past the redaction.
+ */
+function capped(value: string, max: number, redact: (text: string) => string = (t) => t) {
+  const head =
+    value.length > max * 2 ? `${value.slice(0, max * 2).replace(PARTIAL_JWT, '')}…` : value;
+  return clip(redact(head), max);
+}
+
+/**
+ * Hides secret query values, JWTs, bearer tokens and `redaction.secretNames`
+ * in the text fields of a page report before it is stored or served, and
+ * clips each text field.
+ */
+export function redactAnalogReport(report: AnalogRuntimeReport): AnalogRuntimeReport {
+  const path = (value: string) => capped(value, MAX_PATH);
+  return {
+    ...report,
+    url: capped(report.url, MAX_URL, redactUrl),
+    chain: report.chain.map((item) => ({
+      ...item,
+      path: path(item.path),
+      ...(item.file !== undefined && { file: path(item.file) }),
+      ...(item.serverFile !== undefined && { serverFile: path(item.serverFile) }),
+    })),
+    ...(report.load && {
+      load: {
+        ...report.load,
+        preview: capped(report.load.preview, MAX_PREVIEW, redactPreview),
+        keys: report.load.keys.map((key) => capped(key, MAX_PATH, redactUrl)),
+      },
+    }),
+    hydrationErrors: report.hydrationErrors.map((error) => capped(error, MAX_ERROR, redactText)),
+    configPaths: report.configPaths.map(path),
   };
 }

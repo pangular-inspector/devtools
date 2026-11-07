@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { setRedaction } from '../forms-privacy.ts';
 import { decodePayload, sanitizePayload } from '../http-payload.ts';
-import { redactPreview } from '../http-redact.ts';
+import { redactPreview } from '../redaction.ts';
 import { redactText } from '../router.ts';
 
 afterEach(() => setRedaction());

@@ -11,6 +11,7 @@ import { componentOutlineText, routedHosts } from './component-outline.ts';
 import { listConsoleText, listErrorsText, type ErrorsState } from './errors-tools.ts';
 import { code, inspectFormsText, onPage, untrusted, type FormsState } from './forms-tools.ts';
 import { listHttpCallsText } from './http-tools.ts';
+import { httpLintSummary, pageHttpLint } from './http-lint.ts';
 import { inspectSignalStoreText } from './ngrx-live-tools.ts';
 import type { NgrxPages } from './ngrx-tools.ts';
 import { callerPage } from './page-scope.ts';
@@ -224,7 +225,10 @@ function renderSection(section: SnapshotSection, ctx: RenderContext): string | u
       const state = sources.http();
       const own = state.pages.find((entry) => entry.pageId === pageId);
       if (!own) return undefined;
-      return listHttpCallsText({ ...state, pages: [own] }, { page: pageId, limit }, now);
+      const calls = listHttpCallsText({ ...state, pages: [own] }, { page: pageId, limit }, now);
+      const { findings } = pageHttpLint(state, own);
+      if (!findings.length) return calls;
+      return `${calls}\n\nHTTP lint: ${httpLintSummary(findings)}. \`lint-http\` lists the calls and what to try.`;
     }
     case 'errors': {
       const state = sources.errors();

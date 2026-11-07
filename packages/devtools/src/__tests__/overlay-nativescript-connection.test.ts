@@ -24,9 +24,12 @@ class AppComponent {}
 Object.assign(AppComponent, { ɵcmp: { selectors: [['ns-app']] } });
 const app = new AppComponent();
 
+const nativeApp: Record<string, unknown> = { getRootView: () => host };
+
 vi.mock('@nativescript/core', () => ({
-  Application: { getRootView: () => host },
+  Application: nativeApp,
   isAndroid: true,
+  Utils: { layout: { getDisplayDensity: () => 1 } },
 }));
 
 vi.mock('devframe/client', () => ({
@@ -170,6 +173,62 @@ describe('NativeScript overlay connection', () => {
     highlight('');
     expect(host).toMatchObject({ borderWidth: 1, borderColor: 'red' });
     dispose();
+  });
+
+  it('removes the native box on an empty request, not only the border', async () => {
+    const decor: unknown[] = [];
+    const decorView = {
+      addView: (view: unknown) => decor.push(view),
+      removeView: (view: unknown) => decor.splice(decor.indexOf(view), 1),
+    };
+    class View {
+      setBackground() {}
+      setClickable() {}
+      setFocusable() {}
+      setLayoutParams() {}
+      setX() {}
+      setY() {}
+    }
+    const g = globalThis as Record<string, unknown>;
+    g['android'] = {
+      view: { View },
+      widget: { FrameLayout: { LayoutParams: class {} } },
+      graphics: {
+        Color: { parseColor: () => 0 },
+        drawable: {
+          GradientDrawable: class {
+            setColor() {}
+            setStroke() {}
+          },
+        },
+      },
+    };
+    nativeApp['android'] = {
+      foregroundActivity: { getWindow: () => ({ getDecorView: () => decorView }) },
+    };
+    Object.assign(host, {
+      getLocationInWindow: () => ({ x: 0, y: 0 }),
+      getActualSize: () => ({ width: 100, height: 40 }),
+    });
+    try {
+      const { initNativeScriptOverlay } = await import('../overlay-nativescript.ts');
+      const dispose = initNativeScriptOverlay({
+        baseURL: 'http://localhost:9999/',
+        intervalMs: 100,
+      });
+      await flush();
+      const highlight = clients[0].handlers.get('highlight-in-page')!;
+      highlight({ pageId: pageIdOf(clients[0]), id: elementId(host) });
+      expect(decor).toHaveLength(1);
+      highlight('');
+      expect(decor).toHaveLength(0);
+      dispose();
+    } finally {
+      delete g['android'];
+      delete nativeApp['android'];
+      delete host['getLocationInWindow'];
+      delete host['getActualSize'];
+    }
   });
 
   it('keeps a highlight for the duration the request names', async () => {

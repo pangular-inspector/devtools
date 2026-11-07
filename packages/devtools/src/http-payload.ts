@@ -1,7 +1,6 @@
 import { isRedactedKey } from './forms-privacy.ts';
 import type { HydrationMismatch } from './http-hydration.ts';
-import { redactStrings } from './http-redact.ts';
-import { redactJsonText } from './json-text-redact.ts';
+import { redactJsonText, redactStrings } from './redaction.ts';
 import { redactText, redactUrl } from './router.ts';
 import { isSecretName, REDACTED, serialize } from './serialize.ts';
 import type { HydrationStats } from './types.ts';
@@ -24,6 +23,11 @@ export interface PayloadSummary {
   size: number;
   entries: PayloadEntry[];
   error?: string;
+  /**
+   * Set by the server when the payload came from a refetch (the page rendered
+   * its URL again) instead of the HTML the tab was served with.
+   */
+  refetchedAt?: number;
 }
 
 const MAX_VALUE_CHARS = 20_000;
@@ -115,6 +119,7 @@ export function sanitizePayload(input: unknown): PayloadSummary {
     size: num(p.size) ?? 0,
     entries,
     error: masked(p.error, 500),
+    ...(num(p.refetchedAt) !== undefined && { refetchedAt: num(p.refetchedAt) }),
   };
 }
 

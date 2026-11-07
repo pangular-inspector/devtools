@@ -1,6 +1,7 @@
 import { defineRpcFunction } from 'devframe';
 import * as v from 'valibot';
 import { describable } from './agent-schema.ts';
+import type { ScannedRoute } from '../router-types.ts';
 import { analogVersion, buildRoutes, flattenRoutes, servedAnalogRoot } from './analog-scan.ts';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
@@ -27,7 +28,12 @@ const RouteSchema = v.object({
   line: v.optional(v.number()),
 });
 
-type ExtractedRoute = v.InferOutput<typeof RouteSchema>;
+type ExtractedRoute = ScannedRoute;
+
+/** True when two types are the same, so the schema and the shared type can't drift apart. */
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const schemaMatchesScannedRoute: Same<v.InferOutput<typeof RouteSchema>, ScannedRoute> = true;
+void schemaMatchesScannedRoute;
 
 export const getRoutes = defineRpcFunction({
   name: 'get-routes',
@@ -236,8 +242,9 @@ function resolveFiles(found: string[], cwd: string): ExtractedRoute[] {
 }
 
 function clean(route: ExtractedRoute): ExtractedRoute {
-  const out = { ...route } as Record<string, unknown>;
-  for (const key of Object.keys(out)) if (out[key] === undefined) delete out[key];
+  const out: Partial<Record<keyof ExtractedRoute, unknown>> = { ...route };
+  for (const key of Object.keys(out) as (keyof ExtractedRoute)[])
+    if (out[key] === undefined) delete out[key];
   return out as ExtractedRoute;
 }
 
