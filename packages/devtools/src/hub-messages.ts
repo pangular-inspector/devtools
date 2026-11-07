@@ -51,6 +51,9 @@ export interface FeedNavigation {
   url?: unknown;
   errorCode?: unknown;
   reason?: unknown;
+  redirectTo?: unknown;
+  /** Set when the target came from a query param (a possible open redirect). */
+  queryRedirect?: unknown;
 }
 
 type AgentTool = { id: string; safety?: AgentSafety; handler: (args: any) => unknown };
@@ -319,6 +322,27 @@ export function createHubFeed(
     );
   };
 
+  /** Posts a navigation whose target came from a query param, once per page and navigation. */
+  const postQueryRedirect = (pageId: string, nav: FeedNavigation | undefined) => {
+    const flag = nav?.queryRedirect as { param?: unknown; by?: unknown } | undefined;
+    if (!flag || typeof flag !== 'object') return;
+    if (!firstOnPage(pageId, `open-redirect:${String(nav!.id)}:${String(nav!.startedAt)}`)) return;
+    const param = masked(flag.param, 100);
+    const by = masked(flag.by, 200);
+    const target = masked(nav!.redirectTo ?? nav!.url, 300);
+    post(
+      `router:open-redirect:${param}:${by}`,
+      dockOf('router'),
+      {
+        message: clip(`Possible open redirect: target taken from query param ${param}`, MAX_TITLE),
+        level: 'warn',
+        category: HUB_MESSAGE_CATEGORIES.error,
+        detail: [target && `Target: ${target}`, by && `By: ${by}`].filter(Boolean).join('\n'),
+      },
+      pageId,
+    );
+  };
+
   return {
     wrapTool: (tool) => {
       // A plugin tool declares its own tier; the built-in ones take it from AGENT_ENTRIES.
@@ -362,6 +386,7 @@ export function createHubFeed(
     navigations: (pageId, navigations) => {
       if (!messages || !config.inspectors.router) return;
       for (const nav of navigations.slice(-100)) {
+        postQueryRedirect(pageId, nav);
         if (nav?.outcome !== 'failed') continue;
         if (!firstOnPage(pageId, `nav:${String(nav.id)}:${String(nav.startedAt)}`)) continue;
         const code = typeof nav.errorCode === 'string' ? clip(nav.errorCode, 20) : '';

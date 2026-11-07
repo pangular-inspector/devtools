@@ -172,7 +172,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 #### Agents and MCP
 
-- 100 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
+- 103 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, the TanStack Query, Capacitor, plugin and NgRx session tools, and tools for HTTP fault rules and SSR overrides.
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.
@@ -182,6 +182,16 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Agent skills shipped in the package, installed with `pangular skills install`.
 - Read-only tools for browser agents through WebMCP, off by default (`agent.browserTools`).
 - `pangular mcp --print-config` prints the client config for Claude Code, Cursor and VS Code.
+
+#### Router tools
+
+- **Compare two navigations.** The Routes tab has a **Compare** view, and each navigation a **Compare** button, that list which query params, route params, route data, outlets, components, guard and resolver verdicts and phase timings changed between two recorded navigations. Agents get the same answer from `pangular:diff-navigations`. Each navigation now keeps the routes it activated, with redacted params and data.
+- **Live open redirect check.** A guard, resolver or error handler redirect whose target is the value of a query param, and code that navigates to the value of a return-URL query param, are flagged as they happen: an **open redirect risk** badge in **Navigations**, a warning in the hub's **Messages** dock, a line in `pangular:explain-navigation`, and a `redirect-from-query` lint warning that names the guard or code.
+- **Navigation API and error handler in the router timeline.** Each navigation shows the browser Navigation API event it came with (`push`, `replace`, `reload` or `traverse`, and whether the user started it). Navigation API events the router did not make show as **History changes outside the router** in **Navigations**, `pangular:inspect-route` and `pangular:explain-navigation`, which explains a browser URL that differs from the router's. A `withNavigationErrorHandler()` handler that throws is recorded with its message.
+- **HTTP calls per navigation.** `pangular:explain-navigation` and a new **HTTP calls** button on each navigation list the `HttpClient` calls the SSR & HTTP inspector recorded for it, with status and time: the ones that started while it ran, and the ones that started within 5 seconds after it ended and before the next navigation.
+- **Three router lint rules.** `always-run-parent` flags `runGuardsAndResolvers: 'always'` on a parent route with guards or resolvers. `lazy-component-eager` flags a `loadComponent` route whose component another route already imports eagerly. The `resolver-refetch` rule is a timing heuristic: from the SSR & HTTP inspector's calls, it flags a `GET` the page made while a navigation's resolvers ran and again after the navigation ended, which suggests the routed component fetches what a resolver already loaded. A guard can make the first `GET` too, so the rule does not prove the resolver made it. Turn any of them off with `lint.rules`.
+- **Follow navigations from an agent.** `pangular:follow-navigations` returns the navigations that are new or changed since a cursor, across pages, and can wait up to 30 seconds for the next one, so an agent can follow a login and redirect flow without polling.
+- **What happens if I go to a URL.** The **Config** view has a **What happens** button, and agents a `pangular:preview-navigation` tool, that predict a navigation from the live route config without navigating: the redirects it follows, the route chain and params, and in order the guards, lazy chunks, resolvers and components that run, with each route's source file and the render mode.
 
 #### CLI
 

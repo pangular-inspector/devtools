@@ -13,6 +13,7 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { hostPageId } from '../page-id';
 import { pickPage } from '../live-pages';
 import { RouteCurrent } from './route-current';
+import { RouteDiff } from './route-diff';
 import { RouteLint } from './route-lint';
 import { RouteSetup } from './route-setup';
 import { RouteTimeline } from './route-timeline';
@@ -24,6 +25,7 @@ import type { ComponentFocus } from '../types/component-focus.types';
 const TABS = [
   { id: 'current', label: 'Current' },
   { id: 'navigations', label: 'Navigations' },
+  { id: 'compare', label: 'Compare' },
   { id: 'routes', label: 'Config' },
   { id: 'setup', label: 'Setup' },
   { id: 'lint', label: 'Lint' },
@@ -33,7 +35,7 @@ type TabId = (typeof TABS)[number]['id'];
 
 @Component({
   selector: 'app-live-route',
-  imports: [RouteCurrent, RouteLint, RouteSetup, RouteTimeline, RouteTree, Select],
+  imports: [RouteCurrent, RouteDiff, RouteLint, RouteSetup, RouteTimeline, RouteTree, Select],
   template: `
     <div class="section-head">
       <h2>Live router</h2>
@@ -96,7 +98,10 @@ type TabId = (typeof TABS)[number]['id'];
             />
           }
           @case ('navigations') {
-            <app-route-timeline [page]="current" [rpc]="rpc()" />
+            <app-route-timeline [page]="current" [rpc]="rpc()" (compare)="compareFrom($event)" />
+          }
+          @case ('compare') {
+            <app-route-diff [page]="current" [rpc]="rpc()" [start]="compareStart()" />
           }
           @case ('routes') {
             <app-route-tree [page]="current" [rpc]="rpc()" [sources]="sources()" />
@@ -278,6 +283,8 @@ export class LiveRoute {
 
   readonly tabs = TABS;
   readonly selected = signal<TabId>('current');
+  /** The navigation the Compare view starts from, set by a timeline row. */
+  readonly compareStart = signal<number | null>(null);
   readonly pages = signal<RouterPage[]>([]);
   private readonly hostPageId = hostPageId();
   readonly loading = signal(true);
@@ -330,6 +337,14 @@ export class LiveRoute {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** Opens the Compare view with this navigation as the later one. */
+  compareFrom(id: number) {
+    this.compareStart.set(id);
+    this.selected.set('compare');
+    // The clicked button leaves with the Navigations view, so focus moves to the new tab.
+    setTimeout(() => document.getElementById('router-tab-compare')?.focus());
   }
 
   retry() {
