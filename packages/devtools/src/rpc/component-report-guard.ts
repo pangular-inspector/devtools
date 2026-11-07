@@ -85,10 +85,11 @@ function guardProps(value: unknown): ComponentProp[] {
 function guardDependencies(value: unknown): DependencyInfo[] {
   return records(value)
     .filter((dep) => str(dep['token']))
-    .map((dep) => ({
+    .map(({ tokenId, ...dep }) => ({
       ...dep,
       from: str(dep['from']) ? dep['from'] : '',
       token: dep['token'] as string,
+      ...(str(tokenId) ? { tokenId } : {}),
       flags: strings(dep['flags']),
       providedBy: str(dep['providedBy']) ? dep['providedBy'] : null,
     }));

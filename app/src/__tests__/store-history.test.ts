@@ -414,6 +414,25 @@ describe('Provider value', () => {
     expect(region.textContent).toContain('id:');
   });
 
+  it('sends the token id, and closes when another token with the same name takes the row', async () => {
+    const call = vi.fn(async () => ({ ok: true, type: 'Object', members: [] }));
+    const fixture = await mount(call);
+    fixture.componentRef.setInput('tokenId', 'tok-3');
+    await settle(fixture);
+    const toggle = button(fixture, 'Show the value of CartService');
+    toggle.click();
+    await settle(fixture);
+    expect(call).toHaveBeenCalledWith('request-provider-value', {
+      pageId: 'p1',
+      request: { injectorId: 'inj-1', token: 'CartService', tokenId: 'tok-3', index: 2, path: [] },
+    });
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    // Same name and index, different token (#367): the open value belonged to the other one.
+    fixture.componentRef.setInput('tokenId', 'tok-4');
+    await settle(fixture);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('shows only the latest read when it is closed and reopened while a read is pending', async () => {
     const pending: ((answer: unknown) => void)[] = [];
     const call = vi.fn(() => new Promise((resolve) => pending.push(resolve)));

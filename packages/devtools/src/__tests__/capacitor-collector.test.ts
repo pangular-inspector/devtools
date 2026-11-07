@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   capacitorHook,
@@ -405,7 +406,7 @@ describe('createCapacitorHook', () => {
     // In a child process: an unhandled rejection is the thing under test, and
     // the test runner would report one as a failure.
     const script = `
-      const { createCapacitorHook } = await import(${JSON.stringify(join(__dirname, '../capacitor-collector.ts'))});
+      const { createCapacitorHook } = await import(${JSON.stringify(pathToFileURL(join(__dirname, '../capacitor-collector.ts')).href)});
       let unhandled = 0;
       process.on('unhandledRejection', () => unhandled++);
       const failure = Object.assign(new Error('denied'), { code: 'DENIED' });

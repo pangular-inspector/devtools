@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import { splitPath } from '../forms-path.ts';
-import { lineCounter, skipString, sourceRoots, stripComments, walkFiles } from './source-scan.ts';
+import {
+  lineCounter,
+  skipString,
+  sourceRoots,
+  stripComments,
+  walkFiles,
+  relativeFile,
+} from './source-scan.ts';
 
 export interface SourceLine {
   file: string;
@@ -197,7 +204,7 @@ export function findFormSource(
   for (const full of files) {
     const content = readCached(full);
     if (content === null || !needle.test(content)) continue;
-    result = formSourceIn(content, relative(cwd, full), owner, property, path, (name) =>
+    result = formSourceIn(content, relativeFile(cwd, full), owner, property, path, (name) =>
       schemaFile(cwd, files, name, full, content),
     );
     if (result) break;
@@ -241,10 +248,10 @@ function schemaFile(
     const imported = matches.find(
       (match) => match.full === `${base}.ts` || match.full === join(base, 'index.ts'),
     );
-    return imported ? { content: imported.content, file: relative(cwd, imported.full) } : null;
+    return imported ? { content: imported.content, file: relativeFile(cwd, imported.full) } : null;
   }
   if (matches.length !== 1) return null;
-  return { content: matches[0].content, file: relative(cwd, matches[0].full) };
+  return { content: matches[0].content, file: relativeFile(cwd, matches[0].full) };
 }
 
 function readCached(full: string): string | null {

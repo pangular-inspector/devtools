@@ -4,6 +4,7 @@ import { describable } from './agent-schema.ts';
 import { angularMajor } from './angular-version.ts';
 import { standaloneOf } from './get-components.ts';
 import { readFileSync } from 'node:fs';
+import { scanSourceFiles } from './source-file-index.ts';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   classScopes,
@@ -13,9 +14,8 @@ import {
   matchDelimiter,
   realPath,
   skipString,
-  sourceRoots,
   stripComments,
-  walkFiles,
+  toPosixPath,
 } from './source-scan.ts';
 
 const UsageSiteSchema = v.object({
@@ -90,21 +90,25 @@ export const BUILTIN_PIPES = new Map<string, { className: string; isPure: boolea
 export const PIPE_USE = /(?<!\|)\|(?!\|)[ \t]*([A-Za-z_$][\w$]*)/g;
 
 export function scanPipes(cwd: string): PipeInfo[] {
-  const pipes: PipeInfo[] = [];
   const major = angularMajor(cwd);
+  const files = scanSourceFiles(cwd, `pipes:${major ?? '?'}`, (file) => {
+    const usages = new Map<string, UsageSite[]>();
+    const templates = templatesIn(file.content, file.relPath, file.full, cwd);
+    for (const t of templates) recordUsages(t.text, t.file, t.lineAt, t.baseOffset, usages);
+    return {
+      value: { pipes: pipesIn(file.content, file.relPath, major), usages: [...usages] },
+      deps: templateDeps(templates, file.relPath, cwd),
+    };
+  });
+  // The kept results are shared between calls, so the answer is built from copies.
+  const pipes: PipeInfo[] = files.flatMap((file) => file.pipes.map((pipe) => ({ ...pipe })));
   const usagesByName = new Map<string, UsageSite[]>();
-  for (const root of sourceRoots(cwd)) {
-    walkFiles(root, (full, entry) => {
-      if (!entry.endsWith('.ts') || entry.endsWith('.spec.ts')) return;
-      try {
-        const content = readFileSync(full, 'utf-8');
-        const relPath = relative(cwd, full);
-        pipes.push(...pipesIn(content, relPath, major));
-        collectUsages(content, relPath, full, cwd, usagesByName);
-      } catch {
-        // skip
-      }
-    });
+  for (const file of files) {
+    for (const [name, sites] of file.usages) {
+      const list = usagesByName.get(name);
+      if (list) list.push(...sites);
+      else usagesByName.set(name, [...sites]);
+    }
   }
   for (const pipe of pipes) {
     const usages = usagesByName.get(pipe.name);
@@ -150,6 +154,19 @@ function pipesIn(content: string, relPath: string, major: number | undefined): P
     });
   }
   return pipes;
+}
+
+/** The `templateUrl` files among `templates`, by absolute path, so a kept scan of
+ * their component file is redone when one of them changes. */
+export function templateDeps(
+  templates: readonly TemplateSource[],
+  relPath: string,
+  cwd: string,
+): string[] {
+  const root = realPath(cwd);
+  return templates
+    .filter((template) => template.baseOffset === 0 && template.file !== relPath)
+    .map((template) => join(root, template.file));
 }
 
 const TEMPLATE_KEY = /\btemplate\s*:\s*/;
@@ -201,23 +218,6 @@ export function templatesIn(
   return out;
 }
 
-/**
- * Finds every `@Component(...)` in `content` and scans its template — inline,
- * or read from `templateUrl` relative to `fullPath` — for pipe uses,
- * recording each one into `out` by pipe name.
- */
-function collectUsages(
-  content: string,
-  relPath: string,
-  fullPath: string,
-  cwd: string,
-  out: Map<string, UsageSite[]>,
-) {
-  for (const template of templatesIn(content, relPath, fullPath, cwd)) {
-    recordUsages(template.text, template.file, template.lineAt, template.baseOffset, out);
-  }
-}
-
 /** Reads the string value that follows `keyPattern` in `args` (a decorator's
  * masked argument list), starting at `offset` within `source`/the full file's
  * masked code. `args` and `source`/`code` share offsets up to `offset`. */
@@ -259,7 +259,7 @@ function templateFromUrl(url: string, fullPath: string, cwd: string): TemplateSo
     // call that would mix a real path with an unresolved `cwd` and produce a
     // long, wrong `../../` chain wherever `cwd` sits behind a symlink itself
     // (e.g. macOS's /var -> /private/var).
-    return { text, file: inside, lineAt: lineCounter(text), baseOffset: 0 };
+    return { text, file: toPosixPath(inside), lineAt: lineCounter(text), baseOffset: 0 };
   } catch {
     // templateUrl does not resolve to a readable file
     return null;

@@ -23,6 +23,8 @@ class Logger {}
 class App {}
 class Card {}
 class Tooltip {}
+/** The page gives every token a stable id (`token-id.ts`). */
+const TOKEN_ID = expect.stringMatching(/^tok-\d+$/);
 const API_URL = { _desc: 'API_URL', toString: () => 'InjectionToken API_URL' };
 const THEME = { _desc: 'THEME', toString: () => 'InjectionToken THEME' };
 
@@ -117,8 +119,8 @@ describe('collectInjectorTree', () => {
     const { ng } = fakeNg();
     const card = collectInjectorTree(ng).roots[0].children[0];
     expect(card.providers).toEqual([
-      { token: 'CardState', type: 'class', isViewProvider: false },
-      { token: 'Logger', type: 'factory', isViewProvider: true },
+      { token: 'CardState', tokenId: TOKEN_ID, type: 'class', isViewProvider: false },
+      { token: 'Logger', tokenId: TOKEN_ID, type: 'factory', isViewProvider: true },
     ]);
     expect(card.injector.providerCount).toBe(2);
   });
@@ -131,8 +133,14 @@ describe('collectInjectorTree', () => {
     expect(root.injector.name).toBe('Root');
     expect(root.children.map((c) => c.injector.name)).toEqual(['Route: cards']);
     expect(root.providers).toEqual([
-      { token: 'Store', type: 'class', isViewProvider: false, importPath: ['App'] },
-      { token: 'API_URL', type: 'value', isViewProvider: false },
+      {
+        token: 'Store',
+        tokenId: TOKEN_ID,
+        type: 'class',
+        isViewProvider: false,
+        importPath: ['App'],
+      },
+      { token: 'API_URL', tokenId: TOKEN_ID, type: 'value', isViewProvider: false },
     ]);
   });
 
@@ -142,9 +150,15 @@ describe('collectInjectorTree', () => {
     const card = roots[0].children[0];
     const rootId = environment[0].children[0].injector.id;
     expect(card.dependencies).toEqual([
-      { from: 'Card', token: 'Store', flags: [], providedBy: rootId },
-      { from: 'Card', token: 'Logger', flags: ['self'], providedBy: card.injector.id },
-      { from: 'Card', token: 'THEME', flags: ['optional'], providedBy: null },
+      { from: 'Card', token: 'Store', tokenId: TOKEN_ID, flags: [], providedBy: rootId },
+      {
+        from: 'Card',
+        token: 'Logger',
+        tokenId: TOKEN_ID,
+        flags: ['self'],
+        providedBy: card.injector.id,
+      },
+      { from: 'Card', token: 'THEME', tokenId: TOKEN_ID, flags: ['optional'], providedBy: null },
     ]);
     expect(card.injector.path).toEqual([
       card.injector.id,
@@ -299,7 +313,13 @@ describe('collectInjectorTree', () => {
     expect(containerNode.providers.map((p) => p.token)).toEqual(['Logger']);
     expect(cardNode.injector.path).toContain(containerNode.injector.id);
     expect(cardNode.dependencies).toEqual([
-      { from: 'Card', token: 'Logger', flags: [], providedBy: containerNode.injector.id },
+      {
+        from: 'Card',
+        token: 'Logger',
+        tokenId: TOKEN_ID,
+        flags: [],
+        providedBy: containerNode.injector.id,
+      },
     ]);
   });
 
@@ -318,8 +338,8 @@ describe('collectInjectorTree', () => {
     const { roots, environment } = collectInjectorTree(ng);
     const rootId = environment[0].children[0].injector.id;
     expect(roots[0].children[0].dependencies).toEqual([
-      { from: 'Card', token: 'API_URL', flags: [], providedBy: rootId },
-      { from: 'Card', token: 'Logger', flags: ['skipSelf'], providedBy: null },
+      { from: 'Card', token: 'API_URL', tokenId: TOKEN_ID, flags: [], providedBy: rootId },
+      { from: 'Card', token: 'Logger', tokenId: TOKEN_ID, flags: ['skipSelf'], providedBy: null },
     ]);
   });
 
@@ -353,8 +373,14 @@ describe('collectInjectorTree', () => {
     const { environment } = collectInjectorTree(ng);
     const root = environment[0].children[0];
     expect(root.dependencies).toEqual([
-      { from: 'Api', token: 'Http', flags: [], providedBy: root.injector.id },
-      { from: 'Api', token: 'API_URL', flags: ['optional'], providedBy: root.injector.id },
+      { from: 'Api', token: 'Http', tokenId: TOKEN_ID, flags: [], providedBy: root.injector.id },
+      {
+        from: 'Api',
+        token: 'API_URL',
+        tokenId: TOKEN_ID,
+        flags: ['optional'],
+        providedBy: root.injector.id,
+      },
     ]);
     expect(environment[0].dependencies).toEqual([]);
     expect(asked).toEqual([Api, Http]);
@@ -388,8 +414,14 @@ describe('collectInjectorTree', () => {
         : providers(inj);
     const root = collectInjectorTree(ng).environment[0].children[0];
     expect(root.providers).toEqual([
-      { token: 'SignalStore', type: 'class', isViewProvider: false, stateKeys: ['trips', 'query'] },
-      { token: 'SignalStore', type: 'class', isViewProvider: false },
+      {
+        token: 'SignalStore',
+        tokenId: TOKEN_ID,
+        type: 'class',
+        isViewProvider: false,
+        stateKeys: ['trips', 'query'],
+      },
+      { token: 'SignalStore', tokenId: TOKEN_ID, type: 'class', isViewProvider: false },
     ]);
     expect(created).toBe(0);
   });
@@ -418,7 +450,7 @@ describe('collectInjectorTree', () => {
     };
     const root = collectInjectorTree(ng).environment[0].children[0];
     expect(root.dependencies).toEqual([
-      { from: 'CONFIG', token: 'Http', flags: [], providedBy: root.injector.id },
+      { from: 'CONFIG', token: 'Http', tokenId: TOKEN_ID, flags: [], providedBy: root.injector.id },
     ]);
     expect(asked).toEqual([CONFIG]);
   });
@@ -441,8 +473,20 @@ describe('collectInjectorTree', () => {
     };
     const root = collectInjectorTree(ng).environment[0].children[0];
     expect(root.dependencies).toEqual([
-      { from: 'Zone', token: 'Destroy', flags: ['optional'], providedBy: root.injector.id },
-      { from: 'Zone', token: 'Destroy', flags: [], providedBy: root.injector.id },
+      {
+        from: 'Zone',
+        token: 'Destroy',
+        tokenId: TOKEN_ID,
+        flags: ['optional'],
+        providedBy: root.injector.id,
+      },
+      {
+        from: 'Zone',
+        token: 'Destroy',
+        tokenId: TOKEN_ID,
+        flags: [],
+        providedBy: root.injector.id,
+      },
     ]);
   });
 

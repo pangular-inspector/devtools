@@ -6,7 +6,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPangularCli } from '../cli.ts';
 import {
@@ -80,13 +80,17 @@ describe('bundled skills', () => {
 
 describe('installSkills', () => {
   it('picks the agent folder, the home folder with global, or --dir', () => {
+    // Built with the platform's path functions, so the check holds on Windows too, where `resolve`
+    // adds the drive letter and every separator is a backslash.
     const cwd = '/work/app';
-    expect(skillsTarget({ cwd })).toBe('/work/app/.claude/skills');
-    expect(skillsTarget({ cwd, agent: 'agents' })).toBe('/work/app/.agents/skills');
-    expect(skillsTarget({ cwd, agent: 'github' })).toBe('/work/app/.github/skills');
-    expect(skillsTarget({ cwd, global: true, home: '/home/me' })).toBe('/home/me/.claude/skills');
+    expect(skillsTarget({ cwd })).toBe(join(cwd, '.claude/skills'));
+    expect(skillsTarget({ cwd, agent: 'agents' })).toBe(join(cwd, '.agents/skills'));
+    expect(skillsTarget({ cwd, agent: 'github' })).toBe(join(cwd, '.github/skills'));
+    expect(skillsTarget({ cwd, global: true, home: '/home/me' })).toBe(
+      join('/home/me', '.claude/skills'),
+    );
     expect(skillsTarget({ cwd, dir: 'tools/skills', agent: 'agents' })).toBe(
-      '/work/app/tools/skills',
+      resolve(cwd, 'tools/skills'),
     );
     expect(() => skillsTarget({ cwd, agent: 'toString' })).toThrow(/Unknown agent "toString"/);
   });
@@ -107,8 +111,8 @@ describe('installSkills', () => {
     expect(result.results.map((entry) => entry.status)).toEqual(['installed', 'installed']);
     expect(existsSync(join(cwd, '.claude'))).toBe(false);
     expect(skillsInstallLines(result, cwd)).toEqual([
-      '  Would install alpha -> .claude/skills/alpha',
-      '  Would install beta -> .claude/skills/beta',
+      `  Would install alpha -> ${join('.claude/skills/alpha')}`,
+      `  Would install beta -> ${join('.claude/skills/beta')}`,
       '  Dry run: nothing was written.',
     ]);
   });
@@ -204,11 +208,15 @@ describe('pangular skills', () => {
   it('installs into --root, honours --dry-run, --agent, --dir and --skill', async () => {
     const cwd = fixtureDir('pangular-skills-cli-');
     let { out } = await cli(['skills', 'install', '--dry-run'], cwd);
-    expect(out).toContain('Would install pangular-inspector -> .claude/skills/pangular-inspector');
+    expect(out).toContain(
+      `Would install pangular-inspector -> ${join('.claude/skills/pangular-inspector')}`,
+    );
     expect(existsSync(join(cwd, '.claude'))).toBe(false);
 
     ({ out } = await cli(['skills', 'install', '--agent', 'agents'], cwd));
-    expect(out).toContain('Installed pangular-inspector -> .agents/skills/pangular-inspector');
+    expect(out).toContain(
+      `Installed pangular-inspector -> ${join('.agents/skills/pangular-inspector')}`,
+    );
     expect(readFileSync(join(cwd, '.agents/skills/pangular-inspector/SKILL.md'), 'utf8')).toBe(
       readFileSync(join(bundledSkillsDir(), 'pangular-inspector/SKILL.md'), 'utf8'),
     );

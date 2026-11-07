@@ -3,9 +3,9 @@
 // read from Angular's AST, not guessed with a regex or loaded from the project.
 
 import { readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 import { templatesIn, type TemplateSource } from './get-pipes.ts';
-import { sourceRoots, walkFiles } from './source-scan.ts';
+import { sourceRoots, walkFiles, relativeFile } from './source-scan.ts';
 import type { LintSeverity } from './pipe-lint.ts';
 import { redactText } from '../text-redact.ts';
 
@@ -158,7 +158,7 @@ export async function lintTemplates(
         return;
       }
       if (!content.includes('@Component')) return;
-      const relPath = relative(cwd, full);
+      const relPath = relativeFile(cwd, full);
       for (const template of templatesIn(content, relPath, full, cwd)) {
         const text = templateText(template, content, relPath);
         if (text === undefined) continue;

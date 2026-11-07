@@ -78,7 +78,8 @@ export function redactHeaders(headers: HeaderRecord): HeaderRecord {
     const name = rawName.toLowerCase();
     if (typeof value !== 'string') continue;
     out[name] =
-      ALWAYS_MASKED.has(name) || isRedactedKey(name)
+      // The name as sent too, since lowercasing loses camelCase words (`newPassword`).
+      ALWAYS_MASKED.has(name) || isRedactedKey(name) || isRedactedKey(rawName)
         ? REDACTED
         : clip(redactText(value), MAX_HEADER_VALUE);
   }
