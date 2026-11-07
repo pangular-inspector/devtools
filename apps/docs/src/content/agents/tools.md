@@ -845,13 +845,13 @@ A pipe is churning when one of its instances returned an equal result 20 calls i
 | `name`   | no       | Only this pipe, by the name used after `\|`.                      |
 | `page`   | no       | The tab to read live findings from. Defaults to the default page. |
 
-| Suggestion                          | When                                                                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `\| async` to `toSignal()`          | A template uses `\| async`. Uses that pipe a method call are named, with a note to move the Observable to a field first. |
-| Impure pipe to `computed()`         | A custom pipe is `pure: false`.                                                                                          |
-| Signal-reading pipe to `computed()` | The `signal-read-in-pure-pipe` lint rule fires for a pure pipe.                                                          |
-| Churning pipe                       | While recording, the pipe churned (see [Explain a pipe](#explain-a-pipe)).                                               |
-| Stale pipe                          | While recording, the experimental stale check fired.                                                                     |
+| Suggestion                          | When                                                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `\| async` to `toSignal()`          | A template uses `\| async`. If a use pipes a method call, the answer names it and tells you to move the Observable to a field first. |
+| Impure pipe to `computed()`         | A custom pipe is `pure: false`.                                                                                                      |
+| Signal-reading pipe to `computed()` | The `signal-read-in-pure-pipe` lint rule fires for a pure pipe.                                                                      |
+| Churning pipe                       | While recording, the pipe churned (see [Explain a pipe](#explain-a-pipe)).                                                           |
+| Stale pipe                          | While recording, the experimental stale check fired.                                                                                 |
 
 Built-in formatting pipes such as `date` and `currency` are pure and cheap, so it suggests nothing for them. A lint rule set to `false` in `lint.rules` drops its suggestion too.
 
