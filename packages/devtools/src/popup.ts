@@ -1066,12 +1066,16 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
 
   /** Labels the launcher for what a click does: open the panel, or bring it back. */
   function applyOutside() {
-    const label = outside
-      ? 'Bring Pangular Inspector back into the page'
-      : 'Toggle Pangular Inspector';
-    fab.setAttribute('aria-label', label);
-    fab.title = outside ? label : 'Pangular Inspector';
     fab.classList.toggle('outside', !!outside);
+    if (outside) {
+      const label = 'Bring Pangular Inspector back into the page';
+      fab.setAttribute('aria-label', label);
+      fab.title = label;
+      return;
+    }
+    fab.title = 'Pangular Inspector';
+    // Back in the page: the pill's label and counts, when the pill is on.
+    applyPill();
   }
 
   /** Forgets the pop-out window, closing it unless it is already closed. */
@@ -1174,6 +1178,8 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     if (!isOpen) {
       pendingFocus = false;
       returnFocus = null;
+      // A closed launcher shows as the wider pill, which may now cross the window edge.
+      if (state.launcher) placeLauncher(state.launcher.x, state.launcher.y);
     }
     if (isOpen && !loaded) load();
   }

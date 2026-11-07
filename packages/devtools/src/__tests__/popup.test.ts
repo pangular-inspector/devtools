@@ -207,6 +207,21 @@ describe.sequential('devtools popup', () => {
     expect(parseInt(top, 10)).toBeLessThan(window.innerHeight);
   });
 
+  it('places the launcher again when the panel closes, as the wider pill', async () => {
+    localStorage.setItem(
+      'pangular-popup',
+      JSON.stringify({ launcher: { x: 99999, y: 20 }, docked: 'float', pill: true }),
+    );
+    await loadPopup(true);
+    const { fab } = parts();
+    const left = () => parseInt(fab.style.inset.split(' ')[3], 10);
+    fab.click();
+    // Closed, the pill is wider than the round button was.
+    Object.defineProperty(fab, 'offsetWidth', { configurable: true, get: () => 200 });
+    fab.click();
+    expect(left()).toBeLessThanOrEqual(window.innerWidth - 200);
+  });
+
   it('labels the panel and its controls', async () => {
     await loadPopup();
     const shadow = document.getElementById('pangular-popup-root')!.shadowRoot!;
@@ -867,6 +882,24 @@ describe.sequential('devtools popup', () => {
       expect(win.close).toHaveBeenCalled();
       expect(panel.classList.contains('open')).toBe(true);
       expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector');
+    });
+
+    it('shows the pill label again once the popped-out panel comes back', async () => {
+      localStorage.setItem('pangular-popup', JSON.stringify({ pill: true }));
+      const win = fakeWindow();
+      vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+      const popup = await loadPopup(true);
+      await openedSrc();
+      popup.setLauncherCounts({ renders: 3, errors: 0 });
+      const { fab } = parts();
+      popoutButton().click();
+      await vi.waitFor(() =>
+        expect(fab.getAttribute('aria-label')).toBe('Bring Pangular Inspector back into the page'),
+      );
+      // The launcher brings it back: the label says the counts again.
+      fab.click();
+      fab.click();
+      expect(fab.getAttribute('aria-label')).toBe('Toggle Pangular Inspector, 3 renders, 0 errors');
     });
 
     it('reserves the window during the click when the panel has not loaded yet', async () => {
