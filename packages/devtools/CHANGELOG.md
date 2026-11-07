@@ -230,6 +230,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Browser DevTools show the app's own line as the caller of a `console` call again. The browser entries ship source maps that list the console tap in `x_google_ignoreList`, so its wrapper frame is skipped (#369).
 - The Angular Native overlay gates the injector profiler like the NativeScript overlay: in a development build with no `window`, importing it defines one until Angular publishes its debug utilities, so the **Providers** lists fill (#371).
 - `record-change-detection` with `record: "start"` passes on why a page that answered could not record, from its capability report: the Angular version it runs, or a profiler hook the recording could not attach to yet. It no longer waits out the 3 seconds and blames the Angular version (#366).
+- `explain-ssr-request` names a hydration mismatch as a component only when the page read its class, and as an element (`<app-card>`) or text node (`#text`) otherwise (#366).
 
 ### Docs
 
