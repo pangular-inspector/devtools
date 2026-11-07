@@ -995,7 +995,9 @@ export class RouteTimeline {
     let text: string;
     try {
       if (!client) throw new Error('No connection');
-      await rpcCall(client, 'clear-router-navigations', pageId);
+      // On one app of a page that runs several, only that app's history.
+      const app = this.page().appId;
+      await rpcCall(client, 'clear-router-navigations', app ? { pageId, app } : pageId);
       text = 'Navigations cleared.';
     } catch {
       text = 'Could not clear the navigations.';

@@ -784,7 +784,7 @@ async function startOverlay(
         report['activeIds'] = activeIds(router);
         report['setup'] = setup;
         if (routerDomDirty) {
-          routerApps.scan(ng, Array.from(document.querySelectorAll('[ng-version]')), router);
+          routerApps.scan(ng, Array.from(document.querySelectorAll('[ng-version]')), router, true);
         }
         const apps = routerApps.report(ng, routerCount);
         if (apps) report['apps'] = apps;
@@ -1007,10 +1007,19 @@ async function startOverlay(
     name: 'router-clear',
     type: 'event',
     jsonSerializable: true,
-    handler: (message: { pageId?: unknown } | undefined) => {
+    handler: (message: { pageId?: unknown; app?: unknown } | undefined) => {
       if (!on.router || message?.pageId !== pageId) return;
+      const app = typeof message.app === 'string' && message.app ? message.app : undefined;
+      if (app && !routerApps.isPrimary(app)) {
+        // One app of several: only its history.
+        const target = routerApps.target(app);
+        if (target) clearNavigations(target.navigations);
+        lastRouterPayload = '';
+        scheduleRouterPush();
+        return;
+      }
       clearNavigations(navigations);
-      routerApps.clearNavigations();
+      if (!app) routerApps.clearNavigations();
       platformNavigations.length = 0;
       lastRouterPayload = '';
       scheduleRouterPush();

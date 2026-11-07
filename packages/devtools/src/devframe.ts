@@ -1314,12 +1314,26 @@ const pangular = defineDevframe({
       name: 'clear-router-navigations',
       type: 'action',
       jsonSerializable: true,
-      handler: (pageId: unknown) => {
+      // A page id, or `{ pageId, app }` to clear one app of a page that runs several.
+      handler: (target: unknown) => {
         if (!config.actions.router) throw new Error(actionBlockedMessage('router'));
+        const record =
+          target && typeof target === 'object' ? (target as Record<string, unknown>) : {};
+        const pageId = typeof target === 'string' ? target : record['pageId'];
+        const app = typeof record['app'] === 'string' && record['app'] ? record['app'] : undefined;
         if (typeof pageId !== 'string') throw new Error('Give the id of the page to clear.');
-        if (clearRouterNavigations(routerPages, pageId)) applyRouter(currentRouter(routerPages));
-        navigationStream.clear(pageId);
-        void my.rpc.broadcast({ method: 'router-clear', args: [{ pageId }], optional: true });
+        const page = routerPages.get(pageId);
+        const secondary = !!app && !!page?.apps?.some((a) => a.id === app && !a.primary);
+        if (clearRouterNavigations(routerPages, pageId, Date.now(), app)) {
+          applyRouter(currentRouter(routerPages));
+        }
+        // The stream follows the first app only.
+        if (!secondary) navigationStream.clear(pageId);
+        void my.rpc.broadcast({
+          method: 'router-clear',
+          args: [app ? { pageId, app } : { pageId }],
+          optional: true,
+        });
       },
     });
 

@@ -506,11 +506,39 @@ export function touchRouterPage(pages: Pages, pageId: unknown, now = Date.now())
 /**
  * Drops one page's navigation history, its loop warnings and its dropped
  * count. A navigation still in progress stays, as it does in the page.
- * Returns false when the page is unknown.
+ * With `appId`, only that app of a page that runs several is cleared; the
+ * first app's history is the page's own. Returns false when the page is unknown.
  */
-export function clearRouterNavigations(pages: Pages, pageId: string, now = Date.now()): boolean {
+export function clearRouterNavigations(
+  pages: Pages,
+  pageId: string,
+  now = Date.now(),
+  appId?: string,
+): boolean {
   const page = pages.get(pageId);
   if (!page) return false;
+  const secondary = appId ? page.apps?.find((app) => app.id === appId && !app.primary) : undefined;
+  if (secondary) {
+    const next: RouterPage = { ...page, changedAt: now };
+    next.apps = page.apps!.map((app) => {
+      if (app !== secondary) return app;
+      const { loops: _loops, dropped: _dropped, ...rest } = app;
+      const kept = (app.navigations ?? []).filter((nav) => nav.outcome === 'pending');
+      return { ...rest, navigations: kept, loops: detectLoops(kept, app.config) };
+    });
+    pages.set(pageId, next);
+    return true;
+  }
+  if (appId) {
+    // The first app: the page's own history, leaving the other apps as they are.
+    const navigations = page.navigations.filter((nav) => nav.outcome === 'pending');
+    const next: RouterPage = { ...page, navigations, changedAt: now };
+    delete next.dropped;
+    delete next.platformNavigations;
+    next.loops = detectLoops(navigations, next.config);
+    pages.set(pageId, next);
+    return true;
+  }
   const navigations = page.navigations.filter((nav) => nav.outcome === 'pending');
   const next: RouterPage = { ...page, navigations, changedAt: now };
   delete next.dropped;
