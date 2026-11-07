@@ -380,8 +380,8 @@ describe('initPangularHub one-time code', () => {
   });
 
   it('stops trusting a connected client when its token expires', async () => {
-    // The token has under two seconds left when the server starts.
-    const issuedAt = Date.now() - AUTH_TOKEN_TTL_MS + 1500;
+    // The token has four seconds left, room for the hub to start and the client to be trusted.
+    const issuedAt = Date.now() - AUTH_TOKEN_TTL_MS + 4000;
     const { connect } = await serve((home) => {
       const dir = authStoreDir(process.cwd(), home);
       mkdirSync(dir, { recursive: true });
@@ -394,10 +394,10 @@ describe('initPangularHub one-time code', () => {
     });
     const client = await connect('expiring-token');
     expect(await client.ensureTrusted(1000)).toBe(true);
-    await vi.waitFor(() => expect(client.isTrusted).toBe(false), { timeout: 4000 });
+    await vi.waitFor(() => expect(client.isTrusted).toBe(false), { timeout: 6000 });
     const again = await connect('expiring-token');
     expect(await again.ensureTrusted(500).catch(() => false)).toBe(false);
-  });
+  }, 15_000);
 
   it('drops expired tokens at startup and keeps the rewritten file private', async () => {
     const old = Date.now() - AUTH_TOKEN_TTL_MS - 1000;
