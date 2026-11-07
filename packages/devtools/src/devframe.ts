@@ -114,6 +114,7 @@ import {
 import { LIST_COMPONENTS_DESCRIPTION, listComponentsText } from './rpc/component-outline.ts';
 import { inspectComponentText } from './rpc/component-detail-text.ts';
 import { createDeferLoads } from './rpc/defer-loads.ts';
+import { PICK_KEYS } from './component-pick.ts';
 import { createComponentEdits } from './rpc/component-edits.ts';
 import { createSignalRestores } from './rpc/signal-restores.ts';
 import { createComponentValues, valueResultText } from './rpc/component-values.ts';
@@ -2349,6 +2350,44 @@ const pangular = defineDevframe({
           void my.rpc.broadcast({
             method: 'component-pick',
             args: [{ requestId, pageId }],
+            optional: true,
+          });
+        });
+      },
+    });
+
+    // A keyboard move of the running pick: the panel sends the key, the page
+    // answers with the component it shows now on the pick's result channel.
+    register({
+      name: 'request-component-pick-move',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (target: { pageId?: unknown; key?: unknown } | null) => {
+        const key = PICK_KEYS.find((k) => k === target?.key);
+        if (!key) return { moved: false, error: 'Unknown key.' };
+        const asked = typeof target?.pageId === 'string' ? target.pageId : undefined;
+        const pageId = asked ?? latestComponentPage(componentPages.values())?.pageId;
+        if (!pageId || !componentPages.has(pageId)) {
+          return { moved: false, error: 'No page is connected. Open the app in a browser first.' };
+        }
+        return new Promise<Record<string, unknown>>((resolve) => {
+          const requestId = `pick${++pickSeq}`;
+          const timer = setTimeout(() => {
+            pendingPicks.delete(requestId);
+            resolve({ moved: false, error: 'The page did not answer.' });
+          }, 5_000);
+          timer.unref?.();
+          pendingPicks.set(requestId, {
+            pageId,
+            settle: (result) => {
+              clearTimeout(timer);
+              pendingPicks.delete(requestId);
+              resolve(result);
+            },
+          });
+          void my.rpc.broadcast({
+            method: 'component-pick',
+            args: [{ requestId, pageId, move: key }],
             optional: true,
           });
         });

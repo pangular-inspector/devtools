@@ -68,7 +68,12 @@ import {
   componentHostOf,
   selectedComponentDetail,
 } from './component-tree.ts';
-import { startComponentPick } from './component-pick.ts';
+import {
+  PICK_KEYS,
+  startComponentPick,
+  type PickKey,
+  type PickMoveResult,
+} from './component-pick.ts';
 import { registerComponentEdit } from './component-edit-overlay.ts';
 import { registerComponentValues } from './component-values-overlay.ts';
 import type { ScreenshotRequest } from './component-screenshot.ts';
@@ -978,23 +983,43 @@ async function startOverlay(
   });
 
   let cancelComponentPick: (() => void) | null = null;
+  let moveComponentPick: ((key: PickKey) => PickMoveResult) | null = null;
   if (on.components) {
     my.rpc.register({
       name: 'component-pick',
       type: 'event',
       jsonSerializable: true,
-      handler: (request: { requestId?: unknown; pageId?: unknown; cancel?: unknown } | null) => {
+      handler: (
+        request: { requestId?: unknown; pageId?: unknown; cancel?: unknown; move?: unknown } | null,
+      ) => {
         if (!request || (request.pageId && request.pageId !== pageId)) return;
+        // A key from the panel moves the running pick; it never starts or cancels one.
+        if (request.move !== undefined) {
+          const key = PICK_KEYS.find((k) => k === request.move);
+          const result: PickMoveResult = !key
+            ? { moved: false, error: 'Unknown key.' }
+            : (moveComponentPick?.(key) ?? { moved: false, error: 'No pick is running.' });
+          if (typeof request.requestId === 'string') {
+            void my.rpc
+              .call('component-pick-result', { requestId: request.requestId, pageId, result })
+              .catch(() => {});
+          }
+          return;
+        }
         cancelComponentPick?.();
         if (request.cancel === true || typeof request.requestId !== 'string') return;
         const requestId = request.requestId;
         const pick = startComponentPick({
           getNg,
-          highlight: { show: showHighlight, clear: clearHighlight },
+          highlight: { show: (el, reveal) => showHighlight(el, { reveal }), clear: clearHighlight },
         });
         cancelComponentPick = pick.cancel;
+        moveComponentPick = pick.move;
         void pick.result.then((result) => {
-          if (cancelComponentPick === pick.cancel) cancelComponentPick = null;
+          if (cancelComponentPick === pick.cancel) {
+            cancelComponentPick = null;
+            moveComponentPick = null;
+          }
           if (result.ok) {
             componentTarget = result.id;
             consoleGlobals.selectComponent(result.id);

@@ -30,7 +30,7 @@ Each row shows the class name and the host tag. Routed components get a chip wit
 
 ### Directive hosts
 
-An element that hosts directives but no component is a row too, so you can see where directives such as `routerLink` or `ngModel` sit. The row shows the tag and the attributes from the directive selectors, as **&lt;a&gt; [routerLink]**, in a lighter style than component rows. When a selector has no attribute, the row shows the directive class names instead. Select the row to see its directives and a button that shows the component whose template renders it. A directive host has no inputs or properties of its own in the detail pane.
+An element that hosts directives but no component is a row too, so you can see where directives such as `routerLink` or `ngModel` sit. The row shows the tag and the attributes from the directive selectors, as **&lt;a&gt; [routerLink]**, in a lighter style than component rows. When a selector has no attribute, the row shows the directive class names instead. Select the row to see its directives and a button that shows the component whose template renders it. Angular gives directives no source location, so each directive shows the file from the source scan with the same class name, marked **Likely**. When several files define the class, it says how many. A directive host has no inputs or properties of its own in the detail pane.
 
 **Directive hosts** in the toolbar hides or shows these rows. The panel remembers the choice in this browser. While they are hidden, their children move up to the nearest shown row, and the filter does not search them. The page lists up to 1000 directive hosts. Past that, the notice names the limit. Directives on an `<ng-container>` or `<ng-template>` are not listed, because the tree walks elements.
 
@@ -378,6 +378,18 @@ On Angular 20 and later, the page reads the tree about 250 ms after Angular runs
 </ngmd-workflow>
 
 While picking, presses and clicks in the app don't reach it, so menus and drag handles stay as they are.
+
+You can also pick with the keyboard, from the panel or with focus in the app:
+
+| Key         | What it does                                        |
+| ----------- | --------------------------------------------------- |
+| Down arrow  | Highlights the next component in page order         |
+| Up arrow    | Highlights the previous component                   |
+| Left arrow  | Highlights the component around the highlighted one |
+| Right arrow | Highlights the first component inside it            |
+| Enter       | Picks the highlighted component                     |
+
+The first arrow press starts from the component under the pointer, or from the first component on the page. The page scrolls the highlighted component into view, and the panel announces its name and tag.
 
 Press Escape, in the app or in the panel, or click **Cancel pick** to stop. Picking also stops after 15 seconds.
 

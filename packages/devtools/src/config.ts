@@ -1398,6 +1398,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'select-component': 'components',
   'request-component-pick': 'components',
   'cancel-component-pick': 'components',
+  'request-component-pick-move': 'components',
   'component-pick-result': 'components',
   'request-page-highlight': 'components',
   'component-screenshot-result': 'components',

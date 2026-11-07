@@ -14,6 +14,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import type { DevframeRpcClient } from 'devframe/client';
 import { ExtensionBridge, type SourceLocation } from '../extension-bridge';
 import { hostPageId } from '../page-id';
@@ -201,6 +202,15 @@ export function ancestors(parents: ReadonlyMap<string, string>, id: string): str
   return out;
 }
 
+/** The keys that move a running pick on the page, as the page names them. */
+const PICK_KEY_NAMES: Record<string, string> = {
+  ArrowDown: 'next',
+  ArrowUp: 'previous',
+  ArrowLeft: 'parent',
+  ArrowRight: 'child',
+  Enter: 'pick',
+};
+
 const DIRECTIVE_HOSTS_KEY = 'pangular:components:directive-hosts';
 
 /** Whether this viewer last chose to show directive hosts; shown unless they hid them. */
@@ -215,6 +225,7 @@ function storedDirectiveHosts(): boolean {
 @Component({
   selector: 'app-component-tree',
   imports: [
+    NgTemplateOutlet,
     Select,
     CdRecording,
     SourceLink,
@@ -226,7 +237,7 @@ function storedDirectiveHosts(): boolean {
     LeaksSection,
     AngularUnavailable,
   ],
-  host: { '(keydown.escape)': 'cancelPick()' },
+  host: { '(keydown.escape)': 'cancelPick()', '(keydown)': 'pickKey($event)' },
   template: `
     @if (live()) {
       <p class="intro">
@@ -461,7 +472,13 @@ function storedDirectiveHosts(): boolean {
               </h3>
               <ul class="chips">
                 @for (name of host.directives ?? []; track name + $index) {
-                  <li class="chip mono">{{ name }}</li>
+                  <li class="chip mono">
+                    {{ name }}
+                    <ng-container
+                      [ngTemplateOutlet]="directiveSource"
+                      [ngTemplateOutletContext]="{ $implicit: name }"
+                    />
+                  </li>
                 }
               </ul>
             </div>
@@ -748,6 +765,12 @@ function storedDirectiveHosts(): boolean {
                       <span class="mono">{{ dir.name }}</span>
                       <span class="flag">directive on host</span>
                     </h3>
+                    <p class="directive-where mono">
+                      <ng-container
+                        [ngTemplateOutlet]="directiveSource"
+                        [ngTemplateOutletContext]="{ $implicit: dir.name }"
+                      />
+                    </p>
                     @if (dir.inputs.length) {
                       <ul class="props">
                         @for (p of dir.inputs; track p.name) {
@@ -1036,6 +1059,21 @@ function storedDirectiveHosts(): boolean {
         </ul>
       }
     }
+
+    <!-- A directive's file from the source scan, by class name: the page gives none. -->
+    <ng-template #directiveSource let-name>
+      @let found = directiveSources(name);
+      @if (found.length === 1) {
+        <span class="directive-guess" [title]="guessTitle">
+          <span class="likely">Likely</span><span class="sr-only">, matched by class name: </span
+          ><app-source-link [file]="found[0].file" [line]="found[0].line" />
+        </span>
+      } @else if (found.length > 1) {
+        <span class="chip-note" [title]="guessTitle"
+          >{{ found.length }} source files define {{ bareName(name) }}</span
+        >
+      }
+    </ng-template>
   `,
   styles: `
     @use 'mixins' as m;
@@ -1474,6 +1512,18 @@ function storedDirectiveHosts(): boolean {
       color: var(--text-2);
       font-size: 12px;
       overflow-wrap: anywhere;
+    }
+    .directive-where {
+      margin: -4px 0 8px;
+      font-size: 12px;
+    }
+    .directive-where:empty {
+      display: none;
+    }
+    .directive-guess {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-sans);
     }
     .likely {
       display: inline-block;
@@ -2479,6 +2529,14 @@ export class ComponentTree {
     return candidates.length === 1 ? candidates[0] : null;
   }
 
+  /**
+   * The source scan directives a directive on the page may be, by class name. Angular gives
+   * directives no debug location, so a match is only likely.
+   */
+  directiveSources(name: string): SourceComponent[] {
+    return (this.sourceByClass().get(bare(name)) ?? []).filter((c) => c.kind === 'directive');
+  }
+
   sourceKey(comp: SourceComponent) {
     return `${comp.file}#${comp.className}`;
   }
@@ -2565,7 +2623,9 @@ export class ComponentTree {
     const seq = ++this.pickSeq;
     this.pickPageId = this.page()?.pageId ?? null;
     this.picking.set(true);
-    this.say('Click a component in the app. Press Escape to cancel.');
+    this.say(
+      'Click a component in the app, or use the arrow keys to move between components and Enter to pick one. Press Escape to cancel.',
+    );
     const result = (await client
       .scope('pangular')
       .rpc.call('request-component-pick', { pageId: this.pickPageId ?? undefined })
@@ -2581,6 +2641,33 @@ export class ComponentTree {
     this.destroyed.set(null);
     if (this.index().map.has(result.id)) this.reveal(result.id);
     else this.selectedId.set(result.id);
+  }
+
+  /**
+   * Moves a running pick with the keyboard: down and up go through the components in page
+   * order, left to the one around, right to the first one inside, and Enter picks.
+   */
+  pickKey(event: KeyboardEvent) {
+    const key = PICK_KEY_NAMES[event.key];
+    if (!this.picking() || !key || event.altKey || event.ctrlKey || event.metaKey) return;
+    // Enter would press the focused button, which cancels the pick.
+    event.preventDefault();
+    const client = this.rpc();
+    if (!client) return;
+    const seq = this.pickSeq;
+    void client
+      .scope('pangular')
+      .rpc.call('request-component-pick-move', { pageId: this.pickPageId ?? undefined, key })
+      .then((answer) => {
+        const result = answer as { moved?: boolean; name?: string; tag?: string; error?: string };
+        if (seq !== this.pickSeq || !this.picking() || key === 'pick') return;
+        this.say(
+          result?.moved
+            ? `${result.name ?? 'Component'} <${result.tag ?? ''}>. Press Enter to pick it.`
+            : (result?.error ?? 'The page did not move.'),
+        );
+      })
+      .catch(() => {});
   }
 
   cancelPick() {
