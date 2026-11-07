@@ -1162,7 +1162,11 @@ const pangular = defineDevframe({
       name: 'router-lint',
       type: 'query',
       jsonSerializable: true,
-      handler: (pageId: unknown) => routerLintResult(pageFor(pageId), { rules: config.lint.rules }),
+      handler: (pageId: unknown) =>
+        routerLintResult(pageFor(pageId), {
+          rules: config.lint.rules,
+          httpFor: routerHttpCalls,
+        }),
     });
 
     register({
@@ -3883,7 +3887,12 @@ const pangular = defineDevframe({
       handler: async (args: { page?: string }) => {
         const state = routerState.value() as RouterState;
         if (!state.pages.length) return { markdown: noRouter };
-        return { markdown: lintRoutesText(state, args, undefined, { rules: config.lint.rules }) };
+        return {
+          markdown: lintRoutesText(state, args, undefined, {
+            rules: config.lint.rules,
+            httpFor: routerHttpCalls,
+          }),
+        };
       },
     });
 

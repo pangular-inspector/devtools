@@ -133,6 +133,9 @@ Route config mistakes, each with a fix:
 - Redirect loops seen at runtime (rule `redirect-loop`), with the hops and the guards involved.
 - Deprecated class guards and `canLoad`.
 - Lazy chunks downloaded before a rejecting `canActivate`.
+- `runGuardsAndResolvers: 'always'` on a parent route with guards or resolvers (rule `always-run-parent`), which runs them again on every navigation inside it, even one that only changes a query param or the fragment.
+- A `loadComponent` route whose component another route outside any lazy route uses as `component` (rule `lazy-component-eager`). The component is in the main bundle already, so the lazy import saves nothing.
+- A resolver whose data the page fetches again (rule `resolver-refetch`): a navigation with resolvers made a `GET` while it ran, and the same `GET` again after it ended, before the next navigation. It needs the HTTP calls the [SSR & HTTP inspector](./ssr-http.md) recorded on the page.
 - Missing or duplicate titles, and param or input typos.
 - `routerLinkActive` without `ariaCurrentWhenActive`. The check covers every `RouterLink` on the page, also one bound as `[routerLink]` on an element that isn't an anchor.
 - Emails in URLs, and return URLs taken from query params. A navigation the [open redirect check](#open-redirect-check) flagged is a warning that names the param and the guard or code. Without one, the rule falls back to comparing each navigation with the query of the URL it left, as info.

@@ -18,6 +18,8 @@ import {
   type RouterState,
 } from './router-tools.ts';
 import { hopText, loopChain, loopTitle, redirectCycles } from './router-loops.ts';
+import type { HttpCall } from '../http-rules.ts';
+import { callsForNavigation, nextNavigation } from './router-http.ts';
 
 export interface SourceRoute {
   path: string;
@@ -304,6 +306,13 @@ export function listRoutesText(
   );
 }
 
+/** What the route lint can take besides the page: rule switches and the page's HTTP calls. */
+export interface RouterLintOptions {
+  rules?: Record<string, boolean>;
+  /** The HTTP inspector's calls of a page, for `resolver-refetch`. */
+  httpFor?: (pageId: string) => readonly HttpCall[] | undefined;
+}
+
 export type RouterLintResult =
   | { checked: true; findings: LintFinding[] }
   | { checked: false; reason: 'no-page' | 'events-only' | 'no-config' };
@@ -311,7 +320,7 @@ export type RouterLintResult =
 /** Lint findings for the panel, or why no check could run. */
 export function routerLintResult(
   page: RouterPage | undefined,
-  options?: { rules?: Record<string, boolean> },
+  options?: RouterLintOptions,
 ): RouterLintResult {
   if (!page) return { checked: false, reason: 'no-page' };
   if (!page.config)
@@ -327,10 +336,7 @@ export function routerLintResult(
  * setup and navigations) for mistakes Angular throws on, warns about, or
  * silently accepts.
  */
-export function lintRoutes(
-  page: RouterPage,
-  options?: { rules?: Record<string, boolean> },
-): LintFinding[] {
+export function lintRoutes(page: RouterPage, options?: RouterLintOptions): LintFinding[] {
   const findings: LintFinding[] = [];
   const config = page.config ?? [];
   const inputBinding = page.setup?.features['componentInputBinding'] === 'on';
@@ -588,15 +594,114 @@ export function lintRoutes(
       break;
     }
   }
+  findings.push(...alwaysRunParents(config), ...eagerLazyComponents(config));
+  findings.push(...resolverRefetches(page, options?.httpFor?.(page.pageId)));
   const rules = options?.rules;
   return rules ? findings.filter((f) => rules[f.rule] !== false) : findings;
+}
+
+function descendants(node: RouteNode): number {
+  let count = 0;
+  walk(node.children, () => count++);
+  return count;
+}
+
+/**
+ * `runGuardsAndResolvers: 'always'` on a route with children: its guards and
+ * resolvers run again on every navigation inside it, even one that only
+ * changes a query param or the fragment of a child.
+ */
+function alwaysRunParents(config: RouteNode[]): LintFinding[] {
+  const out: LintFinding[] = [];
+  walk(config, (node) => {
+    if (node.runGuardsAndResolvers !== 'always' || !node.children?.length) return;
+    const checks = [
+      ...(node.guards?.canActivate ?? []),
+      ...(node.guards?.canActivateChild ?? []),
+      ...(node.resolvers ?? []),
+    ];
+    if (!checks.length) return;
+    out.push({
+      rule: 'always-run-parent',
+      severity: 'warning',
+      route: node.fullPath,
+      message: `runGuardsAndResolvers: 'always' on a parent of ${descendants(node)} route(s) runs ${list(checks)} again on every navigation inside it, including query param and fragment changes.`,
+      fix: "Use 'paramsChange', 'pathParamsChange' or a function, or move the guard or resolver to the child route that needs it.",
+      angular: 'silent',
+    });
+  });
+  return out;
+}
+
+/**
+ * A `loadComponent` route whose component another route also uses as an
+ * eager `component` outside any lazy route: the component is in the main
+ * bundle already, so the lazy import saves nothing.
+ */
+function eagerLazyComponents(config: RouteNode[]): LintFinding[] {
+  const eager = new Map<string, string>();
+  const lazy: RouteNode[] = [];
+  walk(config, (node, parents) => {
+    if (!node.component) return;
+    if (node.lazy && node.kind === 'component') lazy.push(node);
+    else if (!node.lazy && !parents.some((parent) => parent.kind === 'lazy' || parent.lazy)) {
+      if (!eager.has(node.component)) eager.set(node.component, node.fullPath);
+    }
+  });
+  return lazy
+    .filter((node) => eager.has(node.component!))
+    .map((node) => ({
+      rule: 'lazy-component-eager',
+      severity: 'info' as const,
+      route: node.fullPath,
+      message: `loadComponent loads ${code(node.component!)}, which ${code(eager.get(node.component!)!)} also uses as an eager component, so it is in the main bundle and the lazy import saves nothing.`,
+      fix: `Load ${code(node.component!)} lazily on both routes, or use component on both.`,
+      angular: 'silent' as const,
+    }));
+}
+
+function pathOf(url: string): string {
+  return url.split(/[?#]/)[0] || '/';
+}
+
+/**
+ * A navigation with resolvers that requested a URL while it ran and again
+ * after it ended: the routed component probably fetches what the resolver
+ * already fetched. Needs the HTTP inspector's calls of the page.
+ */
+function resolverRefetches(
+  page: RouterPage,
+  calls: readonly HttpCall[] | undefined,
+): LintFinding[] {
+  if (!calls?.length) return [];
+  const out: LintFinding[] = [];
+  const seen = new Set<string>();
+  for (const nav of page.navigations) {
+    if (out.length >= 5) break;
+    if (!nav.resolvers?.names.length || nav.outcome !== 'succeeded') continue;
+    const joined = callsForNavigation(nav, nextNavigation(page.navigations, nav), calls);
+    const key = (call: HttpCall) => `${call.method} ${call.url}`;
+    const during = new Set(joined.during.filter((c) => c.method === 'GET').map(key));
+    const again = joined.after.find((call) => call.method === 'GET' && during.has(key(call)));
+    if (!again || seen.has(key(again))) continue;
+    seen.add(key(again));
+    out.push({
+      rule: 'resolver-refetch',
+      severity: 'info',
+      route: pathOf(nav.finalUrl ?? nav.url),
+      message: `Navigation #${nav.id} requested ${code(key(again))} while its resolvers (${list(nav.resolvers.names)}) ran and again after it ended, so the routed component probably fetches the same data.`,
+      fix: 'Read the resolved value from the route (an input with withComponentInputBinding, or ActivatedRoute.data) instead of fetching it again, or drop the resolver.',
+      angular: 'silent',
+    });
+  }
+  return out;
 }
 
 export function lintRoutesText(
   state: RouterState,
   args: { page?: string },
   now = Date.now(),
-  options?: { rules?: Record<string, boolean> },
+  options?: RouterLintOptions,
 ): string {
   const page = pickPage(state, args.page);
   if (!page) return noPage(args.page, state);
