@@ -2287,7 +2287,14 @@ export class AnalogInspector {
   /** The dev server origin for copied requests: the open page's, or the panel's own. */
   readonly devOrigin = computed(() => {
     const url = this.page()?.url ?? '';
-    if (/^https?:\/\//.test(url)) return new URL(url).origin;
+    if (/^https?:\/\//.test(url)) {
+      // A malformed page URL must not break the whole Server view.
+      try {
+        return new URL(url).origin;
+      } catch {
+        return '';
+      }
+    }
     return /^https?:$/.test(location.protocol) ? location.origin : '';
   });
   /** The page file whose Vite transform stack is open below the routes. */
