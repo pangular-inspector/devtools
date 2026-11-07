@@ -293,6 +293,8 @@ Give every registered tool and resource an entry in `AGENT_ENTRIES` in `packages
 
 `packages/devtools/src/__tests__/agent-metadata.test.ts` boots the server and fails when a registered tool has no entry, or an entry has no registered tool. It also compares the derived lists with `packages/devtools/src/__tests__/fixtures/agent-metadata-derived.json`, so update that file with the tool and the reviewer sees what changed. See [Configuration](../getting-started/configuration.md).
 
+Then run `pnpm docs:agent-tools`. It writes the [Tool index](../agents/tool-index.md) from `AGENT_ENTRIES`, and `pnpm docs:test` fails while that page is stale or a tool is not named on the Tools or Resources page.
+
 <ngmd-callout type="tip" title="Changed app/?">
   Run <code>pnpm extension:build</code> and commit <code>extension/ui</code>. CI fails when it is stale. See <a href="./chrome-extension.md">Build the extension</a>.
 </ngmd-callout>
@@ -302,11 +304,18 @@ Give every registered tool and resource an entry in `AGENT_ENTRIES` in `packages
 This site lives in `apps/docs`. It is built with [NgMd](https://github.com/erkamyaman/ngmd) on *Analog.
 
 ```bash
-pnpm docs:dev     # Dev server
-pnpm docs:build   # Production build
+pnpm docs:dev          # Dev server
+pnpm docs:build        # Production build
+pnpm docs:test         # Docs site tests, including the stale page checks
+pnpm docs:agent-tools  # Regenerate the agent tool index
+pnpm docs:api          # Regenerate the API reference
 ```
 
 Pages are markdown files under `apps/docs/src/content`. The sidebar comes from `apps/docs/src/ngmd.config.ts`.
+
+The pages under `api/` are generated from the entry points in `packages/devtools/package.json` by `apps/docs/api-reference.ts`. Run `pnpm docs:api` after you change an exported symbol or its JSDoc; `pnpm docs:test` fails while a page is stale.
+
+The build also writes `/llms.txt`, one link per page to its markdown source in sidebar order, and `/llms-full.txt`, every page's markdown in one file. Both follow the [llms.txt](https://llmstxt.org) format and come from `apps/docs/llms-txt.plugin.ts`.
 
 <ngmd-alert severity="important">
   The build fails on broken internal links and on raw external anchors without <code>target="_blank"</code>. Run <code>pnpm docs:build</code> before you open a PR.

@@ -147,6 +147,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Hub messages and toasts, a dock group with badges, and an **All tools** dock.
 - New entry points: `/overlay-manual` (starts nothing on import), `/plugin`, `/capacitor-hook`, `/store-hook`, `/startup-hook`, `/ssr` and `/cd-data`.
 - New config options: `agent.browserTools`, `limits.capacitorCalls`, `limits.idleAfterMs`, `popup`, `plugins` and `redaction.entropy`.
+- `limits.cdSlowMs` (default 16 ms) sets when a change detection cycle counts as slow. The recording flags cycles over it, the `change-detection` agent tool counts and marks them, and the panel chart draws its budget line there instead of at a fixed 16.6 ms.
 - `redaction.entropy`, off by default, masks long high-entropy strings that no name or shape rule catches, such as an opaque token in a harmless field. `true` masks runs of 24 characters or more; `{minLength, threshold}` sets other limits. Hex values, UUIDs, ULIDs and camelCase identifiers stay readable, and known shapes keep their prefix. It applies on every redaction path, on the page and on the devtools server, and shows as **Entropy masking** on the Dashboard.
 - After pairing, focus moves to the active tab with a **Connected** note.
 
@@ -171,6 +172,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Timeline:** one time axis with layers for the router, HTTP, NgRx, change detection, forms and signals.
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
+- **Ionic in the Capacitor tab:** an **Ionic page stacks** section with a card per `ion-router-outlet`: the pages in its stack, the active one, the direction of the last navigation and whether it can go back, read from `@ionic/angular`'s outlet directive or from the DOM. Hovering a page outlines it in the app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
 - **Analog:** a request playground with path params, query, headers, cookies, response headers and timing, per-route history and **Copy as curl** or **Copy as fetch**; the Vite transform stack of a page file (**Transform** in **Routes**); a dev server render mode check and a build analysis with chunk sizes per page in **Render**; a frontmatter check against a JSON Schema set in the new `analog.contentSchema` option, the `injectContentFiles` and `injectContent` call sites and a markdown preview in **Content**; a **Data** view with the full `load()` value on demand and the TransferState entries the browser reused or fetched again; and a **Runtime** view with `import.meta.env`, Nitro `runtimeConfig`, the `analog()` options and Nitro plugins, storage and cache entries, with Nitro tasks to run and a cache purge behind `actions.analog` (#369).
 - **Forms:** a **Schema** view of the rules a Signal Form's schema sets on each field; edit a control's value, touched and dirty state in its row of the **Fields** view (behind `actions.forms`); a WebMCP tool's input schema, and **Try this tool** to run it on its form from the panel (`try-webmcp` in `run-form-action`); a form's history exported as a Playwright test from the **Timeline** view and from `export-form` (`format: "playwright"`); timeline origins worked out per form, so typing in one form no longer tags code changes in another form as user; the `missing-autocomplete` and `submit-disabled-while-invalid` accessibility rules in the forms lint; while a WebMCP call's submit runs, only its status and submit outcome is tagged agent, not values app code writes meanwhile.
@@ -180,6 +182,9 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Angular Native and NativeScript pages report change detection, leaks, errors, stores, TanStack Query, provider values, plugins and startup timing too (#407).
 - **Tap-to-pick and a box highlight on devices.** For NativeScript and Angular Native apps, **Pick component on device** selects the component behind the next tap on the simulator or device, and the arrow keys move between components. The highlight is a box in a native view of its own instead of a border or outline on the app's view, which stays as the fallback (#371).
 - Angular features are detected at runtime, and the panel says what an older version lacks.
+- The server keeps at most 256 KB of JSON for each NgRx store's state. Past it, the largest slices show `[too large: N KB]`, so one huge slice can't fill the server's memory or the panel.
+- `withPangular({ transferCache })` takes Angular's `HttpTransferCacheOptions` and passes them to the transfer cache that `provideClientHydration()` sets up. The SSR & HTTP tab uses them to explain each transfer cache outcome, including a new **Filter** reason.
+- The Dashboard has a **Security** block: whether the one-time code is on or locked, how many trusted tokens there are and when they expire, how many pairing tokens the server accepts, and who may reach the server (reach, allowed origins and hosts). The panel reads it with the `security-status` RPC, which answers trusted clients only and never carries a token or the code.
 - **Injectors:** selecting an element injector reads it again on the page, and **Refresh** in the toolbar reads every injector again. Element injectors are still cached between updates, since reading what they inject is costly.
 - **Injectors:** the Environment view lists lazy route injectors the router already loaded but no rendered element uses, with an **inactive** chip. `inspect-providers` and the `injector-tree` resource mark them `inactive: true`.
 - **Injectors:** a collapsed **Hint** above the live tree lists providers your source declares that nothing on the page injected so far. It is a hint, not an error.
@@ -230,6 +235,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Three router lint rules.** `always-run-parent` flags `runGuardsAndResolvers: 'always'` on a parent route with guards or resolvers. `lazy-component-eager` flags a `loadComponent` route whose component another route already imports eagerly. The `resolver-refetch` rule is a timing heuristic: from the SSR & HTTP inspector's calls, it flags a `GET` the page made while a navigation's resolvers ran and again after the navigation ended, which suggests the routed component fetches what a resolver already loaded. A guard can make the first `GET` too, so the rule does not prove the resolver made it. Turn any of them off with `lint.rules`.
 - **Follow navigations from an agent.** `pangular:follow-navigations` returns the navigations that are new or changed since a cursor, across pages, and can wait up to 30 seconds for the next one, so an agent can follow a login and redirect flow without polling.
 - **What happens if I go to a URL.** The **Config** view has a **What happens** button, and agents a `pangular:preview-navigation` tool, that predict a navigation from the live route config without navigating: the redirects it follows, the route chain and params, and in order the guards, lazy chunks, resolvers and components that run, with each route's source file and the render mode.
+- **Several apps on one page.** A page that bootstraps more than one Angular app with its own Router, such as several `bootstrapApplication()` roots or micro-frontends, reports each app's route, navigations, config and setup under a stable app id. The Routes tab shows an **App** picker on such a page, and the router agent tools take an optional `app` argument. A page with one app reports and shows exactly what it did before (#485).
 
 #### CLI
 
@@ -240,6 +246,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `pangular build` refuses an `--outDir` that would delete files that are not a previous report, unless `--force` is passed.
 - `buildReport()` from `@pangular-inspector/devtools/cli` writes the static report from a script, with the output folder checks of `pangular build`. Unlike `pangular build`, it resolves `outDir` against the working directory, and `config` takes a config object, not a file path.
 - The source scan reads Nx projects.
+- `pangular token --rotate` drops every trusted token of the project and prints a new one-time code from each running server (the CLI, the Vite plugin or the Express hub, several at once when they share the project), which also ends a lock after too many wrong codes. `pangular token` prints how many tokens there are.
+- The CLI start-up output names the NativeScript setup view (`?view=nativescript`) next to the Angular Native one.
 
 ### Performance
 
@@ -304,6 +312,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 - A quick start, and a panel screenshot on every inspector page.
 - Pages for the command palette, settings, terminals, the popup and hub, configuration, other servers (Hono, h3, Fastify), Capacitor, the timeline, errors, audit, TanStack Query, agent skills, browser agents and writing a plugin.
+- A guide to shipping a plugin from a library, built on the example plugin package `examples/pangular-plugin-example` (a feature flag store with its own tab and agent tools), which the Analog demo uses (#404).
 - A roadmap page.
 - The Capacitor and NativeScript guides show the Android network security config and the iOS App Transport Security and local network settings a device needs to reach the devtools over the LAN (#373).
 - The Express and other servers pages say which port the WebSocket side-car uses (the first free one from 9777), how to pin it with `ws: {port}`, and how to serve the socket on the app's own server with `attach(server)` (#426).

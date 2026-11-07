@@ -3,7 +3,9 @@ import { rpcTry } from '../rpc';
 import type {
   NavigationCalls,
   RouteNode,
+  RouterAppReport,
   RouterLintResult,
+  RouterPage,
   ScannedRoute,
 } from '@pangular-inspector/devtools/internal/types';
 
@@ -52,6 +54,41 @@ export function sourceOf(node: RouteNode, sources: SourceRoute[]): SourceRoute |
   );
 }
 
+/** One Angular app with its own Router on a page that runs several. */
+export type RouterApp = RouterAppReport;
+
+/** The apps of a page that runs more than one Angular app with a Router, else none. */
+export function routerAppsOf(page: RouterPage | null | undefined): RouterApp[] {
+  return page?.apps && page.apps.length > 1 ? page.apps : [];
+}
+
+/**
+ * The page as one of its apps sees it, as the server builds it for the agent
+ * tools: that app's route, navigations, config and setup in place of the first
+ * app's. Outlets, links, preloads and guard recording belong to the first app.
+ */
+export function routerAppView(page: RouterPage, appId: string | null): RouterPage {
+  const app = routerAppsOf(page).find((a) => a.id === appId);
+  if (!app) return page;
+  if (app.primary) return { ...page, appId: app.id };
+  return {
+    pageId: page.pageId,
+    reportedAt: page.reportedAt,
+    changedAt: page.changedAt,
+    snapshot: app.snapshot ?? null,
+    navigations: app.navigations ?? [],
+    dropped: app.dropped,
+    generation: app.generation,
+    config: app.config,
+    configTruncated: app.configTruncated,
+    activeIds: app.activeIds,
+    setup: app.setup,
+    loops: app.loops,
+    apps: page.apps,
+    appId: app.id,
+  };
+}
+
 export const routerCall = rpcTry;
 
 export function isReplayableUrl(url: string): boolean {
@@ -70,9 +107,12 @@ export async function routerAction(
   client: DevframeRpcClient | null,
   pageId: string | undefined,
   request: Record<string, unknown>,
+  /** One app of a page that runs several (`RouterPage.appId`). */
+  app?: string,
 ): Promise<Record<string, unknown>> {
   const result = await routerCall<Record<string, unknown>>(client, 'request-router-action', {
     pageId,
+    ...(app ? { app } : {}),
     request,
   });
   return result ?? { error: PAGE_UNREACHABLE };

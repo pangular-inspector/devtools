@@ -33,6 +33,7 @@ export type {
   PlatformNavigation,
   RouteNode,
   RoutePreview,
+  RouterAppReport,
   RouterLintResult,
   RouterPage,
   RouterSetup,

@@ -422,7 +422,7 @@ export class RouteCurrent {
 
   async abort() {
     const pageId = this.pageId();
-    const result = await routerAction(this.rpc(), pageId, { action: 'abort' });
+    const result = await routerAction(this.rpc(), pageId, { action: 'abort' }, this.page().appId);
     if (pageId !== this.pageId()) return;
     this.message.set(
       result['error'] ? String(result['error']) : `Aborted navigation #${result['aborted']}.`,

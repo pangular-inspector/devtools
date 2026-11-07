@@ -24,8 +24,8 @@ interface Bar {
 }
 
 /**
- * One bar per recorded change detection cycle, with the 16.6 ms frame budget
- * as a line. Dragging across the bars, or Shift with the arrow keys, picks a
+ * One bar per recorded change detection cycle, with the slow cycle threshold
+ * (`limits.cdSlowMs`, 16 ms by default) as a line. Dragging across the bars, or Shift with the arrow keys, picks a
  * range of cycles; Start and End fields do the same by cycle number.
  */
 @Component({
@@ -80,7 +80,7 @@ interface Bar {
           ></div>
         }
         <div class="budget" aria-hidden="true" [style.bottom.%]="budgetAt()">
-          <span>{{ budgetLabel }}</span>
+          <span>{{ budgetLabel() }}</span>
         </div>
         <div
           class="bars"
@@ -153,7 +153,7 @@ interface Bar {
         <span class="key over" aria-hidden="true"></span>
         <span class="key-marker" aria-hidden="true"></span>Over budget
       </li>
-      <li><span class="key line" aria-hidden="true"></span>{{ budgetLabel }}</li>
+      <li><span class="key line" aria-hidden="true"></span>{{ budgetLabel() }}</li>
     </ul>
     <details class="table">
       <summary>Show the cycles as a table</summary>
@@ -526,9 +526,11 @@ export class CdCycleChart {
   readonly cycles = input<readonly CdCycle[]>([]);
   /** The picked cycles by id, or null for all of them. */
   readonly range = model<CdRange | null>(null);
+  /** Cycles longer than this, in ms, are over budget: the recording's `slowMs`. */
+  readonly slowMs = input<number>(FRAME_BUDGET_MS);
 
   protected readonly gapUntil = GAP_UNTIL;
-  protected readonly budgetLabel = `${FRAME_BUDGET_MS} ms budget`;
+  protected readonly budgetLabel = computed(() => `${this.slowMs()} ms budget`);
   private readonly uid = `cd-chart-${nextId++}`;
   protected readonly hintId = `${this.uid}-hint`;
 
@@ -540,15 +542,15 @@ export class CdCycleChart {
   readonly hover = signal<number | null>(null);
   readonly focused = signal(false);
 
-  readonly max = computed(() => chartMax(this.cycles()));
-  readonly budgetAt = computed(() => (FRAME_BUDGET_MS / this.max()) * 100);
+  readonly max = computed(() => chartMax(this.cycles(), this.slowMs()));
+  readonly budgetAt = computed(() => (this.slowMs() / this.max()) * 100);
   readonly bars = computed<Bar[]>(() => {
     const max = this.max();
     return this.cycles().map((cycle, index) => ({
       cycle,
       index,
       height: (cycle.ms / max) * 100,
-      over: overBudget(cycle),
+      over: overBudget(cycle, this.slowMs()),
       label: this.describe(cycle),
     }));
   });
@@ -582,13 +584,14 @@ export class CdCycleChart {
   });
   readonly summary = computed(() => {
     const cycles = this.selected();
-    const over = cycles.filter(overBudget).length;
+    const slowMs = this.slowMs();
+    const over = cycles.filter((cycle) => overBudget(cycle, slowMs)).length;
     const scope = this.span()
       ? cycles.length === 1
         ? `Cycle ${cycles[0].id}`
         : `Cycles ${cycles[0].id} to ${cycles.at(-1)!.id} (${cycles.length})`
       : `All ${cycles.length} ${cycles.length === 1 ? 'cycle' : 'cycles'}`;
-    return `${scope}. ${over} over the ${FRAME_BUDGET_MS} ms budget.`;
+    return `${scope}. ${over} over the ${slowMs} ms budget.`;
   });
   readonly tableLabel = computed(() =>
     this.span() ? `Picked cycles, ${this.summary()}` : `All recorded cycles`,
@@ -605,7 +608,7 @@ export class CdCycleChart {
     if (!cycle || index === null) return null;
     return {
       cycle,
-      over: overBudget(cycle),
+      over: overBudget(cycle, this.slowMs()),
       top: cycle.components.slice(0, 3),
       // Beside the bar, on the side with more room, so it never covers the bar itself.
       ...this.tipSide(index),
@@ -631,7 +634,7 @@ export class CdCycleChart {
   }
 
   protected isOver(cycle: CdCycle) {
-    return overBudget(cycle);
+    return overBudget(cycle, this.slowMs());
   }
 
   protected optionId(index: number) {
@@ -645,7 +648,7 @@ export class CdCycleChart {
 
   private describe(cycle: CdCycle): string {
     const parts = [`Cycle ${cycle.id}`, formatMs(cycle.ms)];
-    if (overBudget(cycle)) parts.push('over budget');
+    if (overBudget(cycle, this.slowMs())) parts.push('over budget');
     if (cycle.trigger) parts.push(`after ${cycle.trigger}`);
     parts.push(`${cycle.checks} ${cycle.checks === 1 ? 'check' : 'checks'}`);
     const top = cycle.components[0];

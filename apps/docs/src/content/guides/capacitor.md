@@ -275,6 +275,8 @@ These keys are the same in Capacitor 6, 7 and 8. Keep the development ones out o
 
 ## Troubleshooting
 
+The [troubleshooting page](../getting-started/troubleshooting.md) lists the problems every setup shares, by symptom.
+
 <ngmd-accordion>
   <ngmd-accordion-item title="The panel never shows the app" open>
     Inspect the WebView, with Safari's <strong>Develop</strong> menu for iOS or <code>chrome://inspect</code> for Android, and read the console. <code>[pangular] No devtools server found</code> in a bundled build means <code>connectionMeta</code> is missing, or the WebView blocked the request. A <strong>Mixed Content</strong> message next to it means <code>allowMixedContent</code> is off, and a cleartext error means <code>server.cleartext</code> is. In both cases the overlay sends nothing. A failed connection to the address means the server is not running, listens only on <code>localhost</code>, or the address is wrong for where the app runs. A <code>403</code> under live reload over Wi-Fi means the page's origin is missing from <code>allowedOrigins</code>. A <code>400</code> page with <code>is not allowed</code> under SSR means the address is missing from Angular's <code>security.allowedHosts</code>, as in <a href="#live-reload-over-wi-fi">Live reload over Wi-Fi</a>.

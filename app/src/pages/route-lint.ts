@@ -277,7 +277,11 @@ export class RouteLint {
     const pageId = this.page().pageId;
     if (pageId !== this.checkedPage) this.result.set(null);
     this.checking.set(true);
-    const result = await routerCall<LintResult>(this.rpc(), 'router-lint', pageId);
+    const result = await routerCall<LintResult>(
+      this.rpc(),
+      'router-lint',
+      this.page().appId ? { pageId, app: this.page().appId } : pageId,
+    );
     if (seq !== this.seq) return;
     this.checking.set(false);
     this.failed.set(!result);

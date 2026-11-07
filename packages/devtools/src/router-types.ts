@@ -257,12 +257,19 @@ export interface RouterReport {
   instrumented?: boolean;
   /** The browser Navigation API's `navigate` events, newest last. */
   platformNavigations?: PlatformNavigation[];
+  /**
+   * Every Angular app on the page with a Router, when there is more than one
+   * (`router-apps.ts`). The rest of the report describes the `primary` one.
+   */
+  apps?: RouterAppReport[];
 }
 
 export interface RouterPage extends RouterReport {
   reportedAt: number;
   changedAt: number;
   loops?: NavigationLoop[];
+  /** Set on the view of one app of a page that runs several (`rpc/router-apps.ts`). */
+  appId?: string;
 }
 
 export interface RouterState {
@@ -383,4 +390,32 @@ export interface ScannedRoute {
   hasChildren: boolean;
   file: string;
   line?: number;
+}
+
+/**
+ * One Angular app on the page with its own Router, as the router report
+ * lists it when a page bootstraps more than one (several
+ * `bootstrapApplication` roots or micro-frontends). The first app, the one
+ * the rest of the report describes, has only its id and name; every other
+ * app carries its own route, navigations and config.
+ */
+export interface RouterAppReport {
+  /** Stable for the life of its root element: its tag, with `-2`, `-3` ... for repeats. */
+  id: string;
+  /** The root component's class name, else the tag. */
+  name: string;
+  /** The root element's tag, such as `app-root`. */
+  selector: string;
+  /** The app the top level of the router report describes. */
+  primary?: true;
+  snapshot?: RouterSnapshot | null;
+  navigations?: NavigationRecord[];
+  dropped?: number;
+  generation?: number;
+  config?: RouteNode[];
+  configTruncated?: number;
+  activeIds?: string[];
+  setup?: RouterSetup;
+  /** Navigation loops in this app's history; the server adds them, the page never sends them. */
+  loops?: NavigationLoop[];
 }

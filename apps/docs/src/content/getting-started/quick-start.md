@@ -118,6 +118,8 @@ To see the panel on a page of its own, open `http://localhost:4200/__devframes/`
 
 ## Troubleshooting
 
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
+
 <ngmd-accordion>
   <ngmd-accordion-item title="The button does not appear" open>
     The app is probably a production build. <code>ng build</code> uses the production configuration by default, and the overlay import never runs there. Use <code>ng serve</code>, or build with <code>--configuration development</code>. Then check that <code>main.ts</code> imports the overlay.

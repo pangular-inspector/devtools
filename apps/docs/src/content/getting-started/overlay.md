@@ -284,6 +284,8 @@ While you pick an element on the page, the box follows the pointer and clears wh
 
 ## FAQ
 
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
+
 <ngmd-accordion>
   <ngmd-accordion-item title="Do I need to call createDevtoolsPopup too?" open>
     No. The overlay adds the floating button itself. See <a href="./popup-and-hub.md">Popup and hub</a>.

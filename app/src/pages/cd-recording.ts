@@ -20,7 +20,7 @@ import { AngularUnavailable } from '../ui/angular-unavailable';
 import { angularPageFor, injectAngularPages } from '../angular-pages';
 import { cdCauseText } from '@pangular-inspector/devtools/cd-data';
 import type { CdCause } from '@pangular-inspector/devtools/internal/config';
-import { aggregateComponents, cyclesInRange, type CdRange } from './cd-chart-data';
+import { FRAME_BUDGET_MS, aggregateComponents, cyclesInRange, type CdRange } from './cd-chart-data';
 import { CdDiagnosis } from './cd-diagnosis';
 import { CdCycleChart } from './cd-cycle-chart';
 import { CdFlameGraph } from './cd-flame-graph';
@@ -174,7 +174,7 @@ const SHOWN_CYCLES = 30;
       }
       @if (cycles().length) {
         <h3>Cycles</h3>
-        <app-cd-cycle-chart [cycles]="cycles()" [(range)]="range" />
+        <app-cd-cycle-chart [cycles]="cycles()" [slowMs]="slowMs()" [(range)]="range" />
         <app-cd-flame-graph
           [cycles]="picked()"
           [names]="spanNames()"
@@ -546,6 +546,8 @@ export class CdRecording {
   protected readonly announcement = signal('');
   readonly recording = computed(() => this.page()?.recording === true);
   readonly cycles = computed(() => this.page()?.cycles ?? []);
+  /** The recording's slow cycle threshold (`limits.cdSlowMs`), 16 ms when it names none. */
+  readonly slowMs = computed(() => this.page()?.slowMs ?? FRAME_BUDGET_MS);
   readonly maxCycles = computed(() => panelConfig(this.rpc()).limits.cdCycles);
   /** The cycles the picked range covers, or every cycle. */
   readonly picked = computed(() => cyclesInRange(this.cycles(), this.range()));

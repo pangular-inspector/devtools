@@ -603,7 +603,11 @@ export class RouteTree {
       return;
     }
     const pageId = this.pageId();
-    const result = await routerCall<MatchResult>(this.rpc(), 'router-match', { pageId, url });
+    const result = await routerCall<MatchResult>(this.rpc(), 'router-match', {
+      pageId,
+      app: this.page().appId,
+      url,
+    });
     if (seq !== this.predictSeq || pageId !== this.pageId()) return;
     this.preview.set(null);
     this.match.set(result && { url, result });
@@ -627,7 +631,7 @@ export class RouteTree {
     const result = await routerCall<RoutePreview | { error: string }>(
       this.rpc(),
       'router-preview',
-      { pageId, url },
+      { pageId, app: this.page().appId, url },
     );
     if (seq !== this.predictSeq || pageId !== this.pageId()) return;
     if (!result || 'error' in result) {
@@ -653,7 +657,12 @@ export class RouteTree {
     }
     this.message.set('Running the real matcher in the app…');
     const pageId = this.pageId();
-    const result = await routerAction(this.rpc(), pageId, { action: 'probe', url });
+    const result = await routerAction(
+      this.rpc(),
+      pageId,
+      { action: 'probe', url },
+      this.page().appId,
+    );
     if (seq !== this.probeSeq || pageId !== this.pageId()) return;
     if (result['error']) {
       this.message.set(String(result['error']));
@@ -684,11 +693,16 @@ export class RouteTree {
     this.checkedRow.set(null);
     this.rowResult.set({ id: node.id, text: `Navigating to ${node.fullPath}…` });
     const pageId = this.pageId();
-    const result = await routerAction(this.rpc(), pageId, {
-      action: 'navigate',
-      pattern: node.fullPath,
-      params: this.paramValues()[node.id] ?? {},
-    });
+    const result = await routerAction(
+      this.rpc(),
+      pageId,
+      {
+        action: 'navigate',
+        pattern: node.fullPath,
+        params: this.paramValues()[node.id] ?? {},
+      },
+      this.page().appId,
+    );
     if (pageId !== this.pageId()) return;
     this.rowResult.set({
       id: node.id,
@@ -700,10 +714,12 @@ export class RouteTree {
 
   async resolveLazy(node: RouteNode) {
     const pageId = this.pageId();
-    const result = await routerAction(this.rpc(), pageId, {
-      action: 'resolve-lazy',
-      id: node.id,
-    });
+    const result = await routerAction(
+      this.rpc(),
+      pageId,
+      { action: 'resolve-lazy', id: node.id },
+      this.page().appId,
+    );
     if (pageId !== this.pageId()) return;
     if (result['error']) {
       this.rowResult.set({ id: node.id, text: String(result['error']) });

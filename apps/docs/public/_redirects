@@ -1,0 +1,11 @@
+# Cloudflare reads this file from the static assets and moves each old URL to its page.
+# The NativeScript, Angular Native and Analog setup guides merged into their Getting Started pages.
+/guides/nativescript /getting-started/nativescript 301
+/guides/nativescript/ /getting-started/nativescript 301
+/guides/nativescript.md /getting-started/nativescript.md 301
+/guides/angular-native /getting-started/angular-native 301
+/guides/angular-native/ /getting-started/angular-native 301
+/guides/angular-native.md /getting-started/angular-native.md 301
+/guides/analog /getting-started/vite 301
+/guides/analog/ /getting-started/vite 301
+/guides/analog.md /getting-started/vite.md 301
