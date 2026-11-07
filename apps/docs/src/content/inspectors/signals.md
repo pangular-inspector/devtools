@@ -162,7 +162,7 @@ Angular doesn't send a value for `linkedSignal` nodes. The overlay takes it from
 
 ### Exact and sampled values
 
-Exact **set** entries come from a hook on signal writes, which the overlay loads from `@angular/core/primitives/signals`. Before Angular 20.0 the hook doesn't say which signal was written, so the overlay doesn't install it. A webpack build (the `browser` builder) leaves that import to run time, where it fails. In both cases every entry is **sampled**. The overlay matches a write to a node by its name, kind, version and value. It samples everything else each time it reads the page, as **sampled** entries.
+The value history is part of the live graph, so it needs Angular 20.1 or later. Exact **set** entries come from a hook on signal writes, which the overlay loads from `@angular/core/primitives/signals`. A webpack build (the `browser` builder) leaves that import to run time, where it fails, so there every entry is **sampled**. The overlay matches a write to a node by its name, kind, version and value. It samples everything else each time it reads the page, as **sampled** entries.
 
 In a development build, the Angular compiler names most signals for you. It adds a `debugName` to `signal()`, `computed()`, `linkedSignal()`, `input()`, `model()`, queries, `effect()`, `resource()` and `httpResource()` when the call initializes a class field, a `this.name =` assignment or a variable. The name is the field or variable name.
 
