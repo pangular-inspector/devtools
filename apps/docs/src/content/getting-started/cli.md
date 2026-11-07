@@ -13,13 +13,14 @@ The package installs a `pangular` binary. Run it from the root of your Angular w
 
 ## Commands
 
-| Command  | What it does                                                       |
-| -------- | ------------------------------------------------------------------ |
-| `dev`    | Starts a local server with the devtools UI.                        |
-| `build`  | Writes a static copy of the devtools with the scan.                |
-| `mcp`    | Starts an MCP server over stdio for coding agents.                 |
-| `skills` | Lists or installs the bundled [agent skills](../agents/skills.md). |
-| `lint`   | Runs the source lints and prints the findings as JSON or SARIF.    |
+| Command  | What it does                                                                |
+| -------- | --------------------------------------------------------------------------- |
+| `dev`    | Starts a local server with the devtools UI.                                 |
+| `build`  | Writes a static copy of the devtools with the scan.                         |
+| `mcp`    | Starts an MCP server over stdio for coding agents.                          |
+| `skills` | Lists or installs the bundled [agent skills](../agents/skills.md).          |
+| `lint`   | Runs the source lints and prints the findings as JSON or SARIF.             |
+| `token`  | Shows the trusted tokens of the project, or drops them all with `--rotate`. |
 
 `pangular --version` prints the package version. An unknown command or flag prints one error line and exits with code 1. `pangular --help` lists the commands and flags.
 
@@ -101,12 +102,13 @@ The default command starts a local server with the devtools UI. `dev` is optiona
 npx @pangular-inspector/devtools dev --port 9999 --open
 ```
 
-When the server is ready, it prints the package version, the panel URL, the panel URL for [Angular Native](./angular-native.md) apps and the MCP endpoint:
+When the server is ready, it prints the package version, the panel URL, the panel URL for [Angular Native](./angular-native.md) apps, the [NativeScript](./nativescript.md) setup view and the MCP endpoint:
 
 ```text
   pangular v<version>
   Panel: http://localhost:9999/
   Angular Native apps: http://localhost:9999/?view=angular-native
+  NativeScript setup: http://localhost:9999/?view=nativescript
   MCP:   http://localhost:9999/__mcp
 ```
 
@@ -126,10 +128,31 @@ When the server listens on your network (`--host 0.0.0.0` or a network address),
 | `--allowed-origin <origin>` | An extra origin allowed to reach the server, such as `http://192.168.1.20:8100`. Repeat it for more.                                                                                                                                                                                                                         |
 | `--proxy-origin <origin>`   | The origin of your app's dev server when it proxies `/__pangular/` to this server, such as `http://localhost:4200`. The panel URL on that origin and the one-time code link point there, and the server accepts requests from that origin. See [Client-only Angular CLI app](./installation.md#client-only-angular-cli-app). |
 | `--auth-token <token>`      | A [pairing token](../security.md#pairing-tokens) a client may send instead of the one-time code. Repeat it for more. Prefer the `PANGULAR_AUTH_TOKEN` environment variable.                                                                                                                                                  |
+| `--lan-address [address]`   | Print the server's URL on your network and the define that injects it into a development build of a phone app. Off by default. Without a value it picks this machine's first private IPv4 address. Needs `--host` on the network. See [Inject the LAN address](#inject-the-lan-address).                                     |
 
 <ngmd-callout type="warning" title="Keep it on localhost">
   The server binds to <code>localhost</code> by default and asks for a one-time code. Changing <code>--host</code> or passing <code>--no-auth</code> widens who can reach it. See <a href="../security.md">Access and redaction</a>.
 </ngmd-callout>
+
+### Inject the LAN address
+
+A phone app (Capacitor, NativeScript) needs the server's address on your network. The CLI doesn't build your app, so `--lan-address` prints the URL and the define to pass to your app's build. Start the server on the network with it:
+
+```bash
+npx pangular dev --host 0.0.0.0 --lan-address
+```
+
+It prints lines like these after the startup lines:
+
+```text
+  LAN address for a device build: http://192.168.1.20:9999/
+  Inject it as __PANGULAR_LAN_URL__, for example in an Angular CLI app:
+    ng build --configuration development --define "__PANGULAR_LAN_URL__='http://192.168.1.20:9999/'"
+```
+
+The `--define` flag needs the `application` builder of Angular 17.2 or later. The NativeScript overlay connects to the injected URL when you pass no `baseURL`, and `lanDevtoolsURL()` from `@pangular-inspector/devtools/overlay-manual` reads it in a Capacitor app. See [Set up Capacitor](../guides/capacitor.md#use-the-injected-lan-address) and [Set up NativeScript](../guides/nativescript.md#use-the-injected-lan-address).
+
+`--lan-address` only prints. It doesn't change the host the server binds to, the origin check or the one-time code. With `--host localhost`, the default, it prints a warning and no address, since a phone can't reach that server. `--lan-address 192.168.1.20` names the address, for a machine on several networks. A loopback address is refused.
 
 ### What it shows
 
@@ -239,6 +262,26 @@ pangular skills install --agent agents --dry-run
 ```
 
 `--agent` takes `claude`, `agents` or `github`. See [Install them](../agents/skills.md#install-them) for every flag.
+
+## Trusted tokens
+
+A browser that enters the one-time code gets a session token, which the server trusts for 7 days. `pangular token` prints how many tokens the project has and when the first one expires. It never prints a token.
+
+`pangular token --rotate` drops every trusted token of the project and prints a new one-time code:
+
+```bash
+pangular token --rotate
+```
+
+```text
+Dropped 2 trusted token(s) for this project.
+New one-time code: 482913 (expires in 5 min)
+Enter it in the panel to connect again.
+```
+
+Run it in the project folder, or pass `--root`. It works with every server that runs the project: the standalone CLI, the Vite plugin and the Express hub. The running server drops the tokens it holds, stops trusting the panels and pages that used them, and makes the new code, which also ends a lock after too many wrong codes. Each panel then asks for the code again. If no server runs, the command still drops the tokens and says so. The server prints a new code when it starts. When several servers run the project, such as the Vite plugin and `pangular dev`, the command waits for each of them and prints the code of each. A server that doesn't answer within 3 seconds is counted in the output, and it keeps its tokens until you run the command again or restart it.
+
+The command and the servers pass the request and the codes through files in the project's private token folder (`~/.pangular-inspector/auth/<project>/`, readable by you only): a request, one answer per server, and a heartbeat per running server. The command deletes the request and the answers, which hold the codes, once it printed them. See [Security](../security.md) for how the tokens are stored.
 
 ## Lint export
 

@@ -5,6 +5,7 @@ import { withComponentInputBinding } from '@angular/router';
 import { provideContent, withMarkdownRenderer } from '@analogjs/content';
 import { provideFileRouter, requestContextInterceptor } from '@analogjs/router';
 import { providePangularHttp } from '@pangular-inspector/devtools/http';
+import { provideFeatureFlagsPangularPlugin } from './shared/feature-flags';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -14,5 +15,6 @@ export const appConfig: ApplicationConfig = {
     provideClientHydration(withEventReplay()),
     provideContent(withMarkdownRenderer()),
     providePangularHttp(),
+    provideFeatureFlagsPangularPlugin(),
   ],
 };

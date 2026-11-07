@@ -7,6 +7,7 @@ import {
   AGENT_INSPECTOR,
   AGENT_SAFETY,
   PANGULAR_INSPECTORS,
+  RPC_ANY_INSPECTOR,
   RPC_INSPECTOR,
   SHARED_RPC,
   agentAllowed,
@@ -204,6 +205,7 @@ describe('resolvePangularConfig', () => {
       httpCalls: 200,
       changeLog: 200,
       cdCycles: 200,
+      cdSlowMs: 16,
       capacitorCalls: 200,
       idleAfterMs: 60_000,
     });
@@ -227,6 +229,7 @@ describe('resolvePangularConfig', () => {
       httpCalls: 200,
       changeLog: 200,
       cdCycles: 10,
+      cdSlowMs: 16,
       capacitorCalls: 2000,
       idleAfterMs: 0,
     });
@@ -275,7 +278,9 @@ describe('summarizePangularConfig', () => {
 describe('agent tool and RPC registration', () => {
   it('assigns every tool, resource and RPC function to an inspector or keeps it shared', async () => {
     const { rpc, tools, resources } = await boot();
-    const unassigned = rpc.filter((name) => !RPC_INSPECTOR[name] && !SHARED_RPC.includes(name));
+    const unassigned = rpc.filter(
+      (name) => !RPC_INSPECTOR[name] && !RPC_ANY_INSPECTOR[name] && !SHARED_RPC.includes(name),
+    );
     expect(unassigned).toEqual([]);
     // Shared entries (no inspector, such as scan-build) stay with every inspector off.
     const shared = (id: string) => SHARED_RPC.includes(id) || !AGENT_ENTRIES[id]?.inspectors;
@@ -287,6 +292,17 @@ describe('agent tool and RPC registration', () => {
     expect(Object.keys(AGENT_INSPECTOR).every((id) => [...tools, ...resources].includes(id))).toBe(
       true,
     );
+  });
+
+  it('registers request-page-highlight while components or capacitor is on', async () => {
+    const off = offAll();
+    expect((await boot({ inspectors: { ...off, capacitor: true } })).rpc).toContain(
+      'request-page-highlight',
+    );
+    expect((await boot({ inspectors: { ...off, components: true } })).rpc).toContain(
+      'request-page-highlight',
+    );
+    expect((await boot({ inspectors: off })).rpc).not.toContain('request-page-highlight');
   });
 
   it('keeps open-in-editor with every inspector off, as an RPC only, inside the project root', async () => {

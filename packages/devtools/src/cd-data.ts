@@ -17,6 +17,20 @@ import type {
   CdSpanKind,
 } from './config.ts';
 
+/**
+ * The slow cycle threshold of a recording that names none, such as one from a
+ * page older than `limits.cdSlowMs`. Matches that limit's default.
+ */
+export const DEFAULT_CD_SLOW_MS = 16;
+const MAX_CD_SLOW_MS = 1000;
+
+/** A recording's `slowMs`, or the default when it names none or one out of range. */
+export function cdSlowMs(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= MAX_CD_SLOW_MS
+    ? value
+    : DEFAULT_CD_SLOW_MS;
+}
+
 /** The largest time a JavaScript Date can hold, in ms. */
 const MAX_DATE_MS = 8.64e15;
 
@@ -80,7 +94,7 @@ function span(value: unknown, names: number): CdSpan | null {
   return [name, start, num(ms), depth, kind as CdSpanKind];
 }
 
-function cycle(value: unknown, names: number): CdCycle | null {
+function cycle(value: unknown, names: number, slowMs: number): CdCycle | null {
   if (!isRecord(value) || typeof value['id'] !== 'number') return null;
   const components = list(value['components'], MAX_TOP)
     .map(check)
@@ -116,6 +130,7 @@ function cycle(value: unknown, names: number): CdCycle | null {
     ...(reason ? { cause: reason } : {}),
     ...(refreshed ? { refreshed } : {}),
     ...(unchanged ? { unchanged } : {}),
+    ...(num(value['ms']) > slowMs ? { slow: true } : {}),
   };
 }
 
@@ -398,10 +413,12 @@ function afterRenderStat(value: unknown): CdAfterRenderStat | undefined {
 export function sanitizeCdRecording(value: unknown, maxCycles: number): CdRecording | null {
   if (!isRecord(value)) return null;
   const spanNames = list(value['spanNames'], MAX_SPAN_NAMES).map((name) => text(name, MAX_TRIGGER));
+  // Slow flags are worked out again from the threshold, not taken from the page.
+  const slowMs = cdSlowMs(value['slowMs']);
   const cycles = Array.isArray(value['cycles'])
     ? value['cycles']
         .slice(-Math.min(maxCycles, MAX_CYCLES))
-        .map((each) => cycle(each, spanNames.length))
+        .map((each) => cycle(each, spanNames.length, slowMs))
         .filter((c): c is CdCycle => !!c)
     : [];
   const hosts: Record<string, number> = {};
@@ -437,6 +454,7 @@ export function sanitizeCdRecording(value: unknown, maxCycles: number): CdRecord
         ? num(value['startedAt'])
         : null,
     dropped: num(value['dropped']),
+    slowMs,
     cycles,
     components: components
       .slice(0, MAX_COMPONENTS)

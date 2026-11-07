@@ -238,6 +238,7 @@ export class RouteDiff {
     }
     const result = await routerCall<NavigationDiffResult>(this.rpc(), 'router-diff', {
       pageId,
+      app: this.page().appId,
       a: Number(a),
       b: Number(b),
     });

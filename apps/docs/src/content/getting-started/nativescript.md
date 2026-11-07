@@ -76,11 +76,11 @@ The overlay marks its component reports with `platform: 'nativescript'`, the URL
 
 `initNativeScriptOverlay()` takes an optional object:
 
-| Option       | Default                         | What it does                                                                  |
-| ------------ | ------------------------------- | ----------------------------------------------------------------------------- |
-| `baseURL`    | `defaultDevtoolsBaseURL()`      | Absolute URL of the devtools server.                                          |
-| `intervalMs` | The server's `limits.refreshMs` | How often the app reports, in milliseconds.                                   |
-| `retryMs`    | `5000`                          | How long to wait before connecting again after a failure or a dropped socket. |
+| Option       | Default                                             | What it does                                                                  |
+| ------------ | --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `baseURL`    | `lanDevtoolsURL()`, then `defaultDevtoolsBaseURL()` | Absolute URL of the devtools server.                                          |
+| `intervalMs` | The server's `limits.refreshMs`                     | How often the app reports, in milliseconds.                                   |
+| `retryMs`    | `5000`                                              | How long to wait before connecting again after a failure or a dropped socket. |
 
 `defaultDevtoolsBaseURL(port = 9999)` is exported from the same entry point and picks the address by platform:
 
@@ -89,7 +89,9 @@ The overlay marks its component reports with `platform: 'nativescript'`, the URL
 | iOS      | `http://localhost:9999/` |
 | Android  | `http://10.0.2.2:9999/`  |
 
-`10.0.2.2` is how the Android emulator reaches its host. The devtools server answers requests sent to it (and to `10.0.3.2`, Genymotion's address for the host) from the emulator without any option, as it does `localhost`. A physical device needs your machine's LAN address as `baseURL`.
+`10.0.2.2` is how the Android emulator reaches its host. The devtools server answers requests sent to it (and to `10.0.3.2`, Genymotion's address for the host) from the emulator without any option, as it does `localhost`. A physical device needs your machine's LAN address, as `baseURL` or injected by the build.
+
+`lanDevtoolsURL()`, exported from the same entry point, returns the URL a development build defined as `__PANGULAR_LAN_URL__`, or `undefined`. When it returns one, the overlay connects there instead of to `defaultDevtoolsBaseURL()`. See [Use the injected LAN address](../guides/nativescript.md#use-the-injected-lan-address) and [Allow plain HTTP to your machine](../guides/nativescript.md#allow-plain-http-to-your-machine).
 
 `initNativeScriptOverlay()` returns a function that stops the overlay and tells the server to forget every report the app sent.
 

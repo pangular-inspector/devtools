@@ -130,6 +130,7 @@ interface PangularConfig {
     httpCalls?: number;
     changeLog?: number;
     cdCycles?: number;
+    cdSlowMs?: number;
     capacitorCalls?: number;
     idleAfterMs?: number;
   };
@@ -215,6 +216,7 @@ Values outside the bounds are clamped to the nearest one.
 | `limits.httpCalls`      | `200`   | 10 to 2000  | HTTP calls kept per page and on the server.                                                                                        |
 | `limits.changeLog`      | `200`   | 10 to 2000  | NgRx change log entries kept per page, and the actions kept per page for [other stores](../inspectors/ngrx-store.md#other-stores). |
 | `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                                                             |
+| `limits.cdSlowMs`       | `16`    | 1 to 1000   | A [change detection](../inspectors/components.md#change-detection) cycle longer than this, in ms, counts as slow.                  |
 | `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server.                                              |
 | `limits.idleAfterMs`    | `60000` | 0 to 600000 | How long pages keep sending after an agent's last call while no panel is open. `0` keeps them sending.                             |
 
@@ -288,6 +290,16 @@ The server plugins themselves go in `serverPlugins`, an option of the Express hu
 | `terminals` | `false` | `true` adds a **Terminals** dock to the hub that runs the project's build and test commands. It stays off in production, with `allowedOrigins: false` and with `allowLan`. See [Terminals](./terminals.md). |
 
 It is off by default because it starts processes on your machine. A value other than `true` or `false` prints a warning and keeps it off.
+
+### LAN address
+
+`lanAddress` is an option of the Vite plugin only, and `--lan-address` the matching flag of `pangular dev`. Like `terminals`, it is not part of `PangularConfig`, so `createPangular()` and the CLI config file don't take it.
+
+| Option       | Default | What it does                                                                                                                                                                                                                                                                                                            |
+| ------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lanAddress` | `false` | `true` injects the dev server's devtools URL on this machine's first private IPv4 address, or its first network address when none is private, as `__PANGULAR_LAN_URL__`. An address such as `'192.168.1.20'` uses that one. Needs `allowLan` in effect. See [Inject the LAN address](./vite.md#inject-the-lan-address). |
+
+`false` keeps it off with no warning. `true` and a network IPv4 address turn it on. Any other value, such as a loopback address, `0.0.0.0` or a value that is not a boolean or an IPv4 address, prints a warning and keeps it off. The CLI flag only prints the URL and the define for your build. See [Inject the LAN address](./cli.md#inject-the-lan-address).
 
 ### Lint rules
 

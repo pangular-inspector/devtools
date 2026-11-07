@@ -577,8 +577,58 @@ function encodeRecord(value) {
   return JSON.stringify(out);
 }
 
+// The Ionic page stacks of the seeded Capacitor device page.
+const IONIC_SEED = {
+  pages: {
+    device: {
+      pageId: 'device',
+      url: '/tabs/trips/detail',
+      title: 'Trips',
+      framework: '@ionic/angular',
+      mode: 'md',
+      reportedAt: now,
+      outlets: [
+        {
+          id: 'c-ionic-1',
+          name: 'primary',
+          tabs: '/tabs/trips',
+          source: 'angular',
+          canGoBack: true,
+          direction: 'forward',
+          directionSource: 'event',
+          animated: true,
+          pages: [
+            {
+              component: 'TripsPage',
+              tag: 'app-trips',
+              url: '/tabs/trips',
+              active: false,
+              elementId: 'c-ionic-2',
+            },
+            {
+              component: 'TripDetailPage',
+              tag: 'app-trip-detail',
+              url: '/tabs/trips/detail',
+              active: true,
+              elementId: 'c-ionic-3',
+            },
+          ],
+        },
+        {
+          id: 'c-ionic-4',
+          name: 'menu',
+          source: 'dom',
+          canGoBack: false,
+          pages: [{ component: 'app-menu', tag: 'app-menu', active: true, elementId: 'c-ionic-5' }],
+        },
+      ],
+    },
+  },
+};
+
 const SEEDS = {
   'pangular:capacitor': CAPACITOR_SEED,
+  'pangular:ionic': IONIC_SEED,
   'pangular:errors': ERRORS_SEED,
   'pangular:component-tree': COMPONENTS_SEED,
   'pangular:http': HTTP_SEED,
@@ -1198,6 +1248,7 @@ try {
         await capacitor.locator('.calls .call').nth(1).click();
         await capacitor.locator('#cap-detail').waitFor();
         await capacitor.locator('app-capacitor-state article').waitFor();
+        await capacitor.locator('app-capacitor-ionic article').first().waitFor();
         await capacitor.getByText('possible leak').first().waitFor();
         await check(capacitor, `${colorScheme} view=capacitor with an app reporting`);
         await mustFilter(capacitor, `${colorScheme} view=capacitor`);

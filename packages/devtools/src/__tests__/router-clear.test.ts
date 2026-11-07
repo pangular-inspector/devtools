@@ -97,6 +97,37 @@ describe('clear-router-navigations', () => {
     );
   });
 
+  it('clears only the named app of a page that runs several, and tells the page which', async () => {
+    const { ctx, invoke, router } = await boot();
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    const apps = [
+      { id: 'app-root', name: 'Shell', selector: 'app-root', primary: true },
+      {
+        id: 'cart',
+        name: 'Cart',
+        selector: 'cart-widget',
+        navigations: [nav(7, { url: '/cart' })],
+      },
+    ];
+    await invoke('push-router', report('p1', [nav(1, { url: '/home' })], { apps }));
+    const page = async () => (await router()).pages.find((p) => p.pageId === 'p1')!;
+
+    await invoke('clear-router-navigations', { pageId: 'p1', app: 'cart' });
+    expect((await page()).navigations.map((n) => n.url)).toEqual(['/home']);
+    expect((await page()).apps!.find((a) => a.id === 'cart')!.navigations).toEqual([]);
+    expect(broadcast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'pangular:router-clear',
+        args: [{ pageId: 'p1', app: 'cart' }],
+      }),
+    );
+
+    await invoke('push-router', report('p1', [nav(1, { url: '/home' })], { apps }));
+    await invoke('clear-router-navigations', { pageId: 'p1', app: 'app-root' });
+    expect((await page()).navigations).toEqual([]);
+    expect((await page()).apps!.find((a) => a.id === 'cart')!.navigations).toHaveLength(1);
+  });
+
   it('keeps the list empty when the page reports after clearing', async () => {
     const { invoke, router } = await boot();
     await invoke('push-router', report('p1', looping));

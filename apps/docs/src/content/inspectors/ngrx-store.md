@@ -355,6 +355,10 @@ Restore, **Back to latest**, **Dispatch**, **Dispatch again** and the **Store De
 
 The log keeps the last 200 entries, and the page keeps the states of the same entries for the **State** tab and **Export session**. Set the count with [`limits.changeLog`](../getting-started/configuration.md#limits). Once older entries are dropped, the log says how many. The overlay logs a method call that changes nothing at most once per second.
 
+### State size
+
+The server keeps at most 256 KB of JSON for each store's state: the classic Store's state, and the state and computed fields of each signal store. Past that, the largest top-level slices or fields show `[too large: N KB]` instead of their value, until the rest fits. The smaller slices stay readable. If the state still doesn't fit, such as one with thousands of small fields, the whole state shows the marker, under a `[state]` field for a signal store. A slice that JSON can't write, such as a `BigInt` or a cycle, shows `[not serializable]`. The **Store** tab, the `pangular:ngrx-inspect-store` tool and the `pangular:ngrx-store` resource all read the capped state.
+
 ### Past states assume immutable state
 
 The page keeps a reference to each state an entry produced. NgRx reducers and `patchState` return new objects, so those references stay as they were. An app that mutates its state objects in place changes the kept states too, and the **State** tab then shows the newer values. Exported states are serialized like the rest of the tab, so very deep or large values are cut and marked, and a generated test notes them.

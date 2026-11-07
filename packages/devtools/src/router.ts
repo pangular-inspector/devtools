@@ -321,23 +321,39 @@ function inUse(router: AnyRecord): boolean {
 }
 
 /**
- * Every Router reachable from the given roots, routers that have routes or
- * have navigated first.
+ * Every Router reachable from the given roots with the first root that
+ * reaches it, routers that have routes or have navigated first.
  */
-export function findRouters(ng: RouterDebugApi, roots: Iterable<Element>): AnyRecord[] {
-  const candidates: AnyRecord[] = [];
+export function findRouterRoots(
+  ng: RouterDebugApi,
+  roots: Iterable<Element>,
+): { router: AnyRecord; root: Element }[] {
+  const candidates: { router: AnyRecord; root: Element }[] = [];
   const elements = [...roots];
   for (const el of elements) {
     const injector = read(() => ng.getInjector?.(el), undefined);
     const router = injector ? routerOf(ng, injector) : null;
-    if (router && !candidates.includes(router)) candidates.push(router);
+    if (router && !candidates.some((c) => c.router === router)) {
+      candidates.push({ router, root: el });
+    }
   }
   // Angular before 16.2 can't look the Router up by name (`router-fallback.ts`).
   if (!candidates.length && typeof ng.ɵgetInjectorProviders !== 'function') {
     const held = routerHeldOnPage(ng, elements, isRouter);
-    if (held) candidates.push(held);
+    if (held) candidates.push({ router: held, root: elements[0] });
   }
-  return [...candidates.filter(inUse), ...candidates.filter((r) => !inUse(r))];
+  return [
+    ...candidates.filter((c) => inUse(c.router)),
+    ...candidates.filter((c) => !inUse(c.router)),
+  ];
+}
+
+/**
+ * Every Router reachable from the given roots, routers that have routes or
+ * have navigated first.
+ */
+export function findRouters(ng: RouterDebugApi, roots: Iterable<Element>): AnyRecord[] {
+  return findRouterRoots(ng, roots).map((c) => c.router);
 }
 
 /**

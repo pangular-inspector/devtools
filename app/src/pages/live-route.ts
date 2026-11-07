@@ -18,7 +18,7 @@ import { RouteLint } from './route-lint';
 import { RouteSetup } from './route-setup';
 import { RouteTimeline } from './route-timeline';
 import { RouteTree } from './route-tree';
-import type { RouterPage, SourceRoute } from './router-types';
+import { routerAppView, routerAppsOf, type RouterPage, type SourceRoute } from './router-types';
 import { Select } from '../ui/select';
 import type { ComponentFocus } from '../types/component-focus.types';
 import { AppState } from '../ui/app-state';
@@ -61,6 +61,17 @@ type TabId = (typeof TABS)[number]['id'];
             />
           </div>
         }
+        @if (appOptions().length > 1) {
+          <div class="page-pick">
+            <span class="page-label" id="live-route-app-label">App</span>
+            <app-select
+              labelledBy="live-route-app-label"
+              [options]="appOptions()"
+              [value]="current.appId ?? ''"
+              (valueChange)="appId.set($event)"
+            />
+          </div>
+        }
       }
     </div>
     @if (failed()) {
@@ -98,28 +109,31 @@ type TabId = (typeof TABS)[number]['id'];
         [id]="'router-panel-' + selected()"
         [attr.aria-labelledby]="'router-tab-' + selected()"
       >
-        @switch (selected()) {
-          @case ('current') {
-            <app-route-current
-              [page]="current"
-              [rpc]="rpc()"
-              (showComponent)="showComponent.emit($event)"
-            />
-          }
-          @case ('navigations') {
-            <app-route-timeline [page]="current" [rpc]="rpc()" (compare)="compareFrom($event)" />
-          }
-          @case ('compare') {
-            <app-route-diff [page]="current" [rpc]="rpc()" [start]="compareStart()" />
-          }
-          @case ('routes') {
-            <app-route-tree [page]="current" [rpc]="rpc()" [sources]="sources()" />
-          }
-          @case ('setup') {
-            <app-route-setup [page]="current" />
-          }
-          @case ('lint') {
-            <app-route-lint [page]="current" [rpc]="rpc()" />
+        <!-- Each app gets fresh views, so filters and results never carry over to another app. -->
+        @for (key of viewKey(); track key) {
+          @switch (selected()) {
+            @case ('current') {
+              <app-route-current
+                [page]="current"
+                [rpc]="rpc()"
+                (showComponent)="showComponent.emit($event)"
+              />
+            }
+            @case ('navigations') {
+              <app-route-timeline [page]="current" [rpc]="rpc()" (compare)="compareFrom($event)" />
+            }
+            @case ('compare') {
+              <app-route-diff [page]="current" [rpc]="rpc()" [start]="compareStart()" />
+            }
+            @case ('routes') {
+              <app-route-tree [page]="current" [rpc]="rpc()" [sources]="sources()" />
+            }
+            @case ('setup') {
+              <app-route-setup [page]="current" />
+            }
+            @case ('lint') {
+              <app-route-lint [page]="current" [rpc]="rpc()" />
+            }
           }
         }
       </div>
@@ -312,7 +326,36 @@ export class LiveRoute {
   private unsubscribe: (() => void) | null = null;
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly page = computed(() => this.pages().find((p) => p.pageId === this.pageId()) ?? null);
+  /** The picked page as it reported, before an app is picked on it. */
+  private readonly reported = computed(
+    () => this.pages().find((p) => p.pageId === this.pageId()) ?? null,
+  );
+  /**
+   * On a page that runs several Angular apps with a Router, the app picked
+   * here, else the first one. Kept while the page still has that app.
+   */
+  readonly appId = linkedSignal<RouterPage | null, string | null>({
+    source: this.reported,
+    computation: (page, previous) => {
+      const apps = routerAppsOf(page);
+      if (!apps.length) return null;
+      const kept = previous?.value;
+      return apps.some((app) => app.id === kept) ? kept! : apps[0].id;
+    },
+  });
+  /** The picked page, as the picked app sees it. */
+  readonly page = computed(() => {
+    const page = this.reported();
+    return page ? routerAppView(page, this.appId()) : null;
+  });
+  readonly viewKey = computed(() => [`${this.pageId() ?? ''} ${this.appId() ?? ''}`]);
+  readonly appOptions = computed(() =>
+    routerAppsOf(this.reported()).map((app) => ({
+      value: app.id,
+      label: app.name === app.selector ? `<${app.selector}>` : `${app.name} <${app.selector}>`,
+      hint: (app.primary ? this.reported()?.snapshot?.url : app.snapshot?.url) ?? app.id,
+    })),
+  );
 
   readonly problems = computed(
     () =>

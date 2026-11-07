@@ -53,6 +53,8 @@ Other requests get `403` with the message "Pangular Inspector only answers reque
 
 With `allowLan: true`, the plugin also answers other machines, such as a phone on Wi-Fi, whose origin is in `allowedOrigins`. It needs the one-time code on, and ignores `allowLan` with `auth: false`. See [Other devices on your network](./getting-started/vite.md#other-devices-on-your-network).
 
+`lanAddress` injects the dev server's address on your network into the app's development build, for a phone app. It is off by default and grants no access: the plugin injects an address only when `allowLan` is in effect and `server.host` puts Vite on the network, so the gate, the one-time code and `allowedOrigins` decide who connects, as without it. A production build gets no address. See [Inject the LAN address](./getting-started/vite.md#inject-the-lan-address).
+
 If you open the dev server through another hostname that points to your machine (for example `myapp.test`), list it in Vite's `server.allowedHosts` and the devtools trust it too, as `Host` and as origin. Add other origins with `allowedOrigins`:
 
 ```ts {7-8}
@@ -86,19 +88,19 @@ The plugin's `auth` option decides whether the devtools also ask for the one-tim
 
 Every server that asks for the code (the Vite plugin, the Express hub and the CLI) limits wrong guesses:
 
-| Limit          | What happens                                                                                                                                   |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Per connection | After 3 wrong codes, each next attempt waits twice as long: 1 s, 2 s, 4 s, up to 60 s. A code sent too early is refused without being checked. |
-| All clients    | At most 10 wrong codes a minute. Further codes are refused without being checked, and the terminal prints a warning.                           |
-| Lock           | After 50 wrong codes since the last right one, the server accepts no code until it restarts. Pages that already connected stay connected.      |
+| Limit          | What happens                                                                                                                                                                  |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per connection | After 3 wrong codes, each next attempt waits twice as long: 1 s, 2 s, 4 s, up to 60 s. A code sent too early is refused without being checked.                                |
+| All clients    | At most 10 wrong codes a minute. Further codes are refused without being checked, and the terminal prints a warning.                                                          |
+| Lock           | After 50 wrong codes since the last right one, the server accepts no code until you run `pangular token --rotate` or restart it. Pages that already connected stay connected. |
 
-A refused code is never compared with the real one. devframe gives you a new code after 5 wrong ones, so a client that keeps guessing can change the code you are typing at most twice a minute. If the terminal says the server stopped accepting codes and you didn't type them, something on your machine or network is guessing the code. Restart the dev server to get a new code.
+A refused code is never compared with the real one. devframe gives you a new code after 5 wrong ones, so a client that keeps guessing can change the code you are typing at most twice a minute. If the terminal says the server stopped accepting codes and you didn't type them, something on your machine or network is guessing the code. Run [`pangular token --rotate`](./getting-started/cli.md#trusted-tokens) in the project folder, which prints a new code and drops every trusted token, or restart the dev server to get a new code.
 
 A code lasts 5 minutes. If you type the right code after it expires, the server refuses it without counting it as a wrong code, and devframe gives you a new one. Only the code that is current when the attempt arrives is left uncounted, so a client that guesses gets no free attempts.
 
 #### Trusted browsers
 
-A browser that exchanges the code gets a session token, so it doesn't need the code again after a reload. The server keeps those tokens in `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project (named after a hash of its path), so a token from one project doesn't open another project's server. The folder is readable by you only (mode `0700`), and the file too (`0600`). A token expires 7 days after the code was exchanged. At that moment the server drops it, and a page or panel still connected with it is no longer trusted. At startup the server drops entries in the file that aren't token records, and it only trusts a token that has its own entry, so a name such as `constructor` or `toString` is never a token. To sign out every browser, delete the project's folder, or all of `~/.pangular-inspector/auth`, and restart the server.
+A browser that exchanges the code gets a session token, so it doesn't need the code again after a reload. The server keeps those tokens in `~/.pangular-inspector/auth/<project>/auth.json`, one folder per project (named after a hash of its path), so a token from one project doesn't open another project's server. The folder is readable by you only (mode `0700`), and the file too (`0600`). A token expires 7 days after the code was exchanged. At that moment the server drops it, and a page or panel still connected with it is no longer trusted. At startup the server drops entries in the file that aren't token records, and it only trusts a token that has its own entry, so a name such as `constructor` or `toString` is never a token. To sign out every browser, run [`pangular token --rotate`](./getting-started/cli.md#trusted-tokens) in the project folder: the running server drops every token and the command prints a new one-time code. Deleting the project's folder, or all of `~/.pangular-inspector/auth`, and restarting the server does the same.
 
 Version 0.0.7 and earlier kept the tokens in `~/.devframes/devframe/auth.json` (the Express hub and the Vite plugin) or `~/.pangular/devframe/auth.json` (the CLI), readable by other users and without expiry. Newer versions don't read those files. Delete them if no other devframe tool uses them.
 
@@ -137,7 +139,7 @@ A list keeps loopback origins and the Pangular Inspector extension. So does a cu
 
 ### Standalone CLI
 
-The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. `--allowed-origin` adds an origin to the loopback origins it accepts, and `--auth-token` adds [pairing tokens](#pairing-tokens). See [Standalone CLI](./getting-started/cli.md).
+The CLI server binds to `localhost` and asks for a one-time code. `--host` changes the bind address and `--no-auth` turns the code off. `--allowed-origin` adds an origin to the loopback origins it accepts, and `--auth-token` adds [pairing tokens](#pairing-tokens). `--lan-address` only prints the server's network URL for a device build, and changes none of these. See [Standalone CLI](./getting-started/cli.md).
 
 It runs the same request gate as the Vite plugin and the Express hub in front of every route, the panel and `__connection.json` included: a foreign `Origin`, `Origin: null`, a `Host` that is not this machine and a cross-site request without `Origin` get a `403`. With `--host` set to a network address, other machines get through when their `Origin` is allowed or they send none, such as a device app, and their `Host` is an IP address, a `.local` name or an allowed host.
 
@@ -222,6 +224,21 @@ A page reconnects with the same page id after a reload. To take its page back, t
 | The old connection sent nothing for 30 s | On its next report. A tab in the background stays owned while it says it is still there. |
 
 Agent tools and the panel don't report pages, so these rules don't apply to them. [`ngrx-dispatch`](./agents/tools.md#dispatch-an-action) without `page` is refused while more than one page reports NgRx state. The answer lists those pages, so you can call it again with one. Other tools that act on a page pick one when `page` is left out. `navigate`, for example, acts on the first page that reports a router. Pass `page` when more than one tab is open.
+
+### Check the security status
+
+The **Security** block on the [Dashboard](./inspectors/dashboard.md#security-block) shows how the running server lets clients in. The panel reads it with the `security-status` RPC, which answers trusted clients only: a panel or page that exchanged the one-time code, sent a trusted token or a pairing token, or any client while auth is off.
+
+| Row             | What it says                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| One-time code   | On, with when the current code expires; off; or locked after too many wrong codes.                                     |
+| Trusted clients | How many session tokens the server trusts, and when the first and the last of them expire.                             |
+| Pairing tokens  | How many [pairing tokens](#pairing-tokens) the server accepts. Only shown when it accepts any.                         |
+| Reach           | This machine only, or other machines too (`allowLan`, `--host` with a network address, or no origin check).            |
+| Allowed origins | The origins allowed beyond this machine and the Chrome extension, at most 20, or **Any** when the origin check is off. |
+| Allowed hosts   | The `Host` names allowed beyond loopback, from Vite's `server.allowedHosts`. Only shown when there are any.            |
+
+The answer never holds a token, a pairing token or the one-time code. It holds counts, times and the origins and hosts from your own config, masked like other text. Agent tools can't read it. A static report built with `pangular build` has no server, so its Dashboard shows no **Security** block.
 
 ## What is redacted
 
