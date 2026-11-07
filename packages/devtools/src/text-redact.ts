@@ -198,12 +198,16 @@ function replacePairs(text: string, pair: PairReplacer): string {
     // value counts only after `: ` with a space, so `xmlns:auth="urn:a"` stays one name.
     // For a chain such as `context:password:` only its last key is read again, so a chain
     // like `a:a:a:` is skipped in one step and the scan stays linear.
-    // A chain ending in `=` counts only when a space follows, as in `context:password= "x"`,
-    // so `xmlns:auth="urn:a"` stays one attribute.
+    // A chain ending in `=` counts when a space follows (`context:password= "x"`) or when its
+    // last key is a strong secret name outside an XML namespace (`context:password="x"`), so
+    // `xmlns:auth="urn:a"` stays one attribute.
+    const chainKey = value.slice(value.lastIndexOf(':', value.length - 2) + 1, -1);
     const chain =
       !NEXT_KEY_VALUE.test(value) &&
       KEY_CHAIN_VALUE.test(value) &&
-      (value.endsWith(':') || /\s/.test(text.charAt(at + match.length)));
+      (value.endsWith(':') ||
+        /\s/.test(text.charAt(at + match.length)) ||
+        (!/^xmlns:/i.test(value) && isStrongSecretKey(decode(chainKey))));
     const nextKey = chain || (NEXT_KEY_VALUE.test(value) && (value.endsWith(':') || /\s/.test(eq)));
     if (replaced === match && value && !/^["']/.test(value) && nextKey) {
       const lastKey = chain ? value.lastIndexOf(':', value.length - 2) + 1 : 0;
