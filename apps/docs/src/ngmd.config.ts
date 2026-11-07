@@ -210,6 +210,8 @@ const config: NgmdConfig = {
         {label: 'Analog', href: '/inspectors/analog'},
         {label: 'Capacitor', href: '/inspectors/capacitor'},
         {label: 'Errors', href: '/inspectors/errors'},
+        {label: 'Performance', href: '/inspectors/performance'},
+        {label: 'Build', href: '/inspectors/build'},
         {label: 'Audit', href: '/inspectors/audit'},
       ],
     },

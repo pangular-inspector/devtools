@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { serverErrorsRegistry } from '../server-errors.ts';
+import { buildRegistry } from '../build-graph.ts';
 
 vi.mock('../hub.ts', () => ({
   PANGULAR_HUB_BASE: '/__devframes/',
@@ -18,12 +19,14 @@ function serve(options: Parameters<typeof pangularVite>[0]) {
     middlewares: { use: vi.fn() },
     httpServer: null,
     ws,
+    environments: { client: { moduleGraph: { idToModuleMap: new Map() } } },
   });
   return { ws, sent, original };
 }
 
 afterEach(() => {
   delete (globalThis as { __PANGULAR_SERVER_ERRORS__?: unknown }).__PANGULAR_SERVER_ERRORS__;
+  delete (globalThis as { __PANGULAR_BUILD__?: unknown }).__PANGULAR_BUILD__;
 });
 
 describe('Vite plugin error capture', () => {
@@ -39,5 +42,13 @@ describe('Vite plugin error capture', () => {
   it('leaves ws.send alone with the errors inspector off', () => {
     const { ws, original } = serve({ inspectors: { errors: false } });
     expect(ws.send).toBe(original);
+  });
+
+  it("hands Vite's client module graph to the Build inspector, unless it is off", () => {
+    serve({});
+    expect(buildRegistry().vite).toBeDefined();
+    delete buildRegistry().vite;
+    serve({ inspectors: { build: false } });
+    expect(buildRegistry().vite).toBeUndefined();
   });
 });

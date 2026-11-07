@@ -19,6 +19,7 @@ import { attachErrors } from './errors-collector.ts';
 import { attachLeaks } from './leaks-collector.ts';
 import { attachPlugins } from './plugins-collector.ts';
 import { attachStartup } from './startup-timing.ts';
+import { attachPerformance } from './perf-collector.ts';
 import { attachBrowserTools } from './browser-tools.ts';
 import { attachAxe, axeOwnerNg } from './axe-runner.ts';
 import { createRecentWrites } from './error-explain.ts';
@@ -597,6 +598,8 @@ async function startOverlay(
       })
     : null;
   const startup = on.injectors ? attachStartup(my, pageId, getNg, { tickMs }) : null;
+  const perf = on.performance ? attachPerformance(my, pageId, getNg, { tickMs }) : null;
+  if (perf) own(perf.stop);
   // Runs axe-core only when the panel or an agent asks; it loads axe-core then.
   // The component owning each element is component data: only with that inspector on.
   const axe = attachAxe(my, pageId, axeOwnerNg(on.components, getNg));
@@ -822,6 +825,7 @@ async function startOverlay(
       }),
     plugins && paced(() => void plugins.push().catch(() => {})),
     startup && paced(() => void startup.push().catch(() => {})),
+    perf && paced(() => void perf.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   const pushAll = () => collectors.forEach((run) => run());
   pushAll();
@@ -1078,6 +1082,7 @@ async function startOverlay(
     leaks?.leave();
     plugins?.leave();
     startup?.leave();
+    perf?.leave();
     angularInfo.leave();
     browserTools.leave();
   };
@@ -1092,6 +1097,7 @@ async function startOverlay(
     leaks?.resume();
     plugins?.resume();
     startup?.resume();
+    perf?.resume();
     browserTools.resume();
     void lease.refresh();
     left = false;

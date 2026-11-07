@@ -24,6 +24,8 @@ import {
 import { registerConsoleGlobals } from './rpc/console-globals.ts';
 import { registerErrors } from './rpc/errors-register.ts';
 import { registerServerErrors } from './rpc/server-errors-register.ts';
+import { registerPerformance } from './rpc/perf-register.ts';
+import { registerBuild } from './rpc/build-register.ts';
 import { registerSnapshot } from './rpc/snapshot-tools.ts';
 import { registerLeaks } from './rpc/leaks-register.ts';
 import { registerReduxStores } from './rpc/redux-stores-register.ts';
@@ -949,6 +951,18 @@ const pangular = defineDevframe({
     const serverErrors = on.errors
       ? await registerServerErrors({ my, register, agent, capture: pageTools })
       : null;
+    const perfInspector = on.performance
+      ? await registerPerformance({
+          my,
+          rpcHost: ctx.rpc,
+          register,
+          agent,
+          owns,
+          mayForget,
+          ttl: liveTtl,
+        })
+      : null;
+    if (on.build) registerBuild({ register, agent, root: ctx.cwd });
     const leaksInspector = on.components
       ? await registerLeaks({
           my,
@@ -1481,6 +1495,7 @@ const pangular = defineDevframe({
       if (expireCapacitorPages(capacitorPages, now, liveTtl)) applyCapacitor();
       errorsInspector?.expire(now);
       serverErrors?.expire(now);
+      perfInspector?.expire(now);
       leaksInspector?.expire(now);
       reduxStores?.expire(now);
       tanstackQuery?.expire(now);

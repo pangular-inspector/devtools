@@ -32,6 +32,8 @@ import { NetworkInspector } from './pages/network-inspector';
 import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
 import { CapacitorInspector } from './pages/capacitor-inspector';
 import { ErrorsInspector } from './pages/errors-inspector';
+import { PerformanceInspector } from './pages/performance-inspector';
+import { BuildInspector } from './pages/build-inspector';
 import { PluginsInspector, pluginsReporting } from './pages/plugins-inspector';
 import { AuditInspector } from './pages/audit-inspector';
 import { Timeline } from './pages/timeline';
@@ -218,6 +220,8 @@ function readView(): View | null {
     NetworkInspector,
     CapacitorInspector,
     ErrorsInspector,
+    PerformanceInspector,
+    BuildInspector,
     PluginsInspector,
     AuditInspector,
     Timeline,
@@ -592,6 +596,16 @@ function readView(): View | null {
             }
             @case ('plugins') {
               <app-plugins-inspector [rpc]="rpc()" />
+            }
+            @case ('performance') {
+              <app-performance-inspector
+                [rpc]="rpc()"
+                [canShowComponent]="config().inspectors.components"
+                (showComponent)="showComponent($event)"
+              />
+            }
+            @case ('build') {
+              <app-build-inspector [rpc]="rpc()" />
             }
             @case ('errors') {
               <app-errors-inspector

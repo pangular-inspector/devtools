@@ -3,6 +3,7 @@
     "capacitor-list-calls": "capacitor",
     "capacitor-list-plugins": "capacitor",
     "change-detection": "components",
+    "chunk-sizes": "build",
     "clear-recordings": "http",
     "component-tree": "components",
     "defer-blocks": "components",
@@ -46,6 +47,7 @@
     "list-server-errors": "errors",
     "list-ssr-overrides": "http",
     "list-ssr-requests": "http",
+    "module-graph": "build",
     "navigate": "router",
     "ngrx-dispatch": "ngrx",
     "ngrx-export-session": "ngrx",
@@ -88,7 +90,8 @@
     "tanstack-run-query": "tanstackQuery",
     "track-subscriptions": "components",
     "wait-for": "components",
-    "watch-signal": "signals"
+    "watch-signal": "signals",
+    "web-vitals": "performance"
   },
   "ACTION_TOOLS": {
     "forms": ["fill-form", "run-form-action"],
@@ -182,6 +185,7 @@
     "list-server-errors",
     "list-ssr-overrides",
     "list-ssr-requests",
+    "module-graph",
     "navigate",
     "ngrx-dispatch",
     "ngrx-export-session",
@@ -214,7 +218,8 @@
     "tanstack-run-query",
     "track-subscriptions",
     "wait-for",
-    "watch-signal"
+    "watch-signal",
+    "web-vitals"
   ],
   "agentTags": {
     "analog-explain-render-modes": ["analog"],
@@ -232,6 +237,7 @@
     "capacitor-list-calls": ["capacitor"],
     "capacitor-list-plugins": ["capacitor"],
     "change-detection": ["components"],
+    "chunk-sizes": ["build"],
     "clear-recordings": ["http", "router", "analog"],
     "component-tree": ["components"],
     "defer-blocks": ["components"],
@@ -276,6 +282,7 @@
     "list-server-errors": ["errors"],
     "list-ssr-overrides": ["http"],
     "list-ssr-requests": ["http"],
+    "module-graph": ["build"],
     "navigate": ["router"],
     "ngrx-dispatch": ["ngrx"],
     "ngrx-export-session": ["ngrx"],
@@ -322,6 +329,7 @@
     "tanstack-run-query": ["tanstackQuery"],
     "track-subscriptions": ["components"],
     "wait-for": ["components", "router", "http", "errors", "forms"],
-    "watch-signal": ["signals"]
+    "watch-signal": ["signals"],
+    "web-vitals": ["performance"]
   }
 }

@@ -55,6 +55,8 @@ const TAB_INSPECTOR: Partial<Record<Tab, PangularInspector>> = {
   capacitor: 'capacitor',
   errors: 'errors',
   plugins: 'plugins',
+  performance: 'performance',
+  build: 'build',
 };
 
 /** The `inspectors` key that turns a tab on or off, if any. */

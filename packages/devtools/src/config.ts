@@ -12,6 +12,8 @@ export const PANGULAR_INSPECTORS = [
   'capacitor',
   'errors',
   'plugins',
+  'performance',
+  'build',
 ] as const;
 
 export type PangularInspector = (typeof PANGULAR_INSPECTORS)[number];
@@ -397,6 +399,8 @@ export const PANEL_TABS = [
   { id: 'pipes', label: 'Pipes', inspector: 'pipes' },
   { id: 'network', label: 'SSR & HTTP', inspector: 'http' },
   { id: 'errors', label: 'Errors', inspector: 'errors' },
+  { id: 'performance', label: 'Performance', inspector: 'performance' },
+  { id: 'build', label: 'Build', inspector: 'build' },
   { id: 'capacitor', label: 'Capacitor', inspector: 'capacitor' },
   { id: 'plugins', label: 'Plugins', inspector: 'plugins' },
 ] as const satisfies readonly { id: string; label: string; inspector?: PangularInspector }[];
@@ -1241,6 +1245,11 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   'list-console': { kind: 'tool', inspectors: ['errors'], page: true },
   // SSR and Vite errors the server captured in its own process; the stdio MCP server has none.
   'list-server-errors': { kind: 'tool', inspectors: ['errors'], page: true },
+  'web-vitals': { kind: 'tool', inspectors: ['performance'], page: true },
+  // Vite's module graph lives in the dev server's process; the stdio MCP server has none.
+  'module-graph': { kind: 'tool', inspectors: ['build'], page: true },
+  // Reads the build output on disk, so it works without a page.
+  'chunk-sizes': { kind: 'tool', inspectors: ['build'] },
 
   // plugins
   'list-plugins': { kind: 'tool', inspectors: ['plugins'], page: true },
@@ -1470,6 +1479,9 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'push-errors': 'errors',
   'forget-errors-page': 'errors',
   'clear-server-errors': 'errors',
+  'push-performance': 'performance',
+  'forget-performance-page': 'performance',
+  'get-build-graph': 'build',
   'push-analog': 'analog',
   'forget-analog-page': 'analog',
   'analog-clear-calls': 'analog',
@@ -1521,6 +1533,7 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   analog: 'analog',
   errors: 'errors',
   'server-errors': 'errors',
+  performance: 'performance',
   startup: 'injectors',
   plugins: 'plugins',
 };
@@ -1762,6 +1775,8 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   capacitor: 'Capacitor',
   errors: 'Errors',
   plugins: 'Plugins',
+  performance: 'Performance',
+  build: 'Build',
 };
 
 const ACTION_LABEL: Record<PangularAction, string> = {

@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  Ninety-nine tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  One hundred and two tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -939,6 +939,27 @@ These tools read what a page captured: errors from Angular's `ErrorHandler`, unc
 The explainers are the ones the [Errors](../inspectors/errors.md#explainers) tab shows. For NG0100: the binding, the template function, the previous and current value, the component fields that hold the new value, and the named signals written with it just before the check, with the code that wrote them when write stacks are on. For NG0500 to NG0503: a diff of the server HTML Angular expected and the client DOM it found. For NG0201 and `NullInjectorError`: the token and Angular's dependency path, to pass to `explain-injection`.
 
 `code` accepts `NG0100`, `ng100` or `NG01203`. `explain-error` says so when Angular's error reference has no page for a code, and gives no known cause then. Pass the owner's instance id to `inspect-component` for its inputs and state. `list-errors` takes `limit` up to 100 (default 30), and `list-console` up to 200 (default 50). `since` keeps the console calls made since a duration back from now (`30s`, `5m`, `1h`), an ISO date or epoch milliseconds, so you can read what one reproduction logged. A call repeated in a row counts from its last repeat. The page keeps its last 200 calls and sends them while a panel or an agent watches, so an agent call to an idle page gets what it logged meanwhile. Messages, stacks and console text are masked like other live values.
+
+## Performance
+
+This tool reads the web vitals the page measured. See [Performance](../inspectors/performance.md). Reads: page.
+
+| Tool         | What it answers                                                                                                                                                                                                     | Arguments |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `web-vitals` | LCP, INP, CLS, FCP and TTFB with value and web.dev rating, and the element, event and component behind each, then the slowest interactions, the long task count, the total blocking time and the latest long tasks. | none      |
+
+A metric the browser doesn't measure, or has no entry for yet, says `none yet`, and the answer names the entry types the browser lacks.
+
+## Build
+
+These tools read what the app loads. See [Build](../inspectors/build.md).
+
+| Tool           | What it answers                                                                                                                                                                                                                         | Arguments         |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `module-graph` | The Vite dev server's module graph: the entries, the lazy boundaries (`import()`) with the modules and size each pulls in, and the biggest modules. With `search`, matching modules with their importers, imports and `import()` calls. | `search`, `limit` |
+| `chunk-sizes`  | The chunks of the last production build: initial or lazy, size, gzip size, and with `stats.json` the entry point.                                                                                                                       | `limit`           |
+
+`module-graph` needs the Vite plugin, in the dev server's process; it reads nothing on the stdio MCP server. Sizes are transformed, unminified code, for modules the browser requested. `chunk-sizes` reads the build output on disk, so it works anywhere the project is, and says how to build when there is none. `limit` defaults to 20 for `module-graph` (at most 200) and 30 for `chunk-sizes` (at most 500).
 
 ## Audit
 
