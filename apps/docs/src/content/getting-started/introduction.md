@@ -21,7 +21,7 @@ The same tool runs in several places. It is built with *Devframe, so one definit
 
 ### Live inspectors
 
-These tabs read the running page through Angular's debug API. They need a development build.
+These tabs read the running page through Angular's debug API. They need a development build. [Features](./features.md) shows each tab with a screenshot.
 
 <ngmd-card-grid columns="2">
   <ngmd-card icon="layers" title="Components" link="/inspectors/components" cta="Components">
