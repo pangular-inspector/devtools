@@ -9,6 +9,7 @@
 // current server a failed call keeps the collectors off until a retry works.
 
 import { PANGULAR_CONFIG_KEY, configFromConnection } from './config.ts';
+import { resolveEntropy, type EntropyOptions } from './entropy-redact.ts';
 
 /** The function the overlays call; it is `pangular:redaction-config` on the server. */
 export const REDACTION_CONFIG_RPC = 'redaction-config';
@@ -16,6 +17,8 @@ export const REDACTION_CONFIG_RPC = 'redaction-config';
 export interface RedactionConfig {
   secretNames: string[];
   unmask: string[];
+  /** `redaction.entropy`, sent only when it is on. */
+  entropy?: EntropyOptions;
 }
 
 /** The part of a devframe client the overlay waits on. */
@@ -94,7 +97,8 @@ export async function serverRedaction(
   const secretNames = names((answer as { secretNames?: unknown }).secretNames);
   const unmask = names((answer as { unmask?: unknown }).unmask);
   if (!secretNames || !unmask) return answered;
-  return { secretNames, unmask };
+  const entropy = resolveEntropy((answer as { entropy?: unknown }).entropy);
+  return entropy ? { secretNames, unmask, entropy } : { secretNames, unmask };
 }
 
 export interface RedactionLoader {

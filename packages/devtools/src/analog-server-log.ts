@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ANALOG_RENDER_TIMING } from './analog-call-tags.ts';
 import { beginRender, bindRender, tagRequest } from './analog-call-pages.ts';
 import { runInAnalogRender } from './ssr-context.ts';
+import { redactHighEntropy } from './entropy-redact.ts';
 import { REDACTED, isRedactedKey, redactTokens } from './forms-privacy.ts';
 import { redactJsonText } from './json-text-redact.ts';
 import { maskEmails } from './text-redact.ts';
@@ -22,10 +23,12 @@ function queryKey(key: string): string {
 }
 
 export function redactMessage(text: string): string {
-  return redactTokens(text).replace(QUERY_PAIR, (whole, sep: string, key: string) => {
+  const out = redactTokens(text).replace(QUERY_PAIR, (whole, sep: string, key: string) => {
     const name = queryKey(key);
     return SECRET_QUERY_KEY.test(name) || isRedactedKey(name) ? `${sep}${key}=${REDACTED}` : whole;
   });
+  // Opt-in (`redaction.entropy`), last, so a known shape keeps its prefix.
+  return redactHighEntropy(out, REDACTED);
 }
 
 function redactPairs(text: string): string {
