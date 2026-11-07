@@ -690,6 +690,8 @@ const READ_PLAN = [
   ['ngrx-inspect-store', '/destinations', () => ({})],
   ['ngrx-inspect-store', '/destinations', (ctx) => ({ store: ctx.storeId('TravelStore') })],
   ['ngrx-inspect-store', '/destinations', () => ({ store: 'TravelStore' })],
+  ['ngrx-explain-change', '/destinations', () => ({})],
+  ['ngrx-explain-change', '/destinations', () => ({ store: 'TravelStore' })],
   [
     'ngrx-history',
     '/destinations',
@@ -816,6 +818,7 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'record-guards',
   'ngrx-dispatch',
   'ngrx-restore',
+  'ngrx-store-devtools',
   'tanstack-run-query',
   'run-form-action',
   'fill-form',
@@ -1577,6 +1580,10 @@ async function runActions(state) {
   }
   await act('ngrx-restore', { latest: true, page: ctx.pageId }, 'any');
   await act('ngrx-restore', { seq: 999_999, page: ctx.pageId }, 'refusal');
+  // ngrx-store-devtools: pause and resume recording, and refuse an entry that does not exist
+  await act('ngrx-store-devtools', { op: 'pause', paused: true, page: ctx.pageId }, 'any');
+  await act('ngrx-store-devtools', { op: 'pause', paused: false, page: ctx.pageId }, 'any');
+  await act('ngrx-store-devtools', { op: 'toggle', seq: 999_999, page: ctx.pageId }, 'refusal');
   await act('ngrx-dispatch', { type: '[E2E] Ping', payload: { id: 1 } }, 'refusal');
 
   // plugin action
@@ -2144,6 +2151,7 @@ const ACTION_VALID = {
   'set-signal': () => ({ component: 'NoSuch', property: 'x', value: 1 }),
   'watch-signal': () => ({ stacks: false }),
   'ngrx-restore': () => ({ seq: 999_999 }),
+  'ngrx-store-devtools': () => ({ op: 'toggle', seq: 999_999 }),
   'ngrx-dispatch': () => ({ type: '[E2E] Ping' }),
   'tanstack-run-query': () => ({ action: 'refetch', key: 'nothing' }),
   'run-form-action': (ctx) => ({ action: 'revalidate', form: ctx.formIds?.[0] ?? 'x' }),
@@ -2990,6 +2998,12 @@ function runDocs(state) {
     'params',
     'replaceurl',
     'skiplocationchange',
+    'op',
+    'toggle',
+    'jump',
+    'commit',
+    'reset',
+    'pause',
   ]);
   // Library tools are documented but not listed for the demo, which uses none of the libraries.
   docs.phantomTools = [...documented].filter(
