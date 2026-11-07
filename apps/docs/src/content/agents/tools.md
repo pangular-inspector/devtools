@@ -19,7 +19,7 @@ The server's [prompts](./mcp-server.md#prompts) chain these tools into ready wor
 
 Tool ids use a colon, as `pangular:scan-routes`. MCP clients see them with an underscore, as `pangular_scan-routes`. The tables below drop the `pangular:` prefix. The `read` tools are also registered on the page under the same names, for [browser agents](./browser-agents.md).
 
-Each tool has a short title that clients show in their tool lists. Every tool answers with one plain text block: markdown, or compact JSON for a source scan. See [Titles and answers](./mcp-server.md#titles-and-answers).
+The [Tool index](./tool-index.md) lists every tool with its inspector, tier and transports, generated from the server's own list. Each tool has a short title that clients show in their tool lists. Every tool answers with one plain text block: markdown, or compact JSON for a source scan. See [Titles and answers](./mcp-server.md#titles-and-answers).
 
 ### Source and live tools
 

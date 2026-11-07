@@ -113,6 +113,15 @@ A short intro: what the tab is and when you open it.
 
 Add an entry to `nav` in `apps/docs/src/ngmd.config.ts`. Pages that aren't listed still build, but readers can't find them. Use `status: 'new'` or `status: 'updated'` for a sidebar badge instead of saying "new" in the text.
 
+A `new` or `updated` badge needs `until`, the package version it expires at. Set it to the minor after the release that ships the page, so the badge disappears with the next minor release:
+
+```ts
+// apps/docs/src/ngmd.config.ts
+{label: 'Platforms', href: '/getting-started/platforms', status: 'new', until: '1.2.0'},
+```
+
+The sidebar shows the badge while the version in `packages/devtools/package.json` is older than `until`, and never shows a `new` or `updated` badge without one. `pnpm docs:test` fails on a missing or malformed `until`. Remove an entry's `status` and `until` once its version has shipped.
+
 ### Link to other pages
 
 Link to another page by the relative path of its `.md` file, in markdown links and in `<a>` tags: `[Configuration](./configuration.md)`, `<a href="../inspectors/router.md#agent-tools">`. The site turns these into routes, and the same links work when the page is read on GitHub.

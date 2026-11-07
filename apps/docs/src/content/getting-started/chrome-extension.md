@@ -193,6 +193,8 @@ The extension has no content scripts, so it runs nothing in the pages you browse
 
 ## FAQ
 
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
+
 <ngmd-accordion>
   <ngmd-accordion-item title="The panel does not appear" open>
     The page did not look like an Angular app within about five seconds of opening DevTools. Check that it renders an <code>ng-version</code> attribute or exposes <code>window.ng</code>, which development builds do. If the page shows a prompt for the one-time code, the extension cannot check the page until you answer or close the prompt. Then close and reopen DevTools, or reload the page.

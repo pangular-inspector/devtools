@@ -254,6 +254,8 @@ The SARIF output is a SARIF 2.1.0 log with one run. Rule ids are the lint and th
 
 ## FAQ
 
+The [troubleshooting page](./troubleshooting.md) lists the problems every setup shares, by symptom.
+
 <ngmd-accordion>
   <ngmd-accordion-item title="Do I need to run my app first?" open>
     No. <code>dev</code>, <code>build</code>, <code>mcp</code> and <code>lint</code> read your source files. Only live data needs a running app with the overlay loaded.

@@ -13,6 +13,7 @@ import {Router, RouterLink, RouterLinkActive} from '@angular/router';
 import {LucideDynamicIcon, LucideChevronDown} from '@lucide/angular';
 import config from '../../ngmd.config';
 import {BADGE_VARIANTS, type BadgeVariant} from '../../types/badge';
+import {activeBadge, type BadgedItem} from '../../nav-badges';
 import {onNavigation} from '../utils/enhance-on-navigation';
 import {RouteUrlService} from '../services/route-url/route-url.service';
 
@@ -68,7 +69,7 @@ export class SidebarState {
                     class="flex items-center justify-between gap-2 rounded-md px-3 py-1.5 text-zinc-700 dark:text-zinc-300 hover:bg-[color:var(--accent-soft)] hover:text-[color:var(--accent-strong)] focus:outline-none focus-visible:outline-2 focus-visible:outline focus-visible:outline-offset-[-2px] focus-visible:outline-[color:var(--accent)]"
                   >
                     <span class="min-w-0 truncate">{{ item.label }}</span>
-                    @if (item.status; as status) {
+                    @if (badge(item); as status) {
                       <span
                         class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.625rem] font-medium uppercase tracking-wider"
                         [class]="statusClass(status)"
@@ -102,6 +103,11 @@ export class Sidebar implements AfterViewInit {
 
   toggle(label: string): void {
     this.state.toggle(label);
+  }
+
+  /** The item's badge while it has not expired. See `nav-badges.ts`. */
+  badge(item: BadgedItem): BadgeVariant | null {
+    return activeBadge(item);
   }
 
   statusClass(status: BadgeVariant): string {
