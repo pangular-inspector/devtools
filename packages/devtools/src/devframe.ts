@@ -66,6 +66,7 @@ import { injectorMatches, isEnvironmentRequest, signalOwner } from './signal-gra
 import { scanNgrxStore } from './rpc/get-ngrx-store.ts';
 import { createNgrxHistory } from './rpc/ngrx-session-tools.ts';
 import { createProviderValues } from './rpc/provider-values.ts';
+import { requestInjectorRefresh } from './rpc/injector-refresh.ts';
 import {
   dispatchResultText,
   expireNgrxPages,
@@ -2594,6 +2595,20 @@ const pangular = defineDevframe({
       jsonSerializable: true,
       handler: (message: { pageId?: unknown; request?: unknown } | null) =>
         providerValues.request(message?.pageId, message?.request),
+    });
+
+    // The panel asks the page to read an element injector again (the one it
+    // selected), or every injector (Refresh). The page pushes a fresh tree.
+    register({
+      name: 'request-injector-refresh',
+      type: 'action',
+      jsonSerializable: true,
+      handler: (message: { pageId?: unknown; injectorId?: unknown } | null) =>
+        requestInjectorRefresh(
+          message,
+          injectorPages.keys(),
+          (method, args) => void my.rpc.broadcast({ method, args: [args], optional: true }),
+        ),
     });
 
     register({

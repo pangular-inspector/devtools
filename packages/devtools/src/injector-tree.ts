@@ -401,7 +401,7 @@ function isCreated(record: InjectorRecord): boolean {
   return !(Object.getPrototypeOf(value) === Object.prototype && Object.keys(value).length === 0);
 }
 
-const serviceDependencies = new WeakMap<object, Map<unknown, DependencyInfo[]>>();
+let serviceDependencies = new WeakMap<object, Map<unknown, DependencyInfo[]>>();
 
 /** What the services an environment injector already created inject. */
 function environmentDependencies<H extends object>(
@@ -439,7 +439,34 @@ function environmentDependencies<H extends object>(
   return out.slice(0, MAX_SERVICE_DEPENDENCIES);
 }
 
-const elementEntries = new WeakMap<object, ElementEntry>();
+/**
+ * What each element injector holds, read once. Element provider records don't
+ * change, and the dependency list comes from `ɵgetDependenciesFromInjectable`,
+ * which is too costly to call for every element on every tick. The panel asks
+ * for a fresh read of the element it selects, and of everything on Refresh
+ * ({@link forgetInjectorEntries}).
+ */
+let elementEntries = new WeakMap<object, ElementEntry>();
+/** Element hosts the tree has read, so a refresh can tell an element id from an environment one. */
+const elementHosts = new WeakSet<object>();
+
+/**
+ * Drops what the collector remembers, so the next collection reads it again:
+ * one element injector by its id, or every element injector and the
+ * dependencies of every environment injector's services without one.
+ * Answers whether anything was dropped (always true without an id).
+ */
+export function forgetInjectorEntries(injectorId?: string): boolean {
+  if (injectorId === undefined) {
+    elementEntries = new WeakMap();
+    serviceDependencies = new WeakMap();
+    return true;
+  }
+  const key = byId.get(injectorId)?.deref();
+  if (!key) return false;
+  if (elementHosts.has(key)) return elementEntries.delete(key);
+  return serviceDependencies.delete(key);
+}
 
 function environmentsOf<H extends object>(ng: DebugNg<H>, path: unknown[]): object[] {
   return path.filter(
@@ -511,6 +538,7 @@ function readElement<H extends object>(
     environments: environmentsOf(ng, path),
   };
   elementEntries.set(el, entry);
+  elementHosts.add(el);
   return entry;
 }
 
@@ -636,7 +664,7 @@ export function providerValue<H extends object = Element>(
   const verb = { store: 'Store', log: 'Log', read: 'Read' }[mode];
   const key = byId.get(injectorId)?.deref();
   if (!ng || !key) return { error: 'This injector is no longer on the page.' };
-  const element = elementEntries.has(key);
+  const element = elementHosts.has(key);
   let injector: unknown = key;
   if (element) {
     try {

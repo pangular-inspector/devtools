@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_INJECTOR_NODES,
   collectInjectorTree,
+  forgetInjectorEntries,
   providerKind,
   tokenName,
 } from '../injector-tree.ts';
@@ -214,6 +215,32 @@ describe('collectInjectorTree', () => {
     expect(afterFirst).toBe(3);
     expect(calls).toBe(afterFirst);
     expect(again).toEqual(first);
+  });
+
+  it('reads an element again only when asked for it, or for everything', () => {
+    const { ng } = fakeNg();
+    const read: string[] = [];
+    const providers = ng.ɵgetInjectorProviders;
+    ng.ɵgetInjectorProviders = (inj: any) => {
+      if (inj.kind === 'node') read.push(inj.el.tagName.toLowerCase());
+      return providers(inj);
+    };
+    const first = collectInjectorTree(ng);
+    const cardId = first.roots[0].children[0].injector.id;
+    read.length = 0;
+    collectInjectorTree(ng);
+    expect(read).toEqual([]);
+
+    expect(forgetInjectorEntries(cardId)).toBe(true);
+    collectInjectorTree(ng);
+    // The card is read again; its own lookup path asks app-root's injector too.
+    expect(read).toEqual(['app-card', 'app-root']);
+
+    read.length = 0;
+    expect(forgetInjectorEntries()).toBe(true);
+    collectInjectorTree(ng);
+    expect(read.slice(0, 2)).toEqual(['app-root', 'app-card']);
+    expect(forgetInjectorEntries('inj-gone')).toBe(false);
   });
 
   it('caps the number of element nodes and says so', () => {

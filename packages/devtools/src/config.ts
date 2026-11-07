@@ -1425,6 +1425,7 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'request-ngrx-history': 'ngrx',
   'import-ngrx-session': 'ngrx',
   'request-provider-value': 'injectors',
+  'request-injector-refresh': 'injectors',
   'provider-value-result': 'injectors',
   'push-redux-stores': 'ngrx',
   'forget-redux-stores-page': 'ngrx',

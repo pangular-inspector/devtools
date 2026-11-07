@@ -9,6 +9,7 @@ import { setRedaction } from './forms-privacy.ts';
 import { legacyRedaction, serverRedaction } from './overlay-redaction.ts';
 import { hostBySelector } from './host-tree.ts';
 import { collectInjectorTree } from './injector-tree.ts';
+import { registerInjectorRefresh } from './injector-refresh.ts';
 import { gateInjectorProfilerInReactNativeDev } from './injector-profiler-gate.ts';
 import { attachNativeDiagnostics, errorUtilsTarget, nativeDebugApi } from './native-diagnostics.ts';
 import { attachNgrx } from './ngrx-overlay.ts';
@@ -334,6 +335,8 @@ async function startSession(
       throw error;
     }
   }
+  // Re-reads the element injector the panel selected, or every injector on Refresh.
+  if (on.injectors) registerInjectorRefresh(my.rpc, pageId, pushInjectorTree);
 
   const ngrx = on.ngrx
     ? attachNgrx(my, pageId, angularDebugApi, config.limits.changeLog, {
