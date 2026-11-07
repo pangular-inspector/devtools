@@ -118,7 +118,11 @@ interface PangularConfig {
     browserTools?: boolean;
   };
   actions?: boolean | Partial<Record<PangularAction, boolean>>;
-  redaction?: {secretNames?: string[]; unmask?: string[]};
+  redaction?: {
+    secretNames?: string[];
+    unmask?: string[];
+    entropy?: boolean | {minLength?: number; threshold?: number};
+  };
   limits?: {
     refreshMs?: number;
     navigations?: number;
@@ -173,12 +177,30 @@ The server refuses a blocked action, and with `actions.components` the page refu
 
 ### Redaction
 
-| Option                  | Default | What it does                                                                                                                                                |
-| ----------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `redaction.secretNames` | `[]`    | Extra field names to treat as secret, on top of the built-in list. They match by words, like the built-in list, so `passport` also covers `passportNumber`. |
-| `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__PANGULAR_FORMS__`.                                                 |
+| Option                  | Default | What it does                                                                                                                                                                                                                                        |
+| ----------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `redaction.secretNames` | `[]`    | Extra field names to treat as secret, on top of the built-in list. They match by words, like the built-in list, so `passport` also covers `passportNumber`.                                                                                         |
+| `redaction.unmask`      | `[]`    | Field names to show even when they look secret. They join the `unmask` list of `window.__PANGULAR_FORMS__`.                                                                                                                                         |
+| `redaction.entropy`     | `false` | Also mask high-entropy strings that no name or shape rule catches, such as an opaque token in a harmless-looking field. Hex values and ULIDs stay readable. `true` turns it on with the defaults; an object turns it on and sets the options below. |
 
-Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR & HTTP URLs and Capacitor plugin calls use the extra secret names. Each list keeps up to 100 names. The server sends both lists to a page only after the page is trusted, so they are not in `__connection.json`. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
+| `redaction.entropy` field | Default | What it sets                                                                                                                                    |
+| ------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `minLength`               | `24`    | The shortest run that can be masked, a whole number from 16 to 512. Raise it if ids in your app are masked that shouldn't be.                   |
+| `threshold`               | `4.5`   | The most bits per character a run needs, from 2 to 6. Shorter runs need less (see [High-entropy strings](../security.md#high-entropy-strings)). |
+
+A field that is out of range takes its default, and the server reports the problem when it starts. To mask only longer runs:
+
+```ts
+// vite.config.ts
+import pangular from '@pangular-inspector/devtools/vite';
+import {defineConfig} from 'vite';
+
+export default defineConfig({
+  plugins: [pangular({redaction: {entropy: {minLength: 32}}})],
+});
+```
+
+Forms, the router, component inputs, signals, NgRx, pipes, Analog previews, SSR & HTTP URLs and Capacitor plugin calls use the extra secret names. Each list keeps up to 100 names. `redaction.entropy` applies to the same text, on the page and again on the devtools server; [High-entropy strings](../security.md#high-entropy-strings) says what it masks. The server sends the `redaction` options to a page only after the page is trusted, so they are not in `__connection.json`. See [Access and redaction](../security.md#what-is-redacted) for what is redacted and what unmasking allows.
 
 ### Limits
 
@@ -313,19 +335,20 @@ A value that the server ignores falls back to its default, which is usually the 
 
 The [Dashboard](../inspectors/dashboard.md#configuration-block) has a **Configuration** block. It lists the options that differ from the defaults, or says **Defaults** when nothing is changed. The panel reads the `redaction` rows from the server once it is trusted, since `__connection.json` leaves them out. A static report has no server to ask, so it shows no **Extra secret names** or **Unmasked names** rows.
 
-| Row                             | Lists                                             |
-| ------------------------------- | ------------------------------------------------- |
-| **Inspectors off**              | Inspectors set to `false`.                        |
-| **Agent**                       | **Read-only** when `agent.readOnly` is `true`.    |
-| **Hidden from the agent**       | Inspectors whose agent tools are hidden.          |
-| **Blocked actions**             | Actions set to `false`.                           |
-| **Extra secret names**          | `redaction.secretNames`.                          |
-| **Unmasked names**              | `redaction.unmask`.                               |
-| **Limits**                      | Limits that differ from the defaults.             |
-| **Popup shortcut**              | `popup.hotkey`, or **Off** when it is `false`.    |
-| **Plugins off**                 | Plugins set to `false` in `plugins`.              |
-| **Plugin tools or actions off** | Plugins with `tools` or `actions` set to `false`. |
-| **Lint rules off**              | Rules set to `false` in `lint.rules`.             |
+| Row                             | Lists                                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| **Inspectors off**              | Inspectors set to `false`.                                                             |
+| **Agent**                       | **Read-only** when `agent.readOnly` is `true`.                                         |
+| **Hidden from the agent**       | Inspectors whose agent tools are hidden.                                               |
+| **Blocked actions**             | Actions set to `false`.                                                                |
+| **Extra secret names**          | `redaction.secretNames`.                                                               |
+| **Unmasked names**              | `redaction.unmask`.                                                                    |
+| **Entropy masking**             | **On** when `redaction.entropy` is on, with the options that differ from the defaults. |
+| **Limits**                      | Limits that differ from the defaults.                                                  |
+| **Popup shortcut**              | `popup.hotkey`, or **Off** when it is `false`.                                         |
+| **Plugins off**                 | Plugins set to `false` in `plugins`.                                                   |
+| **Plugin tools or actions off** | Plugins with `tools` or `actions` set to `false`.                                      |
+| **Lint rules off**              | Rules set to `false` in `lint.rules`.                                                  |
 
 ## Where to next
 
