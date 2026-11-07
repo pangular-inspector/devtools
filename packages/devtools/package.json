@@ -1,6 +1,6 @@
 {
   "name": "@pangular-inspector/devtools",
-  "version": "0.0.7",
+  "version": "1.0.0",
   "description": "Pangular Inspector, the unified Angular devtools. Inspect components, signals, DI, and routes. Runs standalone, embedded, or over MCP.",
   "license": "MIT",
   "repository": {
@@ -178,7 +178,7 @@
     "@angular/common": ">=12.2.0 <23.0.0",
     "@angular/core": ">=12.2.0 <23.0.0",
     "rxjs": ">=7",
-    "vite": ">=5"
+    "vite": ">=6"
   },
   "peerDependenciesMeta": {
     "@nativescript/core": {

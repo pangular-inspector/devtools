@@ -2,7 +2,7 @@
 
 All notable changes to `@pangular-inspector/devtools` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com).
 
-## Unreleased
+## 1.0.0
 
 Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0.7** first.
 
@@ -10,6 +10,7 @@ Most setups need changes when they come from 0.0.7, so read **Upgrading from 0.0
 
 These changes can break a 0.0.7 setup without an error.
 
+- **The Vite plugin needs Vite 6 or later.** The `vite` peer range is `>=6`, the versions its tests run against. Vite 5 apps can use the Express hub or the standalone CLI instead. npm still checks the optional peer against an installed Vite 5 and stops with `ERESOLVE`, so upgrade to Vite 6, or add `legacy-peer-deps=true` to the project's `.npmrc` (which `npm ci` needs too, and which turns off every peer check in the project) before `npm install -D @pangular-inspector/devtools`. pnpm only warns.
 - **The Vite plugin asks for the one-time code, and its MCP endpoint asks for a bearer token, by default.** In 0.0.7 the code was on only when a non-loopback host or origin was allowed. An MCP client set up against `http://localhost:5173/__devframes/__mcp` gets `401`. Send the token (see "Send a token" in the MCP server docs, or run `pangular mcp --print-config`), or pass `auth: false` on a machine only you use.
 - **The Express hub is off in production:** when `NODE_ENV` is `production`, or when the server is a production Angular build (`ngDevMode` is `false`). `nodeMiddleware` and `ssrMiddleware` then only call `next()`, and `/__devframes/` answers `404`. To keep the devtools on a staging server, pass `enabled: true` to `initPangularHub()`. Check `devtools.enabled` before the `app.use()` calls to skip them.
 - **The Express hub answers this machine only.** It refuses requests from other addresses and requests to a non-loopback `Host` with `403`. To reach it from a phone or another machine, pass `allowLan: true` and list the device's origin in `allowedOrigins`. `allowLan` needs the one-time code on.
