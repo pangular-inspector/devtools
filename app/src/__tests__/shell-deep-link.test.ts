@@ -81,9 +81,21 @@ describe('deep links', () => {
     fixture.destroy();
   });
 
+  it('selects the signal graph of the component a signals link names', async () => {
+    const { fixture, app } = await boot('#tab=signals&id=c3&page=p1');
+    expect(app.tab()).toBe('signals');
+    expect(app.signalFocus()).toEqual({ componentId: 'c3', pageId: 'p1' });
+    fixture.destroy();
+  });
+
   it('opens a tab without an item, and ignores an unknown tab', async () => {
-    let booted = await boot('#tab=signals&id=3');
+    let booted = await boot('#tab=dashboard&id=3');
+    expect(booted.app.tab()).toBe('dashboard');
+    booted.fixture.destroy();
+    TestBed.resetTestingModule();
+    booted = await boot('#tab=signals');
     expect(booted.app.tab()).toBe('signals');
+    expect(booted.app.signalFocus()).toBeNull();
     booted.fixture.destroy();
     TestBed.resetTestingModule();
     booted = await boot('#tab=nope&id=3');

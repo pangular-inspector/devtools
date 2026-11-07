@@ -275,7 +275,7 @@ Every tool answers with one plain text block, the answer as written: markdown fo
 
 ### Read and action tools
 
-Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-two tools act on the app, so the server does not mark them read-only:
+Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-three tools act on the app, so the server does not mark them read-only:
 
 | Tool                      | Tier          | Reference                                                                         |
 | ------------------------- | ------------- | --------------------------------------------------------------------------------- |
@@ -293,6 +293,7 @@ Each tool has a safety tier: `read`, `action` or `destructive`. The server marks
 | `remove-ssr-override`     | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides)     |
 | `set-component-property`  | `action`      | [Edit a component](./tools.md#edit-a-component)                                   |
 | `set-signal`              | `action`      | [Edit a component](./tools.md#edit-a-component)                                   |
+| `load-defer-block`        | `action`      | [load-defer-block](./tools.md#load-defer-block)                                   |
 | `watch-signal`            | `action`      | [watch-signal](./tools.md#watch-signal)                                           |
 | `record-pipes`            | `action`      | [Record pipe calls](./tools.md#record-pipe-calls)                                 |
 | `track-subscriptions`     | `action`      | [Track subscriptions](./tools.md#track-subscriptions)                             |
