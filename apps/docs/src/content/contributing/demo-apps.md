@@ -116,6 +116,7 @@ It listens on port 4000, or on `PORT` when set.
 - API routes under `src/server/routes/api/v1`, with method suffixes such as `index.get.ts` and `index.post.ts`, and a timing middleware.
 - Markdown content under `src/content/blog` and `src/content/docs`.
 - Prerendered routes listed in `vite.config.ts`, and `/dashboard` as client only (`ssr: false`).
+- A **Feature flags** tab from the example plugin package `examples/pangular-plugin-example`, with its `promo-banner` and `blog-teaser` flags on the home page. See [Ship a plugin from a library](../guides/ship-a-plugin.md).
 
 ### Run Analog in development
 
@@ -127,7 +128,7 @@ The script builds the devtools package, then starts the Vite dev server. That de
 
 ### Type-check the Analog demo
 
-`pnpm typecheck` runs `ngc -p examples/analog/tsconfig.app.json --noEmit`, so CI type-checks the demo's pages, templates, loaders, API routes and middleware. The demo resolves `@pangular-inspector/devtools` to the package source, which imports with `.ts` extensions, so `tsconfig.app.json` sets `rewriteRelativeImportExtensions`.
+`pnpm typecheck` runs `ngc -p examples/analog/tsconfig.app.json --noEmit`, so CI type-checks the demo's pages, templates, loaders, API routes and middleware. The demo resolves `@pangular-inspector/devtools` to the package source, which imports with `.ts` extensions, so `tsconfig.app.json` sets `rewriteRelativeImportExtensions`. It also includes the sources of `examples/pangular-plugin-example`, which the demo imports as TypeScript, so the Analog compiler builds them.
 
 ### Build and preview
 

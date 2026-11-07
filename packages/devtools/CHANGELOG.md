@@ -263,6 +263,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 - A quick start, and a panel screenshot on every inspector page.
 - Pages for the command palette, settings, terminals, the popup and hub, configuration, other servers (Hono, h3, Fastify), Capacitor, the timeline, errors, audit, TanStack Query, agent skills, browser agents and writing a plugin.
+- A guide to shipping a plugin from a library, built on the example plugin package `examples/pangular-plugin-example` (a feature flag store with its own tab and agent tools), which the Analog demo uses (#404).
 - A roadmap page.
 - The Express and other servers pages say which port the WebSocket side-car uses (the first free one from 9777), how to pin it with `ws: {port}`, and how to serve the socket on the app's own server with `attach(server)` (#426).
 - A **Renamed tools** table in the agent tools page, and the public API and the supported versions in the publishing guide.
