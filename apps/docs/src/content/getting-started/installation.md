@@ -84,7 +84,7 @@ declare module '@pangular-inspector/devtools/overlay';
 
 ### Tested versions
 
-The Vite plugin needs Vite 6 or later (`vite` `>=6`). An app on Vite 5 can still use the Express hub or the CLI, but npm checks the optional `vite` peer against the installed Vite and stops with `ERESOLVE`. Install with `npm install --legacy-peer-deps`; pnpm only prints a warning. The peer range is `@angular/core` and `@angular/common` `>=12.2.0 <23.0.0`. The overlay reads Angular's private debug APIs, so each new major is tested before the range takes it in. CI tests these versions:
+The Vite plugin needs Vite 6 or later (`vite` `>=6`). An app on Vite 5 can still use the Express hub or the CLI, but npm checks the optional `vite` peer against the installed Vite and stops with `ERESOLVE`. Add `legacy-peer-deps=true` to the project's `.npmrc` and commit it, then install as below; `npm ci` needs the same setting. pnpm only prints a warning. The peer range is `@angular/core` and `@angular/common` `>=12.2.0 <23.0.0`. The overlay reads Angular's private debug APIs, so each new major is tested before the range takes it in. CI tests these versions:
 
 | Angular                 | Node.js | What runs                                                                 | When                                  |
 | ----------------------- | ------- | ------------------------------------------------------------------------- | ------------------------------------- |
