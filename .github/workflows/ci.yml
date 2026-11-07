@@ -165,6 +165,12 @@ jobs:
       - name: Check the panel with axe
         run: pnpm test:axe
 
+      # The committed extension/ui in extension/panel.html, reading the report test:axe wrote,
+      # and every status the panel bridge shows before it connects.
+      - name: Check the extension panel with axe
+        if: ${{ !cancelled() }}
+        run: pnpm test:axe:extension
+
   # The e2e jobs below are slow, so they run only when the package, the panel, the SSR demo, the
   # tools docs (e2e:mcp reads them) or the scripts and fixtures they use change. The engines-floor
   # job runs only when what the packed package is built from changes. A diff that cannot be
