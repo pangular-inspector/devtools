@@ -47,6 +47,8 @@ export interface ApiEntry {
   slug: string;
   source: string;
   symbols: ApiSymbol[];
+  /** Other import paths that load the same file, such as the package root. */
+  aliases?: string[];
 }
 
 function kindOf(node: Node): Kind | null {
@@ -111,10 +113,13 @@ export function readApiEntries(repoRoot: string): ApiEntry[] {
     skipAddingFilesFromTsConfig: true,
   });
   const entries: ApiEntry[] = [];
+  const targetOf = (target: string | {default?: string; import?: string}) =>
+    typeof target === 'string' ? target : (target.import ?? target.default);
+  const root = pkg.exports['.'];
   for (const [key, target] of Object.entries(pkg.exports)) {
     // `./internal/*` entries serve the panel and the extension, not apps.
     if (SKIPPED_EXPORTS.has(key) || key.startsWith('./internal/')) continue;
-    const rel = typeof target === 'string' ? target : (target.import ?? target.default);
+    const rel = targetOf(target);
     if (!rel?.endsWith('.ts')) continue;
     const sourceFile = project.addSourceFileAtPath(join(pkgDir, rel));
     const symbols: ApiSymbol[] = [];
@@ -148,6 +153,7 @@ export function readApiEntries(repoRoot: string): ApiEntry[] {
       slug,
       source: posix.join('packages/devtools', rel.replace(/^\.\//, '')),
       symbols,
+      ...(root && targetOf(root) === rel ? {aliases: [pkg.name]} : {}),
     });
   }
   return entries;
@@ -185,6 +191,12 @@ export function renderApiPage(entry: ApiEntry, githubUrl: string): string {
     '',
     `Import from \`${entry.specifier}\`. This page is generated from [\`${entry.source}\`](${githubUrl}/blob/main/${entry.source}) and the files it re-exports. Run \`pnpm docs:api\` after you change the public API.`,
     '',
+    ...(entry.aliases?.length
+      ? [
+          `${entry.aliases.map((alias) => `\`${alias}\``).join(', ')} loads the same file and exports the same symbols.`,
+          '',
+        ]
+      : []),
   ];
   if (!entry.symbols.length) {
     out.push('This entry point exports no symbols. Importing it runs its side effect.', '');
@@ -217,7 +229,7 @@ function escapeEnv(text: string): string {
 export function renderApiIndex(entries: ApiEntry[]): string {
   const rows = entries.map(
     (entry) =>
-      `| [\`${entry.specifier}\`](./${entry.slug}.md) | ${entry.symbols.length ? entry.symbols.map((s) => `\`${s.name}\``).join(', ') : 'None, it runs on import'} |`,
+      `| [\`${entry.specifier}\`](./${entry.slug}.md)${entry.aliases?.length ? ` (also ${entry.aliases.map((alias) => `\`${alias}\``).join(', ')})` : ''} | ${entry.symbols.length ? entry.symbols.map((s) => `\`${s.name}\``).join(', ') : 'None, it runs on import'} |`,
   );
   return [
     '---',

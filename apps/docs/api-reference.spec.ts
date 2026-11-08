@@ -27,6 +27,13 @@ describe('API reference', () => {
     expect(entries.some((entry) => entry.slug.startsWith('internal-'))).toBe(false);
   }, 60_000);
 
+  it('names the package root as an alias of the entry point it loads', () => {
+    const entries = readApiEntries(repoRoot);
+    const devframe = entries.find((entry) => entry.slug === 'devframe');
+    expect(devframe?.aliases).toEqual(['@pangular-inspector/devtools']);
+    expect(entries.filter((entry) => entry.aliases?.length)).toHaveLength(1);
+  }, 60_000);
+
   it('shows inferred return types and symbols re-exported from a dependency', () => {
     const devframe = readApiEntries(repoRoot).find((entry) => entry.slug === 'devframe');
     const create = devframe?.symbols.find((s) => s.name === 'createPangular');
