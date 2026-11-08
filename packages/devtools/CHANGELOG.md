@@ -316,6 +316,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - Redaction leaks found by a corpus of fake secrets run through every redaction path are closed: a secret pair after another word and a colon (`Error: password: "…"`), the key after `Authorization: ApiKey` in an Analog server body that is not JSON, secret pairs in the fragment or matrix params of an Analog server message, headers with a camelCase secret name such as `newPassword`, and tokens used as NgRx state keys.
 - The `pipe-usages` resource lists the connected page id in its size summary when only one page reports.
 - The pipe scan and the pipe lint run again when a missing `templateUrl` file appears, and when a template outside the folders the Vite watcher covers changes.
+- A pipe opened from the **Components** tab shows the live data, and records calls, on the page **Components** had selected, not only the page the panel belongs to.
 
 ### Docs
 

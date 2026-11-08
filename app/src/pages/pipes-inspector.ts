@@ -1289,6 +1289,9 @@ export class PipesInspector {
   /** A pipe name to select, from another tab such as Components. */
   readonly focus = input<string | null>(null);
   readonly focusHandled = output<void>();
+  /** The page to show live data for, such as the page picked in Components.
+   * Without one, the tab shows the page the panel belongs to. */
+  readonly pageId = input<string | null>(null);
 
   protected readonly kindOptions = KIND_OPTIONS;
   protected readonly sortOptions = SORT_OPTIONS;
@@ -1301,10 +1304,19 @@ export class PipesInspector {
   loadFailed = signal(false);
   selected = signal<PipeInfo | null>(null);
 
-  live = signal<LivePipeInfo[]>([]);
-  async = signal<AsyncUsageInfo[]>([]);
+  private readonly snapshot = signal<PipesSnapshot | undefined>(undefined);
+  /** The live data of the page this tab shows, or every page merged. */
+  private readonly shown = computed(() => {
+    const snapshot = this.snapshot();
+    // With several tabs reporting, show the one asked for or the one this panel belongs to.
+    const pageId = this.livePageId();
+    const own = pageId ? snapshot?.pages?.find((page) => page.pageId === pageId) : undefined;
+    return own ?? snapshot;
+  });
+  readonly live = computed<LivePipeInfo[]>(() => this.shown()?.pipes ?? []);
+  readonly async = computed<AsyncUsageInfo[]>(() => this.shown()?.async ?? []);
   /** Every `| async` usage, set only when the list was cut short. */
-  asyncTotal = signal<number | undefined>(undefined);
+  readonly asyncTotal = computed(() => this.shown()?.asyncTotal);
   lint = signal<PipeLintFinding[] | null>(null);
   lintFailed = signal(false);
   instrumentedPages = signal<string[]>([]);
@@ -1430,16 +1442,10 @@ export class PipesInspector {
       if (this.destroyRef.destroyed) return;
       const apply = (value: unknown) => {
         const snapshot = value as PipesSnapshot | undefined;
-        // With several tabs reporting, show the one this panel belongs to.
-        const pageId = hostPageId();
-        const own = pageId ? snapshot?.pages?.find((page) => page.pageId === pageId) : undefined;
-        const source = own ?? snapshot;
-        this.live.set(source?.pipes ?? []);
+        this.snapshot.set(snapshot);
         // A runtime-only pipe has nothing left to show once the page stops using it.
         const sel = this.selected();
         if (sel?.runtime && !this.liveByName().has(sel.name)) this.selected.set(null);
-        this.async.set(source?.async ?? []);
-        this.asyncTotal.set(source?.asyncTotal);
         const pages = snapshot?.instrumented ?? [];
         this.instrumentedPages.set(pages);
         if (this.pendingRecord() === pages.length > 0) this.settleRecord(null);
@@ -1452,6 +1458,10 @@ export class PipesInspector {
     }
   }
 
+  private livePageId(): string | null {
+    return this.pageId() ?? hostPageId();
+  }
+
   async toggleInstrument() {
     const client = this.rpc();
     if (!client || this.pendingRecord() !== null) return;
@@ -1461,7 +1471,7 @@ export class PipesInspector {
     let result: { pages?: number } | undefined;
     try {
       // Start on this panel's page (or the latest page); stop every page that records.
-      const request = on ? { pageId: hostPageId() ?? undefined, on } : { on };
+      const request = on ? { pageId: this.livePageId() ?? undefined, on } : { on };
       result = (await client.scope('pangular').rpc.call('request-instrument-pipes', request)) as
         { pages?: number } | undefined;
     } catch {

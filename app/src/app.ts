@@ -27,6 +27,7 @@ import { PipesInspector } from './pages/pipes-inspector';
 import type { Tab, Tabs } from './types/tab.types';
 import type { ComponentFocus } from './types/component-focus.types';
 import type { InjectorFocus } from './types/injector-focus.types';
+import type { PipeFocus } from './types/pipe-focus.types';
 import type { SignalFocus } from './types/signal-focus.types';
 import { AnalogInspector } from './pages/analog-inspector';
 import { NetworkInspector } from './pages/network-inspector';
@@ -599,6 +600,7 @@ function readView(): View | null {
               <app-pipes-inspector
                 [rpc]="rpc()"
                 [focus]="pipeFocus()"
+                [pageId]="pipePage()"
                 (focusHandled)="pipeFocus.set(null)"
               />
             }
@@ -1779,11 +1781,18 @@ export class App implements OnInit, OnDestroy {
     computation: () => null,
   });
 
-  showPipe(name: string) {
+  // The page a link into the Pipes tab asked for; kept after the focus is handled.
+  readonly pipePage = linkedSignal<Tab, string | null>({
+    source: this.tab,
+    computation: () => null,
+  });
+
+  showPipe(focus: PipeFocus) {
     if (!this.config().inspectors.pipes) return;
     // Switch first: the focus belongs to the tab, so the switch would clear it.
     this.switchTab('pipes');
-    this.pipeFocus.set(name);
+    this.pipeFocus.set(focus.name);
+    this.pipePage.set(focus.pageId ?? null);
   }
 
   showForm(formId: string) {

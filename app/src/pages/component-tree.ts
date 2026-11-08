@@ -46,6 +46,7 @@ import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
 import type { ComponentCommand } from '../types/component-command.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
+import type { PipeFocus } from '../types/pipe-focus.types';
 import type { SignalFocus } from '../types/signal-focus.types';
 import { componentJson, hostPathText } from './component-copy';
 import { ValueFlash, flashKey } from './component-value-flash';
@@ -833,7 +834,7 @@ function storedDirectiveHosts(): boolean {
                   [pageId]="page()?.pageId"
                   [component]="bareName(sel.name)"
                   [canShowPipes]="!staticReport()"
-                  (showPipe)="showPipe.emit($event)"
+                  (showPipe)="showPipe.emit({ name: $event, pageId: page()?.pageId })"
                 />
               }
             } @else {
@@ -1884,8 +1885,8 @@ export class ComponentTree {
   readonly canShowInjector = input(false);
   /** Whether the Pipes inspector is on, so the detail lists the template's pipes. */
   readonly canShowPipes = input(false);
-  /** Opens the Pipes tab on the pipe with this name. */
-  readonly showPipe = output<string>();
+  /** Opens the Pipes tab on the pipe with this name, for the page the tree shows. */
+  readonly showPipe = output<PipeFocus>();
   readonly showInjector = output<InjectorFocus>();
   /** Whether the Signals tab is on, so "Show in Signals" can open it. */
   readonly canShowSignals = input(false);
