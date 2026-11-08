@@ -177,7 +177,7 @@ describe('ngrx collector', () => {
 
   it('writes diff paths with keys that need quotes the way the state tree does', async () => {
     const { store, collector } = setup();
-    const source = (store as any)[STATE_SOURCE];
+    const source = (store as unknown as Record<symbol, Record<string, unknown>>)[STATE_SOURCE];
     source['display name'] = writable('Ada');
     source.profile = writable({ 'first name': 'Ada', city: 'Rome' });
     collector.collect();

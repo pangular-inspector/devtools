@@ -1,10 +1,5 @@
-import {
-  DEVTOOLS_BASES,
-  POPUP_ROOT_ID,
-  SETUP_URL,
-  TROUBLESHOOTING_URL,
-  insideDevtoolsPanel,
-} from './panel-frame.ts';
+import { DEVTOOLS_BASES, POPUP_ROOT_ID, SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
+import { TROUBLESHOOTING_URL, newTabLink } from './popup-links.ts';
 import { DEFAULT_POPUP_HOTKEY, matchesHotkey, normalizeHotkey } from './config.ts';
 // In-page floating devtools popup. Renders an iframe pointing at the devtools SPA.
 
@@ -428,21 +423,8 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   missingHint.textContent =
     'Mount the Pangular Inspector hub or the Vite plugin in your dev server, before the SSR handler. ' +
     'If it is mounted on a custom path, pass that path to initOverlay({baseURL}).';
-  const setupLink = document.createElement('a');
-  setupLink.href = SETUP_URL;
-  setupLink.target = '_blank';
-  setupLink.rel = 'noopener noreferrer';
-  setupLink.textContent = 'How to set up Pangular Inspector';
-  const newTab = document.createElement('span');
-  newTab.classList.add('sr-only');
-  newTab.textContent = ' (opens in a new tab)';
-  setupLink.append(newTab);
-  const troubleLink = document.createElement('a');
-  troubleLink.href = TROUBLESHOOTING_URL;
-  troubleLink.target = '_blank';
-  troubleLink.rel = 'noopener noreferrer';
-  troubleLink.textContent = 'Troubleshooting';
-  troubleLink.append(newTab.cloneNode(true));
+  const setupLink = newTabLink(SETUP_URL, 'How to set up Pangular Inspector');
+  const troubleLink = newTabLink(TROUBLESHOOTING_URL, 'Troubleshooting');
   const retryBtn = document.createElement('button');
   retryBtn.type = 'button';
   retryBtn.classList.add('retry');
@@ -1467,16 +1449,13 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   };
   const onOutsideMessage = (e: MessageEvent) => {
     const msg = e.data as { type?: unknown; pill?: unknown } | null;
-    const type = msg?.type;
-    if (type === 'pangular:popup-pill') {
-      // The counts launcher setting, changed in the panel's own window.
-      if (typeof msg?.pill !== 'boolean' || !fromOutside(e)) return;
+    // The counts launcher setting, changed in the panel's own window.
+    if (msg?.type === 'pangular:popup-pill' && typeof msg.pill === 'boolean' && fromOutside(e)) {
       state.pill = msg.pill || undefined;
       saveState(state);
       applyPill();
-      return;
     }
-    if (type !== 'pangular:popup-return') return;
+    if (msg?.type !== 'pangular:popup-return') return;
     const win = fromOutside(e);
     if (!win) return;
     outside = win;

@@ -30,11 +30,8 @@ import type { SignalFocus } from '../types/signal-focus.types';
 import { SignalGraphView } from './signal-graph-view';
 import { SearchField } from '../ui/search-field';
 import { jsonDiff, type JsonDiffEntry } from './json-diff';
-import type {
-  SignalChange,
-  SignalGraphElement,
-  SignalGraphNode,
-} from '@pangular-inspector/devtools/internal/types';
+import type { GraphInjector, SignalGraph, SignalResource } from '../types/signal-graph.types';
+import type { SignalChange, SignalGraphNode } from '@pangular-inspector/devtools/internal/types';
 
 type SignalNode = SignalGraphNode;
 
@@ -42,49 +39,6 @@ interface RestoreResult {
   ok?: boolean;
   key?: string;
   error?: string;
-}
-
-interface SignalEdge {
-  consumer: number;
-  producer: number;
-}
-
-interface SignalResource {
-  id: string;
-  name: string;
-  named: boolean;
-  status?: string;
-  isLoading?: boolean;
-  params?: unknown;
-  value?: unknown;
-  error?: unknown;
-  statusCode?: number;
-  epoch: number;
-  changes?: number;
-  nodeIds: string[];
-}
-
-interface GraphInjector {
-  id: string;
-  name: string;
-}
-
-interface SignalGraph {
-  nodes: SignalNode[];
-  edges: SignalEdge[];
-  componentSelector?: string;
-  component?: { id: string; name: string; tag: string; path: string };
-  injector?: GraphInjector;
-  element?: SignalGraphElement;
-  environments?: GraphInjector[];
-  resources?: SignalResource[];
-  nodeCount?: number;
-  unsupported?: boolean;
-  writeHook?: false;
-  source?: 'selected' | 'routed' | 'root';
-  pageId?: string;
-  history?: Record<string, SignalChange[]>;
-  watch?: { ids: string[]; stacks: boolean };
 }
 
 interface LiveNode {

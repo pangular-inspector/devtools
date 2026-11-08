@@ -52,6 +52,7 @@ import { initialTab, storeTab, storedTab } from './tab-memory';
 import { detectBaseURL } from './base-url';
 import { panelAuth } from './auth-token';
 import { AuthCode } from './ui/auth-code';
+import { ConnectionError } from './ui/connection-error';
 import { clearHighlightsOnHide, forgetDevframeConnection, panelCacheOptions, rpcTry } from './rpc';
 import { EditorOpener } from './ui/source-link';
 import { ViewMemory, restoreScroll } from './view-memory';
@@ -203,10 +204,6 @@ function readView(): View | null {
   return HUB_VIEWS.find((known) => known === view) ?? null;
 }
 
-/** The docs on a panel that can't reach its server. */
-export const TROUBLESHOOTING_DOCS_URL =
-  'https://pangular-inspector.dev/getting-started/troubleshooting/#the-panel-says-disconnected';
-
 @Component({
   selector: 'app-root',
   host: {
@@ -240,6 +237,7 @@ export const TROUBLESHOOTING_DOCS_URL =
     Settings,
     CommandPalette,
     AuthCode,
+    ConnectionError,
   ],
   template: `
     <header>
@@ -515,18 +513,7 @@ export const TROUBLESHOOTING_DOCS_URL =
       } @else if (pairing(); as client) {
         <app-auth-code [client]="client" />
       } @else if (connectionFailed()) {
-        <div class="connection-error" role="alert">
-          <p>
-            Can't reach the devtools server. Check that the dev server is running. The panel keeps
-            trying to connect.
-          </p>
-          <div class="connection-actions">
-            <button type="button" (click)="retryConnection()">Retry now</button>
-            <a [href]="troubleshootingUrl" target="_blank" rel="noopener noreferrer"
-              >Troubleshooting<span class="sr-only"> (opens in a new tab)</span></a
-            >
-          </div>
-        </div>
+        <app-connection-error (retry)="retryConnection()" />
       } @else if (!rpc()) {
         <p class="turned-off" role="status">Connecting to the devtools server…</p>
       } @else if (comingSoon(); as info) {
@@ -1035,50 +1022,6 @@ export const TROUBLESHOOTING_DOCS_URL =
     .turned-off code {
       font-family: var(--font-mono);
     }
-    .connection-error {
-      max-width: 60ch;
-      margin: 0;
-      padding: 12px 14px;
-      border: 1px solid color-mix(in srgb, var(--danger) 36%, transparent);
-      border-radius: var(--radius);
-      background: var(--surface);
-      color: var(--text);
-      p {
-        margin: 0 0 10px;
-      }
-      .connection-actions {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 8px 16px;
-      }
-      a {
-        color: var(--accent);
-        &:focus-visible {
-          @include m.focus-ring;
-        }
-      }
-      button {
-        display: inline-flex;
-        align-items: center;
-        height: var(--control-h);
-        padding: 0 14px;
-        border: 1px solid var(--control-border);
-        border-radius: var(--radius-sm);
-        background: var(--surface-2);
-        color: var(--text);
-        font: inherit;
-        font-weight: 500;
-        cursor: pointer;
-        &:hover {
-          background: var(--surface-3);
-          border-color: var(--accent-line);
-        }
-        &:focus-visible {
-          @include m.focus-ring;
-        }
-      }
-    }
     @media (max-width: 720px) {
       header {
         flex-wrap: wrap;
@@ -1228,7 +1171,6 @@ export class App implements OnInit, OnDestroy {
   private readonly openedDock = signal<{ dock: string } | null>(null);
   connected = signal(false);
   readonly connectionFailed = signal(false);
-  protected readonly troubleshootingUrl = TROUBLESHOOTING_DOCS_URL;
   /** A client the server does not trust yet: the panel asks for the one-time code. */
   readonly pairing = signal<DevframeRpcClient | null>(null);
   /** Says "Connected." once the one-time code is accepted. */

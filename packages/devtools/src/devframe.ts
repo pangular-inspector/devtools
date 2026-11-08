@@ -2664,16 +2664,13 @@ const pangular = defineDevframe({
         'Pipes as JSON: `source` has each pipe with purity and template uses; `pipes`/`async` the live page usage, with churn and stale findings while recording. ' +
         LIVE_RESOURCE_NOTE,
       mimeType: 'application/json',
-      read: () => {
-        const live = currentPipes(pipePages);
-        return {
-          text: liveResourceText(
-            { source: scanPipes(ctx.cwd), ...live },
-            'pangular:scan-pipes and pangular:explain-pipe',
-            [...pipePages.keys()],
-          ),
-        };
-      },
+      read: () => ({
+        text: liveResourceText(
+          { source: scanPipes(ctx.cwd), ...currentPipes(pipePages) },
+          'pangular:scan-pipes and pangular:explain-pipe',
+          [...pipePages.keys()],
+        ),
+      }),
     });
 
     // The same states one page at a time, for the MCP resource templates (`agent-mcp.ts`).

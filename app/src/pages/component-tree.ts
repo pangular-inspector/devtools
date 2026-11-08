@@ -46,7 +46,6 @@ import { CdRecording, type CdPage } from './cd-recording';
 import type { ComponentFocus } from '../types/component-focus.types';
 import type { ComponentCommand } from '../types/component-command.types';
 import type { InjectorFocus } from '../types/injector-focus.types';
-import type { PipeFocus } from '../types/pipe-focus.types';
 import type { SignalFocus } from '../types/signal-focus.types';
 import { componentJson, hostPathText } from './component-copy';
 import { ValueFlash, flashKey } from './component-value-flash';
@@ -1886,7 +1885,7 @@ export class ComponentTree {
   /** Whether the Pipes inspector is on, so the detail lists the template's pipes. */
   readonly canShowPipes = input(false);
   /** Opens the Pipes tab on the pipe with this name, for the page the tree shows. */
-  readonly showPipe = output<PipeFocus>();
+  readonly showPipe = output<{ name: string; pageId?: string }>();
   readonly showInjector = output<InjectorFocus>();
   /** Whether the Signals tab is on, so "Show in Signals" can open it. */
   readonly canShowSignals = input(false);
@@ -2688,7 +2687,6 @@ export class ComponentTree {
 
   private say(message: string) {
     this.pickMessage.set(message);
-    // A repeated message, such as "The page did not move.", is read out again.
     this.announce(message);
   }
 
