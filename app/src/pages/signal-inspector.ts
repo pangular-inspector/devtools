@@ -1815,6 +1815,8 @@ export class SignalInspector {
   readonly focus = input<SignalFocus | null>(null);
   /** The signal to select once the focused component's graph arrives. */
   private readonly focusedSignal = signal<{ componentId: string; key: string } | null>(null);
+  /** The page a focus asked for before it reported a graph; chosen once it does. */
+  private pendingPageId: string | null = null;
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -2282,6 +2284,11 @@ export class SignalInspector {
         const state = { graph: next?.graph ?? null, pages };
         this.notePageGone(graphPagesOf(state));
         this.graphState.set(state);
+        const pending = this.pendingPageId;
+        if (pending && this.graphPages()[pending]) {
+          this.pendingPageId = null;
+          this.chosenPageId.set(pending);
+        }
         // A state the client hasn't loaded from the server yet says nothing.
         if (value !== undefined) this.graphKnown.set(true);
       };
@@ -2325,6 +2332,7 @@ export class SignalInspector {
 
   selectPage(pageId: string | null) {
     if (!pageId || pageId === this.shownPageId()) return;
+    this.pendingPageId = null;
     this.chosenPageId.set(pageId);
     const label = this.pageOptions().find((o) => o.value === pageId)?.label ?? pageId;
     this.announcement.set(`Showing the signal graph of ${label}.`);
@@ -2332,8 +2340,11 @@ export class SignalInspector {
 
   /** Shows the graph of the component a focus names, on its page when it names one. */
   private showComponent(focus: SignalFocus) {
-    if (focus.pageId && !this.pageId && this.graphPages()[focus.pageId]) {
-      this.chosenPageId.set(focus.pageId);
+    this.pendingPageId = null;
+    if (focus.pageId && !this.pageId) {
+      // A page that has not reported its graph yet is chosen when it does.
+      if (this.graphPages()[focus.pageId]) this.chosenPageId.set(focus.pageId);
+      else this.pendingPageId = focus.pageId;
     }
     this.focusedSignal.set(focus.key ? { componentId: focus.componentId, key: focus.key } : null);
     this.pickComponent(focus.componentId, this.pageId ?? focus.pageId);
@@ -2341,6 +2352,8 @@ export class SignalInspector {
 
   pickComponent(value: string | null, forPage?: string) {
     const picked = value && value !== FOLLOW ? value : null;
+    // Another component replaces a focus that still waits for its signal.
+    if (this.focusedSignal()?.componentId !== picked) this.focusedSignal.set(null);
     const pageId = forPage ?? this.targetPageId() ?? undefined;
     this.pickedByPage.update((all) => {
       const next = { ...all };
