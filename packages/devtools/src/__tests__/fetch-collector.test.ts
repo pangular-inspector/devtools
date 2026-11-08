@@ -8,7 +8,7 @@ import { requestOf, watchNativeFetch } from '../fetch-collector.ts';
 import { notePendingClientRequest } from '../http-record.ts';
 import { httpRegistry, sanitizeCalls } from '../http-rules.ts';
 import { readHeaders, withCapturedHeaders } from '../http-headers.ts';
-import { withPangular } from '../http.ts';
+import { providePangularHttp, withPangular } from '../http.ts';
 import { angularAtLeast, initAngularTestBed, zonelessProviders } from './angular-version.ts';
 
 const g = globalThis as { fetch?: typeof fetch; __PANGULAR_HTTP__?: unknown };
@@ -169,6 +169,31 @@ describe('watchNativeFetch', () => {
 
 describe.runIf(angularAtLeast('19.0'))('native fetch with HttpClient', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  it('wraps fetch() from bootstrap only in dev mode', () => {
+    const dev = globalThis as { ngDevMode?: unknown };
+    const saved = dev.ngDevMode;
+    const stub = stubFetch(async () => new Response(''));
+    initAngularTestBed();
+    try {
+      dev.ngDevMode = false;
+      TestBed.configureTestingModule({
+        providers: [...zonelessProviders(), providePangularHttp()],
+      });
+      TestBed.inject(HttpClient, null);
+      expect(g.fetch).toBe(stub);
+      TestBed.resetTestingModule();
+      dev.ngDevMode = true;
+      TestBed.configureTestingModule({
+        providers: [...zonelessProviders(), providePangularHttp()],
+      });
+      TestBed.inject(HttpClient, null);
+      expect(g.fetch).not.toBe(stub);
+      expect(httpRegistry().nativeFetch).toBe(stub);
+    } finally {
+      dev.ngDevMode = saved;
+    }
+  });
 
   it('records an HttpClient request on withFetch() once, as an HttpClient call', async () => {
     (globalThis as { ngDevMode?: unknown }).ngDevMode = true;

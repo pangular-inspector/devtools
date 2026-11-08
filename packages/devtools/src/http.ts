@@ -66,6 +66,8 @@ import { redirectOf } from './http-redirect.ts';
 import { claimTransferEntry, mockContentType, parseBody } from './http-internals.ts';
 export { decodePayload, type PayloadEntry, type PayloadSummary } from './http-payload.ts';
 
+declare const ngDevMode: unknown;
+
 const MAX_WARNINGS = 50;
 const PREVIEW_CHARS = 2000;
 
@@ -446,8 +448,11 @@ export function providePangularHttp(): EnvironmentProviders {
 
 /** Records the page's own `fetch()` calls from bootstrap on, before the overlay connects. */
 function watchNativeFetchEarly() {
+  // A bare `ngDevMode`, which a production build replaces with false, so the
+  // fetch collector and the devtools paths it knows are dropped from the app.
+  if (typeof ngDevMode === 'undefined' || !ngDevMode) return;
   const platform = inject(PLATFORM_ID, { optional: true });
-  if (!devMode() || !platform || isPlatformServer(platform)) return;
+  if (!platform || isPlatformServer(platform)) return;
   watchNativeFetch();
 }
 
