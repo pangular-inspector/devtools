@@ -81,7 +81,8 @@ export function redirectTarget(
 /**
  * The query and fragment of `redirectTo` (`target`, from `?` or `#`), with each
  * `:name` value copied from the query parameter `name` of the URL (`rest`), as
- * Angular's redirect does. A key whose parameter the URL lacks is dropped.
+ * Angular's redirect does: every value of a repeated parameter becomes its own
+ * pair, and a parameter the URL lacks becomes `undefined`, as Angular writes it.
  */
 function redirectQuery(target: string, rest: string): string {
   if (!target.startsWith('?')) return target;
@@ -96,8 +97,9 @@ function redirectQuery(target: string, rest: string): string {
       pairs.push(pair);
       continue;
     }
-    const copied = actual.get(value.slice(1));
-    if (copied !== null) pairs.push(`${key}=${encodeURIComponent(copied)}`);
+    const copied = actual.getAll(value.slice(1));
+    if (!copied.length) pairs.push(`${key}=undefined`);
+    for (const one of copied) pairs.push(`${key}=${encodeURIComponent(one)}`);
   }
   return `${pairs.length ? `?${pairs.join('&')}` : ''}${fragment}`;
 }

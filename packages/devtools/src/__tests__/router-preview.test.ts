@@ -98,10 +98,13 @@ describe('redirectTarget', () => {
       path: 'old',
       fullPath: '/old',
       kind: 'redirect',
-      redirectTo: '/new?tab=:section&from=old&missing=:gone#top',
+      redirectTo: '/new?tab=:section&from=old&missing=:gone&tags=:tag#top',
       pathMatch: 'full',
     };
-    expect(redirectTarget('/old?section=a%20b', [node], {})).toBe('/new?tab=a%20b&from=old#top');
+    // Angular Router 22.1 writes a missing parameter as `undefined` and repeats a repeated one.
+    expect(redirectTarget('/old?section=a%20b&tag=x&tag=y', [node], {})).toBe(
+      '/new?tab=a%20b&from=old&missing=undefined&tags=x&tags=y#top',
+    );
   });
 });
 
