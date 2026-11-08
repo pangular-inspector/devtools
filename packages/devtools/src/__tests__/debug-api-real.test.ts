@@ -9,7 +9,8 @@ import { STANDALONE, angularAtLeast, zonelessProviders } from './angular-version
 class DebugRoot {}
 Component({ ...STANDALONE, selector: 'app-root', template: '<p>ok</p>' })(DebugRoot);
 
-describe('NgDebugApi against a real app', () => {
+// `bootstrapApplication` and standalone components arrive in 14.0.
+describe.runIf(angularAtLeast('14.0'))('NgDebugApi against a real app', () => {
   let app: ApplicationRef | null = null;
   afterEach(() => {
     app?.destroy();

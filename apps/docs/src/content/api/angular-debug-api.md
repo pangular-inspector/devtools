@@ -33,6 +33,7 @@ A required function is one every supported Angular version publishes, so the ove
 | `ɵgetInjectorMetadata`            | 17.0     | No       | Type (`element`, `environment` or `null`) and source of an injector.                                                         |
 | `ɵsetProfiler`                    | See note | No       | Adds a profiler. From 20.0 it hands back its remover; before that it has one slot (`ng-capabilities.ts` checks the version). |
 | `ɵgetSignalGraph`                 | 19.1     | No       | The reactive graph of an injector. Node ids from 20.1.                                                                       |
+| `toggleWatchSignal`               | See note | No       | Watches or unwatches a signal-graph node by id. Present in 22.3 prereleases; not called by the overlay.                      |
 | `ɵgetDeferBlocks`                 | 19.1     | No       | `@defer` blocks under a node. Replaced by `ɵgetControlFlowBlocks` in 22.0.                                                   |
 | `ɵgetControlFlowBlocks`           | 22.0     | No       | `@defer` and `@for` blocks under a node.                                                                                     |
 | `ɵgetTransferState`               | See note | No       | The TransferState entries without Angular's own hydration keys. Present in 22.1; not checked on older versions.              |
