@@ -1,0 +1,266 @@
+@if (live()) {
+  <p class="intro">
+    Every component instance on the page, in the order Angular rendered them. Hover a row to
+    highlight its host in the page, and select it to read its live inputs, properties, outputs and
+    injected services.
+  </p>
+
+  <div class="toolbar">
+    <app-search-field
+      #filterInput
+      class="search"
+      placeholder="Filter by text, <tag> or [directive]"
+      describedBy="ct-filter-hint"
+      saveKey="components"
+      [value]="filter()"
+      (valueChange)="setFilter($event)"
+    />
+    <span id="ct-filter-hint" class="sr-only">
+      Type plain text, a tag such as &lt;button&gt;, or a directive such as [routerLink]. Combine
+      them to narrow the tree.
+    </span>
+    @if (pageOptions().length > 1) {
+      <span class="sr-only" id="ct-page-label">Page</span>
+      <app-select
+        class="page-select"
+        labelledBy="ct-page-label"
+        [options]="pageOptions()"
+        [value]="page()?.pageId ?? null"
+        (valueChange)="selectPage($event)"
+      />
+    }
+    <span class="count">{{ countLabel() }}</span>
+    <div class="tree-actions">
+      @if (page()!.directiveHostCount) {
+        <button
+          type="button"
+          class="tree-action"
+          title="Directive hosts"
+          [attr.aria-pressed]="showDirectiveHosts()"
+          (click)="toggleDirectiveHosts()"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 4H5v16h3" />
+            <path d="M16 4h3v16h-3" />
+          </svg>
+          <span class="label">Directive hosts</span>
+        </button>
+      }
+      <button
+        type="button"
+        class="tree-action"
+        title="Expand all"
+        [disabled]="!!filter().trim()"
+        (click)="expandAll()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m7 15 5 5 5-5" />
+          <path d="m7 9 5-5 5 5" />
+        </svg>
+        <span class="label">Expand all</span>
+      </button>
+      <button
+        type="button"
+        class="tree-action"
+        title="Collapse all"
+        [disabled]="!!filter().trim()"
+        (click)="collapseAll()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m7 20 5-5 5 5" />
+          <path d="m7 4 5 5 5-5" />
+        </svg>
+        <span class="label">Collapse all</span>
+      </button>
+      <button
+        type="button"
+        class="pick"
+        [class.on]="picking()"
+        [attr.title]="pickLabel()"
+        (click)="picking() ? cancelPick() : pick()"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 4l6.5 16 2.3-6.7L19.5 11z" />
+        </svg>
+        <span class="label">{{ pickLabel() }}</span>
+      </button>
+    </div>
+  </div>
+  <p class="sr-only" role="status">{{ announcement() }}</p>
+  @if (pickMessage()) {
+    <p class="pick-message">{{ pickMessage() }}</p>
+  }
+  @if (page()!.truncated) {
+    <p class="notice" role="status">{{ truncationText() }}</p>
+  }
+
+  <div class="layout">
+    <div appTreeRows class="tree-col" (clearFilter)="clearFilter()"></div>
+
+    @if (selectedHost(); as host) {
+      <section
+        appHostDetail
+        class="detail"
+        aria-labelledby="ct-detail-title"
+        [node]="host"
+      ></section>
+    } @else if (selectedNode(); as sel) {
+      <section
+        appComponentDetail
+        class="detail"
+        aria-labelledby="ct-detail-title"
+        [node]="sel"
+        (showForm)="showForm.emit($event)"
+        (showInjector)="showInjector.emit($event)"
+        (showSignals)="showSignals.emit($event)"
+        (showPipe)="showPipe.emit($event)"
+      ></section>
+    } @else {
+      <div class="detail placeholder">
+        @if (destroyed(); as name) {
+          <p class="state-title">The selected component was destroyed</p>
+          <p class="state-hint">
+            <span class="mono">{{ name }}</span> is no longer on the page. Select another component
+            to see its live values.
+          </p>
+        } @else {
+          <p class="state-hint">
+            Select a component to see its live inputs, properties, outputs, change detection and
+            injected services.
+          </p>
+        }
+      </div>
+    }
+  </div>
+
+  <app-defer-blocks
+    [blocks]="deferBlocks()"
+    [truncated]="page()?.deferTruncated === true"
+    [clockOffset]="page()?.clockOffset ?? 0"
+    [mismatches]="page()?.hydration?.mismatches ?? []"
+    (showOwner)="showOwner($event)"
+    (showNode)="revealNode($event)"
+    (highlight)="$event ? highlightBlock($event) : highlight(null)"
+  />
+  @if (deferUnavailable()) {
+    <app-angular-unavailable
+      class="defer"
+      [page]="angularPage()"
+      capability="deferBlocks"
+      compact
+    />
+  }
+  @if (!native()) {
+    <app-hydration-section
+      [report]="page()?.hydration"
+      (overlay)="setHydrationOverlay($event)"
+      (showNode)="revealNode($event)"
+      (highlight)="highlight($event)"
+    />
+  }
+  <app-for-blocks
+    [blocks]="page()?.forBlocks"
+    [truncated]="page()?.forBlocksTruncated === true"
+    [supported]="(page()?.deferBlocks && !page()?.forBlocks) || forUnavailable() ? false : null"
+    [angular]="angularPage()"
+    (showOwner)="showForOwner($event)"
+    (highlight)="highlight($event)"
+  />
+  @if (!staticReport()) {
+    <app-cd-recording
+      [page]="cdPage()"
+      [pageId]="page()!.pageId"
+      [rpc]="rpc()"
+      [native]="native()"
+      (showComponent)="showCdComponent($event)"
+    />
+    <app-leaks-section
+      [report]="leaksPage()"
+      [pageId]="page()!.pageId"
+      [rpc]="rpc()"
+      [angular]="angularPage()"
+      (showComponent)="showLeakComponent($event)"
+      (highlight)="highlight($event)"
+    />
+  }
+} @else {
+  @if (page()) {
+    <p class="notice" role="status">
+      The page reported no component instances. The live tree needs a development build with
+      Angular's debug API. Showing what the source declares instead.
+    </p>
+  } @else if (!pagesKnown()) {
+    <p class="notice" role="status">Loading the live component tree…</p>
+  } @else {
+    <p class="notice">
+      No page is connected, so this lists what the source declares. Open the app in a browser with
+      the devtools connected to see each rendered instance.
+    </p>
+  }
+
+  <div class="toolbar">
+    <app-search-field
+      #filterInput
+      class="search"
+      placeholder="Filter by selector, class or file"
+      saveKey="components-source"
+      [(value)]="filter"
+    />
+    @if (source().length) {
+      <span class="count" aria-live="polite">
+        @if (filter().trim()) {
+          {{ filteredSource().length }} of {{ source().length }}
+        } @else {
+          {{ sourceCounts().components }}
+          {{ sourceCounts().components === 1 ? 'component' : 'components' }} ·
+          {{ sourceCounts().directives }}
+          {{ sourceCounts().directives === 1 ? 'directive' : 'directives' }}
+        }
+      </span>
+    }
+    <button
+      type="button"
+      class="refresh"
+      [class.spinning]="loading()"
+      [attr.aria-busy]="loading()"
+      (click)="refresh()"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+        <path d="M20 4v5h-5" />
+      </svg>
+      Refresh
+    </button>
+  </div>
+
+  @if (loading() && !source().length) {
+    <div class="state" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <p class="state-title">Scanning components…</p>
+    </div>
+  } @else if (error() && !source().length) {
+    <div class="state" role="alert">
+      <p class="state-title">Could not load components</p>
+      <p class="state-hint">
+        @if (staticReport()) {
+          Run <code>pangular build</code> again to rebuild the report.
+        } @else {
+          Check that the dev server is running, then try again.
+        }
+      </p>
+      <button type="button" (click)="refresh()">Retry</button>
+    </div>
+  } @else if (!source().length) {
+    <div class="state">
+      <p class="state-title">No components found</p>
+      <p class="state-hint">No @Component or @Directive was found in the source.</p>
+    </div>
+  } @else if (!filteredSource().length) {
+    <div class="state">
+      <p class="state-title">No components match “{{ filter().trim() }}”</p>
+      <button type="button" (click)="clearFilter()">Clear filters</button>
+    </div>
+  } @else {
+    <ul appSourceList class="source-list" role="list" (showForm)="showForm.emit($event)"></ul>
+  }
+}

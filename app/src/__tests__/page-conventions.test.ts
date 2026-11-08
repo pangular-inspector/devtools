@@ -40,7 +40,7 @@ describe('every page uses the shared search field', () => {
       ),
     );
     // The values filter sits under the component filter in the Components detail panel.
-    expect(labels).toEqual(['component-tree.ts: Filter values']);
+    expect(labels).toEqual(['components/component-detail.ts: Filter values']);
   });
 
   it('uses Filter, not Find, in every placeholder', async () => {

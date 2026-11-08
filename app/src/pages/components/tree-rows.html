@@ -1,0 +1,107 @@
+<h2 class="sr-only">Component tree</h2>
+@if (!rows().length) {
+  <div class="state compact tree">
+    <p class="state-title">No components match “{{ filter().trim() }}”</p>
+    @if (page()!.truncated) {
+      <p class="state-hint">The filter only searches the components the tree lists.</p>
+    }
+    @if (!showDirectiveHosts() && page()!.directiveHostCount) {
+      <p class="state-hint">Directive hosts are hidden, so they are not searched.</p>
+    }
+    <button type="button" (click)="clearFilter.emit()">Clear filters</button>
+  </div>
+}
+@if (rowWindow.enabled()) {
+  <p class="window-note">
+    {{ rows().length }} rows. Rows render as you scroll, so the browser's find only sees the ones
+    near view; the filter above searches them all.
+  </p>
+}
+<div
+  #treeEl
+  class="tree"
+  role="tree"
+  aria-label="Component instances"
+  [class.windowed]="rowWindow.enabled()"
+  [style.padding-top.px]="rowWindow.enabled() ? 6 + rowWindow.padTop() : null"
+  [style.padding-bottom.px]="rowWindow.enabled() ? 6 + rowWindow.padBottom() : null"
+  [hidden]="!rows().length"
+  (keydown)="onTreeKey($event)"
+>
+  @for (shown of shownRows(); track shown.row.node.id) {
+    @let row = shown.row;
+    <div
+      class="row"
+      role="treeitem"
+      [attr.aria-level]="row.depth + 1"
+      [attr.aria-setsize]="row.setsize"
+      [attr.aria-posinset]="row.posinset"
+      [attr.aria-expanded]="row.hasChildren ? row.expanded : null"
+      [attr.aria-selected]="selectedId() === row.node.id"
+      [attr.tabindex]="tabStop() === row.node.id ? 0 : -1"
+      [attr.data-vindex]="shown.index"
+      [attr.data-id]="row.node.id"
+      [class.selected]="selectedId() === row.node.id"
+      [class.dir-host]="row.node.kind === 'directive'"
+      [style.--depth]="row.depth"
+      (click)="select(row.node.id)"
+      (focus)="focusId.set(row.node.id); highlight(row.node.id); showNameTip($event)"
+      (blur)="highlight(null); nameTip.set(null)"
+      (keydown.escape)="nameTip.set(null)"
+      (mouseenter)="highlight(row.node.id)"
+      (mouseleave)="highlight(null)"
+    >
+      @if (row.hasChildren) {
+        <span
+          class="twisty"
+          aria-hidden="true"
+          [class.open]="row.expanded"
+          (click)="toggle(row.node.id, $event)"
+        >
+          <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>
+        </span>
+      } @else {
+        <span class="twisty-space" aria-hidden="true"></span>
+      }
+      @if (row.node.kind === 'directive') {
+        <span class="tag host-tag mono">&lt;{{ row.node.tag }}&gt;</span>
+        <span class="host-dirs mono" [attr.title]="row.node.directives?.join(', ')">{{
+          hostLabel(row.node)
+        }}</span>
+        <span class="sr-only">directive host</span>
+      } @else {
+        <span class="name mono" [attr.title]="row.node.name">{{ row.node.name }}</span>
+        <span class="tag mono" [attr.title]="'<' + row.node.tag + '>'"
+          >&lt;{{ row.node.tag }}&gt;</span
+        >
+      }
+      @if (row.node.hydration; as status) {
+        <span [class]="'hyd hyd-' + status"
+          ><span class="sr-only">Hydration: </span>{{ hydrationText(status) }}</span
+        >
+      }
+      @for (hit of routedById().get(row.node.id) ?? []; track hit.outlet + hit.route) {
+        <span class="routed">{{ hit.route || '/' }}</span>
+      }
+      @if (cdHosts()[row.node.id]; as checks) {
+        <span class="checks">
+          {{ checks
+          }}<span class="sr-only"> {{ checks === 1 ? 'check' : 'checks' }} while recording</span>
+        </span>
+      }
+      @if (row.node.kind !== 'directive' && row.node.directives?.length) {
+        <span class="dirs" [attr.title]="row.node.directives!.join(', ')">
+          +{{ row.node.directives!.length }}
+          <span class="sr-only">
+            {{ row.node.directives!.length === 1 ? 'directive' : 'directives' }}
+          </span>
+        </span>
+      }
+    </div>
+  }
+</div>
+@if (nameTip(); as tip) {
+  <div class="name-tip mono" aria-hidden="true" [style.top.px]="tip.top">
+    {{ tip.text }}
+  </div>
+}

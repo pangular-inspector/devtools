@@ -1,0 +1,88 @@
+@use 'mixins' as m;
+@use 'components' as ct;
+
+@include ct.base;
+@include ct.buttons;
+@include ct.facts;
+.source-item {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.source-item.expanded {
+  border-color: var(--accent-line);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.source-toggle {
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  min-height: 52px;
+  padding: 10px 16px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+}
+.source-toggle:hover {
+  background: var(--surface-2);
+}
+.source-toggle:focus-visible {
+  @include m.focus-ring(-2px);
+}
+.kind-flag {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 99px;
+  @include m.tint(accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.kind-flag.directive {
+  @include m.tint(ok);
+}
+.row-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.selector {
+  color: var(--text-strong);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.file {
+  color: var(--text-2);
+  font-size: 12px;
+  @include m.truncate;
+}
+.chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 2.2;
+  transition: transform 200ms var(--ease);
+}
+.expanded .chevron {
+  transform: rotate(90deg);
+  stroke: var(--accent);
+}
+.inline-detail {
+  padding: 0 0 12px;
+  border-top: 1px solid var(--border);
+}
+.inline-detail .facts {
+  border-bottom: 0;
+}
+.inline-detail .show-form {
+  margin: 0 16px;
+}
