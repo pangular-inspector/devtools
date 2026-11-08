@@ -64,7 +64,7 @@ app/                          # Devtools UI SPA (Angular + Vite)
 packages/
   devtools/                   # Publishable npm package
     src/devframe.ts           # defineDevframe(): the tool definition
-    src/devframe-*.ts         # Its parts: shared types, registrars, the page registry, and each area's state, RPC functions and agent tools
+    src/devframe-*.ts         # Its parts: shared types, registrars, the page registry, and the state, RPC functions and agent tools of the areas kept here (other inspectors live in `src/rpc/<area>-register.ts`)
     src/overlay.ts            # Client script running in the user's page (the overlay-manual entry)
     src/overlay-auto.ts       # The overlay entry: starts the overlay and the floating button on import
     src/rpc/                  # Node-side RPC functions and agent tools
