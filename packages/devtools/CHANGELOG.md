@@ -318,6 +318,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The pipe scan and the pipe lint run again when a missing `templateUrl` file appears, and when a template outside the folders the Vite watcher covers changes.
 - A pipe opened from the **Components** tab shows the live data, and records calls, on the page **Components** had selected, not only the page the panel belongs to.
 - `preview-navigation` fills a `:name` value in the query of a `redirectTo` from the URL's query parameter, as Angular does, and keeps the fragment of a redirect that has both a query and a fragment.
+- `ngrx-explain-change` keeps its `store` filter when it explains one entry by `seq`, answers a refusal with `isError`, and puts a single untrusted notice on an unknown page answer.
 
 ### Docs
 

@@ -649,7 +649,7 @@ Why a state value changed. With `path`, the newest entries in the kept log (up t
 | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `path`   | without seq  | A state path as the diff writes it, from the state root (`cart.items`, `items[0].done`) or a signal store field (`filter`). **Copy path** in the state tree copies one. |
 | `seq`    | without path | An entry number, to explain that entry instead.                                                                                                                         |
-| `store`  | no           | Only entries of that store, by id or name. `store` is the `@ngrx/store` Store.                                                                                          |
+| `store`  | no           | Only entries of that store, by id or name. `store` is the `@ngrx/store` Store. With `seq`, an entry of another store is not explained, and the answer names its store.  |
 | `page`   | no           | The tab to read. Defaults to the newest page that reports NgRx.                                                                                                         |
 
 ### redux-inspect-stores

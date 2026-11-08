@@ -90,7 +90,7 @@ With `provideStoreDevtools()`, the classic Store gets a **Store DevTools history
 | **Reset…**                  | After **Reset history** to confirm, puts the store back on its initial state and empties the history. Earlier entries can no longer be restored.    |
 | **Skip this action**        | On an open action entry: Store DevTools computes the state again without it, and the entry gets a `skipped` tag. **Include this action** undoes it. |
 
-Each operation adds a `Store DevTools: …` entry to the log, so the diff shows where the state moved.
+Each operation but **Pause recording** and **Resume recording** adds a `Store DevTools: …` entry to the log, so the diff shows where the state moved. Pausing and resuming leave the state as it is.
 
 ### Read any past state
 
