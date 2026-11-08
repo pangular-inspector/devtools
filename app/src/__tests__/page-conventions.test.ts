@@ -13,11 +13,12 @@ async function pageSources(): Promise<Map<string, string>> {
     readFileSync(path: string, encoding: 'utf8'): string;
     readdirSync(path: string, options: { recursive: true }): string[];
   };
-  // Recursive, so a page split into a folder (pages/network/) is still checked.
+  // Recursive, so a page split into a folder (pages/network/) is still checked. Templates in
+  // their own `.html` files are read too, so a check finds markup wherever it lives.
   const files = fs
     .readdirSync(PAGES, { recursive: true })
     .map((file) => file.replaceAll('\\', '/'))
-    .filter((file) => file.endsWith('.ts'));
+    .filter((file) => file.endsWith('.ts') || file.endsWith('.html'));
   return new Map(files.map((file) => [file, fs.readFileSync(`${PAGES}${file}`, 'utf8')]));
 }
 
@@ -128,7 +129,7 @@ describe('pages with a keyboard list use the shared roving list', () => {
     const sources = await pageSources();
     const lists = {
       'capacitor-inspector.ts': '[data-cap-call]',
-      'pipes-inspector.ts': '[data-pipe-row]',
+      'pipes/pipe-list.html': '[data-pipe-row]',
       'network/call-timeline.ts': '',
       'network/ssr-requests.ts': '',
       'query-inspector.ts': '',

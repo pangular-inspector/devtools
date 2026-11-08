@@ -1,0 +1,203 @@
+@if (selected(); as p) {
+  <header class="detail-head">
+    <h2 id="pipe-detail-title" class="mono" tabindex="-1">{{ p.name }}</h2>
+    <span class="chip" [class.impure]="!p.isPure">{{ p.isPure ? 'pure' : 'impure' }}</span>
+    @if (p.builtin) {
+      <span class="chip">built-in</span>
+    }
+    @if (p.runtime) {
+      <span class="chip">runtime only</span>
+    }
+  </header>
+
+  <div class="block">
+    <h3>Declaration</h3>
+    <dl>
+      <dt>Class</dt>
+      <dd class="mono">{{ p.className }}</dd>
+      <dt>Source</dt>
+      <dd>{{ sourceLabel(p) }}</dd>
+      @if (!p.builtin && !p.runtime) {
+        <dt>File</dt>
+        <dd class="mono"><app-source-link [file]="p.file" [line]="p.line" /></dd>
+      }
+      @if (!p.runtime) {
+        <dt>Standalone</dt>
+        <dd>{{ p.isStandalone ? 'Yes' : 'No, declared in an NgModule' }}</dd>
+      }
+      <dt>Pure</dt>
+      <dd>
+        {{ p.isPure ? 'Yes, reruns only when an input changes' : 'No, reruns on every check' }}
+      </dd>
+    </dl>
+  </div>
+
+  @if (p.usages?.length) {
+    <div class="block">
+      <h3>
+        Used in templates <span class="pill">{{ p.usageCount }}</span>
+      </h3>
+      <ul class="sites">
+        @for (u of p.usages; track u.file + ':' + u.line) {
+          <li class="mono"><app-source-link [file]="u.file" [line]="u.line" /></li>
+        }
+      </ul>
+    </div>
+  }
+
+  <div class="block">
+    <h3>Live on the page</h3>
+    @if (liveFor(p.name); as live) {
+      @if (live.churn; as churn) {
+        <p class="warning" role="note">
+          <span class="chip warn">churning</span>
+          @if (live.isPure) {
+            An instance ran {{ churn.streak }} times in a row and returned an equal result each
+            time: its input changes reference while its contents stay the same. Keep the input
+            stable, for example in a computed().
+          } @else {
+            An instance returned an equal object or array as a new reference
+            {{ churn.streak }} times in a row, so the bindings that read it update for nothing.
+            Return the previous result when it is equal, or use a computed().
+          }
+        </p>
+      }
+      @if (live.stale) {
+        <p class="warning" role="note">
+          <span class="chip warn">experimental</span>
+          This pure pipe got an argument whose contents changed while its reference stayed the same,
+          so it may be showing a stale value.
+        </p>
+      }
+      <dl>
+        <dt>Instances</dt>
+        <dd>{{ live.instanceCount }}</dd>
+        <dt>Used by</dt>
+        <dd>
+          <ul class="chips">
+            @for (c of live.components; track c.name) {
+              <li>
+                @if (c.targets?.[0]; as target) {
+                  <button
+                    type="button"
+                    class="component"
+                    [attr.aria-label]="'Highlight ' + c.name + ' on the page'"
+                    (click)="highlight(target, true)"
+                    (mouseenter)="highlight(target)"
+                    (mouseleave)="highlight(null)"
+                    (focus)="highlight(target)"
+                    (blur)="highlight(null)"
+                  >
+                    <span class="mono">{{ c.name }}</span>
+                    <span class="count">{{ c.count }}</span>
+                  </button>
+                } @else {
+                  <span class="component">
+                    <span class="mono">{{ c.name }}</span>
+                    <span class="count">{{ c.count }}</span>
+                  </span>
+                }
+              </li>
+            }
+          </ul>
+        </dd>
+        @if (live.call; as call) {
+          <dt>Calls</dt>
+          <dd>{{ call.callCount }}</dd>
+          @if (call.totalMs !== undefined) {
+            <dt>Time</dt>
+            <dd>
+              {{ ms(call.totalMs) }} total, {{ ms(call.totalMs / call.callCount) }} average,
+              {{ ms(call.maxMs ?? 0) }} slowest
+            </dd>
+          }
+          @if (call.errorCount) {
+            <dt>Errors</dt>
+            <dd>
+              {{ call.errorCount }}
+              @if (call.lastError) {
+                <span class="mono value">{{ call.lastError }}</span>
+              }
+            </dd>
+          }
+          <dt>Last input</dt>
+          <dd class="mono value">{{ describe(call.lastArgs) }}</dd>
+          <dt>Last output</dt>
+          <dd class="mono value">{{ describe(call.lastResult) }}</dd>
+          @if (call.instances?.length) {
+            <dt>Per instance</dt>
+            <dd>
+              <ul class="sites">
+                @for (i of call.instances; track $index) {
+                  <li class="instance">
+                    @if (i.target; as target) {
+                      <button
+                        type="button"
+                        class="component"
+                        [attr.aria-label]="'Highlight ' + i.component + ' on the page'"
+                        (click)="highlight(target, true)"
+                        (mouseenter)="highlight(target)"
+                        (mouseleave)="highlight(null)"
+                        (focus)="highlight(target)"
+                        (blur)="highlight(null)"
+                      >
+                        <span class="mono">{{ i.component }}</span>
+                      </button>
+                    } @else {
+                      <span class="component">
+                        <span class="mono">{{ i.component }}</span>
+                      </span>
+                    }
+                    <span class="mono value">
+                      {{ describe(i.lastArgs) }} → {{ describe(i.lastResult) }}
+                      <span class="calls">{{ i.callCount }}×</span>
+                      @if (i.totalMs !== undefined) {
+                        <span class="calls">{{ ms(i.totalMs) }}</span>
+                      }
+                    </span>
+                    @if (i.lastCaller) {
+                      <span class="mono value caller">{{ i.lastCaller }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+              @if (call.instanceTotal) {
+                <p class="hint">
+                  Showing {{ call.instances.length }} of {{ call.instanceTotal }} instances.
+                </p>
+              }
+            </dd>
+          }
+          @if (call.lastCaller) {
+            <dt>Last caller</dt>
+            <dd class="mono value">{{ call.lastCaller }}</dd>
+          }
+        } @else if (instrumenting()) {
+          <dt>Calls</dt>
+          <dd class="muted">None recorded yet.</dd>
+        }
+      </dl>
+      @if (live.staleCheck === 'unavailable') {
+        <p class="hint">
+          The stale check is off for this pipe: it couldn't read the compiled template, which
+          happens in minified builds.
+        </p>
+      }
+      @if (!live.call && !instrumenting()) {
+        <p class="hint">Turn on “Record calls” to see call counts and values.</p>
+      }
+    } @else {
+      <p class="empty-line">
+        Not in use on the connected page. Open a view that uses it, or connect the app.
+      </p>
+    }
+  </div>
+} @else {
+  <h2 id="pipe-detail-title" class="visually-hidden">Pipe details</h2>
+  <div class="state compact">
+    <p class="state-title">Pick a pipe</p>
+    <p class="state-hint">
+      See where it is declared, which components use it and what it last returned.
+    </p>
+  </div>
+}

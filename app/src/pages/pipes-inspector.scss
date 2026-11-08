@@ -1,0 +1,173 @@
+@use 'mixins' as m;
+@use 'pipes';
+
+:host {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+@include pipes.mono;
+.intro {
+  max-width: 720px;
+  margin: 0 0 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.search {
+  position: relative;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.search:focus-within .search-icon {
+  stroke: var(--accent);
+}
+input[type='search'] {
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 12px 0 34px;
+  background: var(--bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  transition:
+    border-color 150ms var(--ease),
+    box-shadow 150ms var(--ease);
+}
+input[type='search']::placeholder {
+  color: var(--text-3);
+}
+input[type='search']:focus-visible {
+  @include m.field-focus;
+}
+.toolbar app-select {
+  width: 150px;
+}
+.total {
+  flex: none;
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+@include pipes.buttons;
+.record[aria-busy='true'] {
+  cursor: progress;
+}
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.record.on {
+  @include m.tint(accent);
+}
+.record.on .rec-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text-2);
+  line-height: 1.5;
+  @include m.enter(0.2s);
+}
+.notice strong {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.notice svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.notice.error {
+  @include m.tint(danger);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.notice.error svg {
+  margin-top: 0;
+  stroke: currentColor;
+}
+.notice.error span {
+  flex: 1 1 200px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+@media (min-width: 880px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 44%);
+  }
+  .detail {
+    position: sticky;
+    top: 64px;
+    max-height: calc(100vh - 150px);
+    overflow: auto;
+  }
+}
+.list-wrap {
+  min-width: 0;
+}
+.detail {
+  min-width: 0;
+  @include m.panel;
+  @include m.enter;
+}
+.section {
+  margin-top: 20px;
+  @include m.enter;
+}
+@include pipes.states;
+@include pipes.state-text;

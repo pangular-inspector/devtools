@@ -1,0 +1,37 @@
+<h2 id="lint-title">
+  Lint
+  @if (lint(); as findings) {
+    <span class="pill">{{ findings.length }}</span>
+  }
+</h2>
+@if (lintFailed()) {
+  <p class="empty-line" role="alert">Couldn't run the lint check. Try Refresh.</p>
+} @else if (lint() === null) {
+  <p class="empty-line" role="status">Checking…</p>
+} @else if (!lint()!.length) {
+  <p class="empty-line ok">No problems found.</p>
+} @else {
+  <ul class="findings">
+    @for (f of lint(); track $index) {
+      <li class="finding">
+        <div class="finding-head">
+          <span class="severity" [attr.data-tone]="f.severity">{{ f.severity }}</span>
+          <code class="mono rule">{{ f.rule }}</code>
+          @let target = pipeFor(f);
+          <span class="where mono">
+            @if (target) {
+              <button type="button" class="pipe-link" (click)="showPipe(target)">
+                <span class="sr-only">Show pipe </span>{{ f.pipe }}
+              </button>
+            } @else {
+              {{ f.pipe }}
+            }
+            · <app-source-link [file]="f.file" [line]="f.line" />
+          </span>
+        </div>
+        <p class="finding-message">{{ f.message }}</p>
+        <p class="finding-fix"><span class="fix-label">Fix</span> {{ f.fix }}</p>
+      </li>
+    }
+  </ul>
+}

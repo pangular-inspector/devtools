@@ -1,0 +1,510 @@
+// Styles shared by the Pipes page and its sections (`app/src/pages/pipes/`), in the order the page
+// had them as one component, so each part looks as it did. Include the groups a part uses, in
+// this order: mono, buttons, pipe-list, chips, detail, value, detail-body, notes, section-head,
+// stacks, async-list, lint-list, states, state-text.
+@use 'mixins' as m;
+
+@mixin mono {
+  .mono {
+    font-family: var(--font-mono);
+  }
+}
+
+@mixin buttons {
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: var(--control-h);
+    padding: 0 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 150ms var(--ease),
+      border-color 150ms var(--ease);
+  }
+  button:hover:not(:disabled) {
+    border-color: var(--accent-line);
+    background: var(--surface-3);
+  }
+  button:focus-visible {
+    @include m.focus-ring;
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+}
+
+@mixin pipe-list {
+  .pipe-list {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    @include m.panel;
+    @include m.enter;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 12px;
+    width: 100%;
+    height: auto;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    text-align: left;
+    font-weight: 400;
+    white-space: normal;
+  }
+  .row:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--surface-2);
+  }
+  .row:focus-visible {
+    @include m.focus-ring(-2px);
+  }
+  .row.selected {
+    background: var(--accent-soft);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+  .row-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+  .name {
+    flex: none;
+    color: var(--text-strong);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .sub {
+    color: var(--text-3);
+    font-size: 12px;
+    @include m.truncate;
+  }
+  .row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+  .row-file {
+    grid-column: 1 / -1;
+    color: var(--text-3);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  .no-source {
+    font-family: var(--font-sans);
+    font-style: italic;
+  }
+  .more {
+    margin-left: 6px;
+    color: var(--text-2);
+  }
+}
+
+@mixin chips {
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 7px;
+    border: 1px solid var(--border-strong);
+    border-radius: 99px;
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .chip.impure,
+  .chip.warn {
+    @include m.tint(warn);
+  }
+  .chip.live {
+    @include m.tint(ok);
+  }
+  .chip.hot {
+    @include m.tint(accent);
+    text-transform: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 99px;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@mixin detail {
+  .detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-head h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 15px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    border-radius: 4px;
+  }
+  .detail-head h2:focus {
+    outline: none;
+  }
+  .detail-head h2:focus-visible {
+    @include m.focus-ring;
+  }
+  .block {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .block:last-child {
+    border-bottom: 0;
+  }
+  h3 {
+    @include m.label;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+  }
+  dl {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 6px 14px;
+    margin: 0;
+  }
+  dt {
+    color: var(--text-3);
+  }
+  dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--text);
+  }
+}
+
+@mixin value {
+  .value {
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+}
+
+@mixin detail-body {
+  .muted {
+    color: var(--text-2);
+  }
+  .sites {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--text-2);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .calls {
+    margin-left: 6px;
+    color: var(--text-3);
+  }
+  .instance {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .instance .component {
+    padding-right: 10px;
+  }
+  .caller {
+    flex-basis: 100%;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .component {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 4px 0 10px;
+    border: 1px solid var(--control-border);
+    border-radius: 99px;
+    background: var(--bg);
+    font-size: 12px;
+    transition:
+      border-color 150ms var(--ease),
+      background-color 150ms var(--ease);
+  }
+  button.component {
+    height: 24px;
+    padding: 0 4px 0 10px;
+    border-radius: 99px;
+    background: var(--bg);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  .count {
+    padding: 0 6px;
+    border-radius: 99px;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: 10px;
+    line-height: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .warning {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--warn) 8%, transparent);
+    color: var(--text);
+    line-height: 1.5;
+  }
+}
+
+@mixin notes {
+  .hint {
+    margin: 8px 0 0;
+    color: var(--text-3);
+    font-size: 12px;
+  }
+  .empty-line {
+    margin: 0;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+  .empty-line.ok {
+    color: var(--ok);
+  }
+}
+
+@mixin section-head {
+  :host(.section) h2 {
+    @include m.label;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+  }
+  :host(.section) > .hint {
+    margin: -2px 0 10px;
+  }
+}
+
+@mixin stacks {
+  .async-list,
+  .findings {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+@mixin async-list {
+  .async-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    min-width: 0;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    @include m.panel;
+    transition:
+      background-color 150ms var(--ease),
+      border-color 150ms var(--ease);
+  }
+  .async-row:hover {
+    border-color: var(--border-strong);
+    background: var(--surface-2);
+  }
+  .component-name {
+    color: var(--text-strong);
+    font-weight: 600;
+  }
+  button.component-name {
+    height: 24px;
+    padding: 0 8px;
+    margin-left: -8px;
+    border-color: transparent;
+    background: none;
+    font-size: 13px;
+  }
+  .latest {
+    flex: 1 1 100%;
+    color: var(--text-2);
+  }
+}
+
+@mixin lint-list {
+  .finding {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    @include m.panel;
+  }
+  .finding-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+  }
+  .severity {
+    padding: 0 7px;
+    border: 1px solid var(--border-strong);
+    border-radius: 99px;
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 16px;
+    text-transform: uppercase;
+  }
+  .severity[data-tone='warning'] {
+    @include m.tint(warn);
+  }
+  .severity[data-tone='error'] {
+    @include m.tint(danger);
+  }
+  .rule {
+    color: var(--accent);
+    font-size: 12px;
+  }
+  .where {
+    color: var(--text-3);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  button.pipe-link {
+    display: inline;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    white-space: normal;
+  }
+  button.pipe-link:hover:not(:disabled) {
+    border-color: transparent;
+    background: none;
+    color: var(--accent-hover);
+  }
+  button.pipe-link:focus-visible {
+    @include m.focus-ring;
+  }
+  .finding-message {
+    margin: 6px 0 0;
+    color: var(--text);
+    line-height: 1.5;
+  }
+  .finding-fix {
+    margin: 4px 0 0;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+  .fix-label {
+    @include m.label;
+    margin-right: 4px;
+  }
+}
+
+@mixin states {
+  .state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 40px 16px;
+    text-align: center;
+    background: var(--surface);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    @include m.enter;
+  }
+  .state.compact {
+    padding: 28px 16px;
+    border: 0;
+    background: none;
+  }
+}
+
+@mixin state-text {
+  .state-title {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .state-hint {
+    max-width: 440px;
+    margin: 0;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+  .state button {
+    margin-top: 8px;
+  }
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner {
+      animation: none;
+    }
+  }
+}
