@@ -302,6 +302,14 @@ describe('forms MCP tools', () => {
     expect(fallback).not.toContain('Signup');
   });
 
+  it('explain-field with only a path reads the default page', async () => {
+    const { call } = await withForms();
+    // pg2 connected last and has only Profile, so `bio` is found without naming the form.
+    const field = await call('explain-field', { path: 'bio' });
+    expect(field).toContain('`bio` in `Profile.form`');
+    expect(field).not.toContain('Signup');
+  });
+
   it('explain-invalid-forms and inspect-form-payload narrow to a path', async () => {
     const { call } = await withForms();
     const explained = await call('explain-invalid-forms', { form: 'Signup', path: 'email' });

@@ -105,7 +105,9 @@ type PangularInspector =
   | 'analog'
   | 'capacitor'
   | 'errors'
-  | 'plugins';
+  | 'plugins'
+  | 'performance'
+  | 'build';
 
 type PangularAction =
   'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components' | 'tanstackQuery' | 'plugins';
@@ -150,6 +152,8 @@ interface PangularConfig {
 | `agent.readOnly`     | `false` | `true` keeps only the agent tools in the `read` [safety tier](../agents/tools.md#action-tools). It drops every `action` and `destructive` tool in the [tier table](../agents/tools.md#action-tools): `run-form-action`, `fill-form`, `navigate`, `ngrx-dispatch`, `ngrx-restore`, `ngrx-store-devtools`, `tanstack-run-query`, `set-http-rule`, `remove-http-rule`, `set-ssr-override`, `remove-ssr-override`, `refetch-transfer-state`, `set-component-property`, `set-signal`, `load-defer-block`, `watch-signal`, `record-pipes`, `track-subscriptions`, `record-change-detection`, `probe-route`, `record-guards`, `analog-run-api`, `analog-run-nitro-task`, `analog-purge-nitro-cache` and `clear-recordings`. `audit` stays without its `axe` argument. |
 | `agent.tools.<name>` | `true`  | `false` hides one inspector's agent tools and resources, and its [shared-state keys](../agents/resources.md#shared-state) over HTTP MCP. The tab stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `agent.browserTools` | `false` | `true` registers the `read` agent tools on the page for [browser agents](../agents/browser-agents.md) (WebMCP and Chrome DevTools for agents). Off by default, because any script on the development page could then call them. This is where the **Browser agent tools** switch in [Settings](./settings.md#browser-agents) starts. The switch changes it for every page until the dev server restarts.                                                                                                                                                                                                                                                                                                                                                       |
+
+The inspectors are `components`, `injectors`, `signals`, `ngrx`, `tanstackQuery`, `forms`, `router`, `pipes`, `http`, `analog`, `capacitor`, `errors`, `plugins`, `performance` ([Performance](../inspectors/performance.md)) and `build` ([Build](../inspectors/build.md)).
 
 `agent.tools` has the same keys as `inspectors`. An inspector that is off has no agent tools, whatever `agent.tools` says.
 
@@ -290,6 +294,33 @@ The server plugins themselves go in `serverPlugins`, an option of the Express hu
 | `terminals` | `false` | `true` adds a **Terminals** dock to the hub that runs the project's build and test commands. It stays off in production, with `allowedOrigins: false` and with `allowLan`. See [Terminals](./terminals.md). |
 
 It is off by default because it starts processes on your machine. A value other than `true` or `false` prints a warning and keeps it off.
+
+### Extra devframes
+
+`extraDevframes` is an option of the Express hub and the Vite plugin only. It mounts other devframes on the hub that serves Pangular Inspector, so a team's own devtools or another library's devframe sit next to the Pangular docks without a second server. It takes the same input as `initHub({ devframes })` from `@devframes/hub`: devframe definitions, `{ devframe, dock }` entries to change a dock, promises and functions that return them.
+
+This one adds a devframe with one RPC function. `defineDevframe` comes from the `devframe` package, which the hub runs on:
+
+```ts
+import {defineDevframe} from 'devframe';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
+
+const teamTools = defineDevframe({
+  id: 'team-tools',
+  name: 'Team tools',
+  version: '1.0.0',
+  packageName: 'team-tools',
+  homepage: 'https://example.com/team-tools',
+  description: "The team's own devtools",
+  setup(ctx) {
+    ctx.rpc.register({name: 'team-tools:ping', type: 'static', handler: () => 'pong'});
+  },
+});
+
+const devtools = initPangularHub({extraDevframes: [teamTools]});
+```
+
+The extra devframes run behind the same origin check, request gate and one-time code as Pangular Inspector. The hub mounts Pangular Inspector under the id `pangular`, so an entry with that id is dropped with a warning. That includes a devframe a promise or a function resolves to, which is checked once it resolves; the other entries keep their order. A value that is not an array is ignored with a warning.
 
 ### LAN address
 

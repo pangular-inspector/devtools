@@ -92,6 +92,15 @@ import { Component, input } from '@angular/core';
           <path d="M12 7v6" />
           <path d="M12 16.5v.01" />
         }
+        @case ('performance') {
+          <path d="M12 14l4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        }
+        @case ('build') {
+          <path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z" />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22V12" />
+        }
         @case ('plugins') {
           <path
             d="M10 3h4v3a2 2 0 1 0 4 0V5h1a2 2 0 0 1 2 2v4h-2a2 2 0 1 0 0 4h2v4a2 2 0 0 1-2 2h-4v-2a2 2 0 1 0-4 0v2H7a2 2 0 0 1-2-2v-4H4a2 2 0 1 1 0-4h1V7a2 2 0 0 1 2-2h3Z"

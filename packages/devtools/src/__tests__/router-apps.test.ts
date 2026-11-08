@@ -271,7 +271,9 @@ describe('router apps on the server', () => {
   it('accepts a report with an app list and refuses a malformed one', () => {
     expect(isRouterReport(routerReport({ apps: appsList }))).toBe(true);
     expect(isRouterReport(routerReport({ apps: [{ id: 3 }] }))).toBe(false);
-    expect(isRouterReport(routerReport({ apps: new Array(9).fill(appsList[0]) }))).toBe(false);
+    expect(
+      isRouterReport(routerReport({ apps: Array.from({ length: 9 }, () => appsList[0]) })),
+    ).toBe(false);
   });
 
   it('shows the page as the asked-for app and leaves single-app pages alone', () => {

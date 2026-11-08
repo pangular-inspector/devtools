@@ -22,7 +22,7 @@ function fakeNavigation() {
     const event = Object.assign(new Event(name), fields);
     target.dispatchEvent(event);
   };
-  return { api: target as unknown as Record<string, any>, fire };
+  return { api: target as unknown as Parameters<typeof capturePlatformNavigations>[0], fire };
 }
 
 function nav(id: number, extra: Partial<NavigationRecord> = {}): NavigationRecord {

@@ -10,6 +10,12 @@ import {
   type WebMcpWatcher,
 } from '../forms-webmcp.ts';
 
+/** The page's WebMCP globals, which the DOM types don't describe. */
+const webmcp = navigator as unknown as {
+  modelContext?: { registerTool(tool: unknown, options?: unknown): Promise<unknown> };
+  modelContextTesting?: unknown;
+};
+
 type Tool = {
   name: string;
   description: string;
@@ -20,8 +26,8 @@ type Tool = {
 const watchers: WebMcpWatcher[] = [];
 afterEach(() => {
   watchers.splice(0).forEach((w) => w.stop());
-  delete (navigator as any).modelContext;
-  delete (navigator as any).modelContextTesting;
+  delete webmcp.modelContext;
+  delete webmcp.modelContextTesting;
 });
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -36,7 +42,7 @@ function fakeContext(fail?: (tool: Tool) => unknown) {
       options?.signal?.addEventListener('abort', () => tools.delete(tool.name));
     }),
   };
-  (navigator as any).modelContext = context;
+  webmcp.modelContext = context as unknown as typeof webmcp.modelContext;
   return { context, tools };
 }
 
@@ -125,7 +131,7 @@ describe('watchWebMcp', () => {
     const original = context.registerTool;
     const watcher = watch();
     expect(context.registerTool).not.toBe(original);
-    await (navigator as any).modelContext.registerTool(
+    await webmcp.modelContext!.registerTool(
       { name: 'sign_up', description: 'Create an account', inputSchema: schema, execute: vi.fn() },
       {},
     );
@@ -156,7 +162,7 @@ describe('watchWebMcp', () => {
       tool.description === 'second' ? new Error('Duplicate tool name') : null,
     );
     const watcher = watch();
-    const register = (navigator as any).modelContext.registerTool;
+    const register = webmcp.modelContext!.registerTool;
     await register({ name: 'dup', description: 'first', inputSchema: schema, execute: vi.fn() });
     await expect(
       register({
@@ -178,7 +184,7 @@ describe('watchWebMcp', () => {
     fakeContext();
     const watcher = watch();
     const abort = new AbortController();
-    await (navigator as any).modelContext.registerTool(
+    await webmcp.modelContext!.registerTool(
       { name: 't', description: '', inputSchema: schema, execute: vi.fn() },
       { signal: abort.signal },
     );
@@ -219,7 +225,7 @@ describe('watchWebMcp', () => {
     const first = fieldNode({ name: '' });
     const second = fieldNode({ name: '' });
     let activeInside = false;
-    await (navigator as any).modelContext.registerTool({
+    await webmcp.modelContext!.registerTool({
       name: 'profile',
       description: 'Update profile',
       inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: [] },
@@ -256,7 +262,7 @@ describe('watchWebMcp', () => {
     const other = fieldNode({ name: '' });
     let finish!: () => void;
     let linkIt = true;
-    await (navigator as any).modelContext.registerTool({
+    await webmcp.modelContext!.registerTool({
       name: 'slow',
       description: 'Slow submit',
       inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: [] },
@@ -278,7 +284,7 @@ describe('watchWebMcp', () => {
     expect(watcher.takeActivity()(target)).toBeUndefined();
 
     linkIt = false;
-    await (navigator as any).modelContext.registerTool({
+    await webmcp.modelContext!.registerTool({
       name: 'unplaced',
       description: 'No form',
       inputSchema: { type: 'string' },
@@ -293,7 +299,7 @@ describe('watchWebMcp', () => {
   it('gives up on a tried tool that does not answer within 10 seconds', async () => {
     fakeContext();
     const watcher = watch();
-    await (navigator as any).modelContext.registerTool(
+    await webmcp.modelContext!.registerTool(
       {
         name: 'hang',
         description: 'Never answers',
@@ -324,7 +330,7 @@ describe('watchWebMcp', () => {
       tool.name === 'broken' ? new Error(`bad token ${jwt}`) : null,
     );
     const watcher = watch();
-    const register = (navigator as any).modelContext.registerTool;
+    const register = webmcp.modelContext!.registerTool;
     await register({
       name: 'lookup',
       description: 'Uses Bearer abc123def456',
@@ -346,7 +352,7 @@ describe('watchWebMcp', () => {
 
   it('reads tools that were registered before it attached from the browser tool list', async () => {
     fakeContext();
-    (navigator as any).modelContextTesting = {
+    webmcp.modelContextTesting = {
       listTools: () => [
         { name: 'early', description: 'Registered first', inputSchema: JSON.stringify(schema) },
       ],
@@ -378,7 +384,7 @@ describe('WebMCP audit fixes', () => {
     expect(watcher.describe([]).page).toBeUndefined();
     const { tools } = fakeContext();
     expect(watcher.describe([]).page).toMatchObject({ modelContext: true });
-    await (navigator as any).modelContext.registerTool({
+    await webmcp.modelContext!.registerTool({
       name: 'late',
       description: 'Registered after load',
       inputSchema: { type: 'object', properties: {} },
@@ -392,7 +398,7 @@ describe('WebMCP audit fixes', () => {
     const { tools } = fakeContext();
     const watcher = watch();
     let release!: () => void;
-    await (navigator as any).modelContext.registerTool({
+    await webmcp.modelContext!.registerTool({
       name: 'slow',
       description: '',
       inputSchema: { type: 'object', properties: {} },
@@ -412,7 +418,7 @@ describe('WebMCP Try this tool', () => {
     const execute = vi.fn(async () => ({
       content: [{ type: 'text', text: 'Form submitted successfully' }],
     }));
-    await (navigator as any).modelContext.registerTool({
+    await webmcp.modelContext!.registerTool({
       name: 'sign_up',
       description: 'Create an account',
       inputSchema: schema,
@@ -437,7 +443,7 @@ describe('WebMCP Try this tool', () => {
     fakeContext();
     const watcher = watch();
     expect(await watcher.run(fieldNode({ a: '' }), {})).toMatchObject({ ok: false });
-    await (navigator as any).modelContext.registerTool({
+    await webmcp.modelContext!.registerTool({
       name: 'broken',
       description: '',
       inputSchema: { type: 'object', properties: { city: { type: 'string' } } },
@@ -454,7 +460,7 @@ describe('WebMCP Try this tool', () => {
   it('calls a tool registered before it attached through modelContextTesting.executeTool', async () => {
     fakeContext();
     const executeTool = vi.fn(async () => 'Form submitted successfully');
-    (navigator as any).modelContextTesting = {
+    webmcp.modelContextTesting = {
       listTools: () => [{ name: 'early', description: '', inputSchema: JSON.stringify(schema) }],
       executeTool,
     };

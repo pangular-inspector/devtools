@@ -128,7 +128,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 #### Setup and workflow
 
 - The Vite plugin loads the overlay itself, so setup is one line in `vite.config.ts`. New plugin options: `allowLan`, `overlay`, `terminals` and `serverPlugins`.
-- New hub options: `enabled`, `allowLan`, `terminals`, `serverPlugins` and `browserDistFolder`.
+- New hub options: `enabled`, `allowLan`, `terminals`, `serverPlugins`, `extraDevframes` and `browserDistFolder`. The Vite plugin takes `extraDevframes` too, to mount other devframes on the same hub (#373).
 - Open in editor: <kbd>Alt</kbd>+click a component on the page, or a file and line in the panel.
 - A command palette (<kbd>⌘K</kbd> or <kbd>Ctrl+K</kbd>) with a command for every tab and action.
 - A **Settings** page: theme, hidden, pinned and reordered tabs, passive mode, a counts launcher, and a **Browser agents** switch.
@@ -172,13 +172,15 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **NgRx Store:** the opt-in `ngrx.trace` option records the redacted app frames each change log entry came from, shown as source links in the entry (#368).
 - **NgRx Store:** a signal store that uses `withDevtools()` is watched through `watchState` only, without wrapping its methods or signals (#368).
 - **TanStack Query:** a tab for queries and mutations, with invalidate and refetch.
-- **SSR & HTTP:** a network waterfall, search and filters on the timeline, response preview format, copy and mock, TransferState keys and edits in SSR overrides, and SSR tracing for fetch handlers such as Hono, h3 and Nitro.
-- **Errors:** a tab for `ErrorHandler` errors, uncaught errors, unhandled rejections and the console, with NG0xxx codes and explainers for NG0100, hydration mismatches and missing providers.
+- **SSR & HTTP:** the page's own `fetch()` calls next to the `HttpClient` ones (#369), a network waterfall, search and filters on the timeline, response preview format, copy and mock, TransferState keys and edits in SSR overrides, and SSR tracing for fetch handlers such as Hono, h3 and Nitro.
+- **Errors:** a tab for `ErrorHandler` errors, uncaught errors, unhandled rejections and the console, with NG0xxx codes and explainers for NG0100, hydration mismatches and missing providers. **Server errors** lists SSR render errors and Vite transform and compile errors, and `list-server-errors` reads them (#372).
 - **Timeline:** one time axis with layers for the router, HTTP, NgRx, change detection, forms and signals.
 - **Audit:** one ranked list of findings across the inspectors, an axe pass, and before and after sessions.
 - **Capacitor:** a tab for the platform, plugins, plugin calls and listeners of a Capacitor app.
 - **Ionic in the Capacitor tab:** an **Ionic page stacks** section with a card per `ion-router-outlet`: the pages in its stack, the active one, the direction of the last navigation and whether it can go back, read from `@ionic/angular`'s outlet directive or from the DOM. Hovering a page outlines it in the app.
 - **Forms, Router, Pipes and Analog:** filters, lint navigation, **Clear filters**, a route count, routed components in the **Components** tab, and search and a failed filter for Analog server calls.
+- **Performance:** a tab for LCP, INP, CLS, FCP and TTFB with the element and component behind each, the slowest interactions and long tasks (#372).
+- **Build:** a tab for the Vite dev server's module graph with its lazy boundaries, and the chunk sizes of the last production build (#372, #373).
 - **Analog:** a request playground with path params, query, headers, cookies, response headers and timing, per-route history and **Copy as curl** or **Copy as fetch**; the Vite transform stack of a page file (**Transform** in **Routes**); a dev server render mode check and a build analysis with chunk sizes per page in **Render**; a frontmatter check against a JSON Schema set in the new `analog.contentSchema` option, the `injectContentFiles` and `injectContent` call sites and a markdown preview in **Content**; a **Data** view with the full `load()` value on demand and the TransferState entries the browser reused or fetched again; and a **Runtime** view with `import.meta.env`, Nitro `runtimeConfig`, the `analog()` options and Nitro plugins, storage and cache entries, with Nitro tasks to run and a cache purge behind `actions.analog` (#369).
 - **Forms:** a **Schema** view of the rules a Signal Form's schema sets on each field; edit a control's value, touched and dirty state in its row of the **Fields** view (behind `actions.forms`); a WebMCP tool's input schema, and **Try this tool** to run it on its form from the panel (`try-webmcp` in `run-form-action`); a form's history exported as a Playwright test from the **Timeline** view and from `export-form` (`format: "playwright"`); timeline origins worked out per form, so typing in one form no longer tags code changes in another form as user; the `missing-autocomplete` and `submit-disabled-while-invalid` accessibility rules in the forms lint; while a WebMCP call's submit runs, only its status and submit outcome is tagged agent, not values app code writes meanwhile.
 - **Plugin API:** a library can add its own tab, agent tools and shared state.
@@ -220,7 +222,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 #### Agents and MCP
 
-- 113 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `load-defer-block` (loads one `@defer` block as if its trigger fired, behind `actions.components`), `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, `ngrx-store-devtools`, `ngrx-explain-change` (#368), the TanStack Query, Capacitor, plugin and NgRx session tools, tools for HTTP fault rules and SSR overrides, and the Analog tools `analog-scan-build`, `analog-scan-nitro`, `analog-purge-nitro-cache`, `analog-run-nitro-task`, `analog-scan-runtime-config`, `analog-inspect-transform` and `analog-inspect-render-mode` (#369).
+- 118 agent tools. New tools include `audit`, `suggest-pipe-migrations` (read-only pipe-to-signal suggestions, #369), `snapshot`, `wait-for`, `scan-templates` (#415), `list-errors`, `explain-error`, `list-console`, `list-server-errors`, `web-vitals`, `module-graph`, `chunk-sizes`, `refetch-transfer-state`, `find-leaks`, `diagnose-change-detection` (#395), `set-component-property`, `set-signal`, `load-defer-block` (loads one `@defer` block as if its trigger fired, behind `actions.components`), `track-subscriptions`, `watch-signal`, `hydration`, `screenshot-component`, `open-in-panel`, `startup-timing`, `read-provider-value`, `record-change-detection`, `probe-route`, `record-guards`, `ngrx-store-devtools`, `ngrx-explain-change` (#368), the TanStack Query, Capacitor, plugin and NgRx session tools, tools for HTTP fault rules and SSR overrides, and the Analog tools `analog-scan-build`, `analog-scan-nitro`, `analog-purge-nitro-cache`, `analog-run-nitro-task`, `analog-scan-runtime-config`, `analog-inspect-transform` and `analog-inspect-render-mode` (#369).
 - One naming scheme for tools and arguments, and plain markdown answers. See **Agent tools renamed**.
 - Tool titles, inspector tags and safety tiers (`action` and `destructive`).
 - Every answer names the page it read, and one rule picks the default page for every tool.
@@ -326,6 +328,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 
 ### Release and CI
 
+- The overlay reads `window.ng` through one typed `NgDebugApi` (`debug-api.ts`) with the Angular version of each function, and a test against a real app fails when Angular publishes a function the type doesn't declare (#373).
+- `pnpm lint` runs oxlint with a ratchet: CI fails when a file gets more warnings of a rule than `lint-baseline.json` allows, or when a source file over 1,500 lines grows (#373).
 - The `leaks-real` test expects the rows the collector really reports (#430).
 - Pull requests run the security and MCP end-to-end checks, and a weekly job runs the rest.
 - A CI job installs the packed package on Node.js 22.12.0, the `engines.node` floor, and loads its CLI and its `cli`, `hub`, `ssr` and `vite` entry points there (#373).

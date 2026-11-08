@@ -74,7 +74,8 @@ interface PangularHttpOptions {
 
 Function. Source: [`packages/devtools/src/http.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/http.ts).
 
-Captures hydration warnings (NG05xx) before the overlay loads. During a
+Captures hydration warnings (NG05xx) and the page's native `fetch()` calls
+before the overlay loads. During a
 server render traced by `ssrMiddleware`, it also records the router's guard
 and resolver timings and applies render-error overrides from the panel.
 Add it next to `provideHttpClient(withPangular())`.

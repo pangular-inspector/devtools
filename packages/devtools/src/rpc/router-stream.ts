@@ -82,6 +82,8 @@ export class NavigationStream {
       );
       for (const key of this.signatures.keys()) if (!keep.has(key)) this.signatures.delete(key);
     }
+    // A copy: each waiter removes itself from the set when it wakes.
+    // oxlint-disable-next-line unicorn/no-useless-spread
     if (added) for (const wake of [...this.waiters]) wake();
     return added;
   }

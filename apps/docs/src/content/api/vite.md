@@ -179,5 +179,11 @@ interface PangularViteOptions extends PangularConfig {
   lanAddress?: boolean | string;
   /** Pangular plugins' server sides: their agent tools and shared state. */
   serverPlugins?: readonly PangularServerPlugin[];
+  /**
+   * Other devframes to mount on the same hub, after Pangular Inspector: the
+   * same input as `initHub({ devframes })`. Each gets its own dock and runs
+   * behind the plugin's request gate and one-time code.
+   */
+  extraDevframes?: DevframesInput;
 }
 ```

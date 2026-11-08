@@ -462,10 +462,27 @@ export function touchRouterPage(pages: Pages, pageId: unknown, now = Date.now())
 }
 
 /**
+ * The refusal for an `app` the page did not report, so a typo never clears
+ * the first app instead; `undefined` without an app, or when the page is
+ * unknown or lists it.
+ */
+export function unknownRouterApp(
+  pages: Pages,
+  pageId: string,
+  appId: string | undefined,
+): string | undefined {
+  const page = pages.get(pageId);
+  if (!appId || !page || page.apps?.some((app) => app.id === appId)) return undefined;
+  const known = (page.apps ?? []).map((app) => `\`${app.id}\``).join(', ');
+  return `Page ${pageId} reports no app with the id "${appId}". ${known ? `Its apps: ${known}.` : 'It runs one app; leave app out.'}`;
+}
+
+/**
  * Drops one page's navigation history, its loop warnings and its dropped
  * count. A navigation still in progress stays, as it does in the page.
  * With `appId`, only that app of a page that runs several is cleared; the
- * first app's history is the page's own. Returns false when the page is unknown.
+ * first app's history is the page's own. Returns false when the page is
+ * unknown, or does not report `appId`.
  */
 export function clearRouterNavigations(
   pages: Pages,
@@ -475,6 +492,7 @@ export function clearRouterNavigations(
 ): boolean {
   const page = pages.get(pageId);
   if (!page) return false;
+  if (unknownRouterApp(pages, pageId, appId)) return false;
   const secondary = appId ? page.apps?.find((app) => app.id === appId && !app.primary) : undefined;
   if (secondary) {
     const next: RouterPage = { ...page, changedAt: now };

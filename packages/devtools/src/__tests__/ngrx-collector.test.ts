@@ -1163,7 +1163,9 @@ describe('ngrx collector with Store DevTools', () => {
     expect(collector.run({ type: 'devtools', op: 'jump', seq: entry.seq })).toEqual({
       error: 'Only @ngrx/store entries can be used for a Store DevTools jump.',
     });
-    expect((signal as any)[STATE_SOURCE].query()).toBe('b');
+    expect((signal as unknown as Record<symbol, { query(): string }>)[STATE_SOURCE].query()).toBe(
+      'b',
+    );
   });
 
   it('logs a restore with its diff so the next action is not blamed for it', () => {

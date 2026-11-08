@@ -205,9 +205,9 @@ describe('collectInjectorTree', () => {
     const { ng } = fakeNg();
     let calls = 0;
     const providers = ng.ɵgetInjectorProviders;
-    ng.ɵgetInjectorProviders = (inj: any) => {
+    ng.ɵgetInjectorProviders = (inj: { kind?: unknown }) => {
       if (inj.kind === 'node') calls++;
-      return providers(inj);
+      return providers(inj as never);
     };
     const first = collectInjectorTree(ng);
     const afterFirst = calls;

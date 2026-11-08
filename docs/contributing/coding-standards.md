@@ -4,7 +4,7 @@ These rules go together with the Angular rules in [`AGENTS.md`](../../AGENTS.md)
 
 ## TypeScript
 
-- Strict mode everywhere. Avoid `any`; use `unknown` and narrow it, or a small local interface.
+- Strict mode everywhere. Avoid `any`; use `unknown` and narrow it, or a small local interface. `pnpm lint` (oxlint) warns on `any` and fails when a file gets more warnings than `lint-baseline.json` allows.
 - Prefer `const`. Use `readonly` for members that never change.
 - Names describe what a thing is or does. Spell words out. Booleans start with `is`, `has` or `should`.
 - No `I` prefix on interfaces and no `$` suffix on observables.
@@ -27,7 +27,7 @@ The panel's visual rules are in the [UI guidelines](./ui-guidelines.md).
 
 The overlay runs inside the user's app, so it must be correct, cheap and invisible.
 
-- **Use Angular's debug APIs**, not guesses: `ng.getComponent`, `ng.getDirectives`, `ng.getDirectiveMetadata`, `ng.getListeners`, `ng.getInjector`, `ng.ɵgetInjectorProviders`, `ng.ɵgetInjectorResolutionPath`, `ng.ɵgetDependenciesFromInjectable`, `ng.ɵgetSignalGraph`. Check the shapes in `node_modules/@angular/core/fesm2022` before relying on a field.
+- **Use Angular's debug APIs**, not guesses: `ng.getComponent`, `ng.getDirectives`, `ng.getDirectiveMetadata`, `ng.getListeners`, `ng.getInjector`, `ng.ɵgetInjectorProviders`, `ng.ɵgetInjectorResolutionPath`, `ng.ɵgetDependenciesFromInjectable`, `ng.ɵgetSignalGraph`. Check the shapes in `node_modules/@angular/core/fesm2022` before relying on a field. The overlay hands collectors `window.ng` typed as `NgDebugApi` (`debug-api.ts`, with the version each function arrived in); a collector declares the narrow part it reads, and `debug-api.test.ts` checks that the two still fit.
 - **Never write to the app's DOM.** Give elements and objects ids through a `WeakMap` (`element-id.ts`, `idFor` in `injector-tree.ts`), so ids stay stable between pushes and selection survives a refresh.
 - **Walk the host tree, not the DOM**, in the component, injector, signal graph and NgRx collectors. Take a `HostTree` (`host-tree.ts`) that defaults to `domTree()`, so the same collector runs on a platform without a DOM.
 - **Strip bundler prefixes** from class names (`className()` in `injector-tree.ts`), so `_App` shows as `App`.

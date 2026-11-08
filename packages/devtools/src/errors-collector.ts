@@ -37,10 +37,10 @@ type AnyRecord = Record<string, any>;
 
 /** The parts of `window.ng` this collector reads. */
 export interface ErrorsDebugNg extends RouterDebugApi, HydrationDebugNg {
-  getComponent?: (el: Element) => unknown;
-  getOwningComponent?: (el: Element) => unknown;
-  getHostElement?: (component: unknown) => Element | null;
-  getInjector?: (el: Element) => unknown;
+  getComponent?(el: Element): unknown;
+  getOwningComponent?(el: Element): unknown;
+  getHostElement?(component: unknown): Element | null;
+  getInjector?(el: Element): unknown;
 }
 
 interface Rpc {

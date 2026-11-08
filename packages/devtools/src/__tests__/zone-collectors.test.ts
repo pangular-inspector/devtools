@@ -10,6 +10,8 @@ import { QueryClient } from '@tanstack/query-core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ANALOG_META_DESCRIPTION, attachAnalog } from '../analog-runtime.ts';
 import { attachErrors } from '../errors-collector.ts';
+import { watchNativeFetch } from '../fetch-collector.ts';
+import { httpRegistry } from '../http-rules.ts';
 import { attachForms } from '../forms-collector.ts';
 import { attachNgrx } from '../ngrx-overlay.ts';
 import {
@@ -138,6 +140,23 @@ describe('collectors under zone.js', () => {
       () => attachErrors(my, 'page-1', () => undefined).stop,
       () => console.debug('hello'),
     );
+    expect(result.withCollector).toEqual(result.without);
+    expect(result.withCollector.stable).toBe(true);
+  });
+
+  it('native fetch: a fetch() from app code adds no tick and keeps the zone stable', async () => {
+    const g = globalThis as { fetch?: typeof fetch; __PANGULAR_HTTP__?: unknown };
+    const original = g.fetch;
+    g.fetch = (async () => new Response('ok')) as typeof fetch;
+    stops.push(() => {
+      g.fetch = original;
+      delete g.__PANGULAR_HTTP__;
+    });
+    const result = await compare(
+      () => watchNativeFetch(),
+      () => void fetch('/api/trips').then((response) => response.text()),
+    );
+    expect(httpRegistry().calls?.some((call) => call.nativeFetch)).toBe(true);
     expect(result.withCollector).toEqual(result.without);
     expect(result.withCollector.stable).toBe(true);
   });

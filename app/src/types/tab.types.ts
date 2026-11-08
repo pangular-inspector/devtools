@@ -15,7 +15,9 @@ export type Tab =
   | 'capacitor'
   | 'settings'
   | 'errors'
-  | 'plugins';
+  | 'plugins'
+  | 'performance'
+  | 'build';
 
 export type Tabs = {
   id: Tab;

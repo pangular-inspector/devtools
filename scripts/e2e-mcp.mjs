@@ -646,6 +646,13 @@ const READ_PLAN = [
   ['tanstack-inspect-query', null, () => ({ key: 'products' })],
   ['redux-inspect-stores', null, () => ({})],
   ['list-errors', null, () => ({})],
+  ['list-server-errors', null, () => ({})],
+  ['list-server-errors', null, () => ({ kind: 'ssr', limit: 5 })],
+  ['list-server-errors', null, () => ({ id: 's999' })],
+  ['web-vitals', null, () => ({})],
+  ['module-graph', null, () => ({ limit: 5 })],
+  ['module-graph', null, () => ({ search: 'main', limit: 5 })],
+  ['chunk-sizes', null, () => ({ limit: 5 })],
   ['explain-error', null, (ctx) => ({ id: ctx.errorId ?? 'e1' })],
   ['explain-error', null, () => ({ code: 'NG0100' })],
   ['list-console', null, () => ({ since: '30m', limit: 20 })],
@@ -1886,7 +1893,7 @@ async function runActions(state) {
   write(
     'refetch-transfer-state',
     'the page answers with the payload the server sends now',
-    /^Refetched/.test(r.markdown),
+    r.markdown.startsWith('Refetched'),
     r.markdown.slice(0, 300),
   );
 

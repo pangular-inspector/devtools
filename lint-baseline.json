@@ -1,0 +1,437 @@
+{
+  "app/src/__tests__/component-tree-hydration.test.ts": {
+    "eslint(no-unused-vars)": 1
+  },
+  "app/src/__tests__/hub-rail-style.test.ts": {
+    "eslint(no-unused-vars)": 1
+  },
+  "app/src/__tests__/timeline.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "app/src/__tests__/virtual-window.test.ts": {
+    "eslint(no-setter-return)": 1
+  },
+  "app/src/app.ts": {
+    "pangular(max-lines)": 1999
+  },
+  "app/src/pages/analog-inspector.ts": {
+    "pangular(max-lines)": 2743
+  },
+  "app/src/pages/component-tree.ts": {
+    "pangular(max-lines)": 2982
+  },
+  "app/src/pages/di-inspector.ts": {
+    "pangular(max-lines)": 2742
+  },
+  "app/src/pages/network-inspector.ts": {
+    "pangular(max-lines)": 3143
+  },
+  "app/src/pages/pipes-inspector.ts": {
+    "pangular(max-lines)": 1612
+  },
+  "app/src/pages/signal-inspector.ts": {
+    "pangular(max-lines)": 2547
+  },
+  "app/src/pages/store-inspector.ts": {
+    "pangular(max-lines)": 2870
+  },
+  "app/src/pages/store-types.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "apps/docs/image-sizes.spec.ts": {
+    "unicorn(no-new-array)": 1
+  },
+  "apps/docs/search-index.plugin.ts": {
+    "eslint(no-control-regex)": 1
+  },
+  "apps/docs/src/app/utils/heading-slug.ts": {
+    "eslint(no-control-regex)": 1
+  },
+  "examples/nativescript/references.d.ts": {
+    "typescript(triple-slash-reference)": 1
+  },
+  "packages/devtools/src/__tests__/analog-load-inherit.test.ts": {
+    "typescript(no-explicit-any)": 2
+  },
+  "packages/devtools/src/__tests__/analog-page-calls.test.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/async-source.test.ts": {
+    "unicorn(no-thenable)": 1
+  },
+  "packages/devtools/src/__tests__/audit-findings.test.ts": {
+    "eslint(no-unused-vars)": 1
+  },
+  "packages/devtools/src/__tests__/audit-tools.test.ts": {
+    "eslint(no-unsafe-optional-chaining)": 2,
+    "typescript(no-explicit-any)": 5
+  },
+  "packages/devtools/src/__tests__/axe-runner.test.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/browser-tools.test.ts": {
+    "typescript(no-explicit-any)": 15
+  },
+  "packages/devtools/src/__tests__/cd-flash.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/cd-live.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/change-detection.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/component-screenshot.test.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/console-tap.test.ts": {
+    "typescript(no-this-alias)": 1
+  },
+  "packages/devtools/src/__tests__/extension-origin.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/extension-panel-bridge.test.ts": {
+    "eslint(no-unused-vars)": 1
+  },
+  "packages/devtools/src/__tests__/forms-actions-fill-submit.test.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/forms-actions.test.ts": {
+    "typescript(no-explicit-any)": 3
+  },
+  "packages/devtools/src/__tests__/forms-audit.test.ts": {
+    "typescript(no-explicit-any)": 12
+  },
+  "packages/devtools/src/__tests__/forms-collector.test.ts": {
+    "typescript(no-explicit-any)": 9
+  },
+  "packages/devtools/src/__tests__/forms-dotted-keys.test.ts": {
+    "typescript(no-explicit-any)": 10
+  },
+  "packages/devtools/src/__tests__/forms-mcp.test.ts": {
+    "typescript(no-explicit-any)": 3
+  },
+  "packages/devtools/src/__tests__/forms-read.test.ts": {
+    "typescript(no-explicit-any)": 22
+  },
+  "packages/devtools/src/__tests__/forms-real.test.ts": {
+    "typescript(no-explicit-any)": 6
+  },
+  "packages/devtools/src/__tests__/forms-scan.test.ts": {
+    "typescript(no-explicit-any)": 4
+  },
+  "packages/devtools/src/__tests__/forms-submit-reasons.test.ts": {
+    "typescript(no-explicit-any)": 3
+  },
+  "packages/devtools/src/__tests__/forms-submit-shared.test.ts": {
+    "typescript(no-explicit-any)": 2
+  },
+  "packages/devtools/src/__tests__/forms-webmcp.test.ts": {
+    "typescript(no-explicit-any)": 3
+  },
+  "packages/devtools/src/__tests__/forms.test.ts": {
+    "typescript(no-explicit-any)": 6
+  },
+  "packages/devtools/src/__tests__/http.test.ts": {
+    "eslint(no-unused-vars)": 1,
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/injector-component-link.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/injector-tree.test.ts": {
+    "typescript(no-explicit-any)": 22
+  },
+  "packages/devtools/src/__tests__/leased-collectors.test.ts": {
+    "typescript(no-explicit-any)": 3
+  },
+  "packages/devtools/src/__tests__/lint-export.test.ts": {
+    "eslint(no-unused-vars)": 1
+  },
+  "packages/devtools/src/__tests__/native-diagnostics.test.ts": {
+    "unicorn(no-useless-spread)": 2
+  },
+  "packages/devtools/src/__tests__/ngrx-args.test.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/ngrx-collector.test.ts": {
+    "typescript(no-explicit-any)": 61,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/ngrx-redaction-hot-path.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/older-angular.test.ts": {
+    "unicorn(no-new-array)": 3
+  },
+  "packages/devtools/src/__tests__/overlay-angular-native.test.ts": {
+    "eslint(no-unsafe-optional-chaining)": 1
+  },
+  "packages/devtools/src/__tests__/overlay-dispose.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/overlay-heartbeat.test.ts": {
+    "unicorn(no-useless-spread)": 1,
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "packages/devtools/src/__tests__/overlay-link.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/overlay-nativescript-connection.test.ts": {
+    "eslint(no-unsafe-optional-chaining)": 1
+  },
+  "packages/devtools/src/__tests__/overlay-reconnect-visibility.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/overlay-reconnect.test.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/overlay-redaction.test.ts": {
+    "unicorn(no-useless-spread)": 2
+  },
+  "packages/devtools/src/__tests__/pipes-collector.test.ts": {
+    "typescript(no-explicit-any)": 5
+  },
+  "packages/devtools/src/__tests__/pipes-runtime.test.ts": {
+    "eslint(no-unsafe-optional-chaining)": 1,
+    "typescript(no-explicit-any)": 4
+  },
+  "packages/devtools/src/__tests__/plugins-collector.test.ts": {
+    "eslint(no-unsafe-optional-chaining)": 1,
+    "eslint(no-unused-vars)": 1,
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/redux-devtools-hook.test.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/redux-stores.test.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/__tests__/startup-timing.test.ts": {
+    "typescript(no-explicit-any)": 1,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/__tests__/zone-collectors.test.ts": {
+    "typescript(no-explicit-any)": 1,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/analog-runtime.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/browser-tools.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/component-form-masks.ts": {
+    "typescript(no-explicit-any)": 1,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/component-screenshot.ts": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "packages/devtools/src/config.ts": {
+    "pangular(max-lines)": 2778
+  },
+  "packages/devtools/src/console-tap.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/devframe.ts": {
+    "pangular(max-lines)": 3238,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/dom-diff.ts": {
+    "unicorn(no-new-array)": 1
+  },
+  "packages/devtools/src/error-explain.ts": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "packages/devtools/src/errors-collector.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/forms-actions.ts": {
+    "eslint(no-unused-vars)": 1,
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/forms-collector.ts": {
+    "typescript(no-explicit-any)": 3,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/forms-instrument.ts": {
+    "typescript(no-explicit-any)": 1,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/forms-read.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/forms-submit.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/forms-webmcp.ts": {
+    "eslint(no-unused-vars)": 1,
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/forms.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/hub-messages.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/leaks-collector.ts": {
+    "typescript(no-explicit-any)": 1,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/native-diagnostics.ts": {
+    "unicorn(no-useless-spread)": 2
+  },
+  "packages/devtools/src/ngrx-collector.ts": {
+    "pangular(max-lines)": 1958,
+    "typescript(no-explicit-any)": 1,
+    "unicorn(no-useless-fallback-in-spread)": 1,
+    "unicorn(no-useless-spread)": 3
+  },
+  "packages/devtools/src/ngrx-session.ts": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "packages/devtools/src/ngrx-shared.ts": {
+    "eslint(no-control-regex)": 1
+  },
+  "packages/devtools/src/overlay-link.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/page-lease.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/pipes-collector.ts": {
+    "typescript(no-explicit-any)": 2
+  },
+  "packages/devtools/src/pipes-runtime.ts": {
+    "typescript(no-explicit-any)": 2
+  },
+  "packages/devtools/src/plugin.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/plugins-collector.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/popup.ts": {
+    "pangular(max-lines)": 1517
+  },
+  "packages/devtools/src/push-delta.ts": {
+    "typescript(no-explicit-any)": 4
+  },
+  "packages/devtools/src/query-collector.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/redux-devtools-hook.ts": {
+    "typescript(no-explicit-any)": 1,
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/router-setup.ts": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "packages/devtools/src/router.ts": {
+    "typescript(no-explicit-any)": 1,
+    "unicorn(prefer-string-starts-ends-with)": 2
+  },
+  "packages/devtools/src/rpc/__tests__/browser-tools-data.test.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/__tests__/browser-tools.test.ts": {
+    "eslint(no-unused-vars)": 2,
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/analog-register.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/analog-scan.ts": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "packages/devtools/src/rpc/audit-axe.ts": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "packages/devtools/src/rpc/audit-register.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/browser-tools.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/errors-register.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/get-routes.ts": {
+    "unicorn(prefer-string-starts-ends-with)": 2
+  },
+  "packages/devtools/src/rpc/http-waterfall.ts": {
+    "eslint(no-unused-vars)": 1
+  },
+  "packages/devtools/src/rpc/injection-explain.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/leaks-register.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/library-tools.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/rpc/page-interest.ts": {
+    "unicorn(no-useless-spread)": 3
+  },
+  "packages/devtools/src/rpc/pipes-agent.ts": {
+    "eslint(no-unused-vars)": 1
+  },
+  "packages/devtools/src/rpc/plugins-register.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/push-acks.ts": {
+    "unicorn(no-useless-spread)": 1
+  },
+  "packages/devtools/src/rpc/query-register.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/redux-stores-register.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/report-deltas.ts": {
+    "unicorn(no-useless-spread)": 5
+  },
+  "packages/devtools/src/rpc/server-routes.ts": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "packages/devtools/src/rpc/snapshot-tools.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/startup-register.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/rpc/tool-input.ts": {
+    "unicorn(no-useless-fallback-in-spread)": 1
+  },
+  "packages/devtools/src/signal-masks.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "packages/devtools/src/startup-recorder.ts": {
+    "typescript(no-explicit-any)": 1
+  },
+  "scripts/commit-message.mjs": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "scripts/docs-screenshots.mjs": {
+    "eslint(no-control-regex)": 1
+  },
+  "scripts/e2e-install.mjs": {
+    "eslint(no-control-regex)": 2,
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "scripts/e2e-mcp.mjs": {
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "scripts/e2e-panel.mjs": {
+    "eslint(no-control-regex)": 1
+  },
+  "scripts/e2e-resilience.mjs": {
+    "eslint(no-unused-vars)": 3,
+    "unicorn(prefer-string-starts-ends-with)": 1
+  },
+  "scripts/e2e-security.mjs": {
+    "unicorn(prefer-string-starts-ends-with)": 2
+  }
+}

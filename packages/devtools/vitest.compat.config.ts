@@ -15,6 +15,7 @@ const pageSide = [
   'cd-recorder-real',
   'change-detection',
   'change-detection-real',
+  'debug-api-real',
   'component-tree',
   'console-tap',
   'defer-blocks',

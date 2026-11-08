@@ -146,6 +146,7 @@ Run the same checks as CI before you open a PR:
 
 ```bash
 pnpm format:check                   # Prettier
+pnpm lint                           # oxlint, with no new warnings over lint-baseline.json
 pnpm typecheck                      # Host app + specs, devtools UI and Analog demo (with templates), devtools package + its tests
 pnpm exec nx affected -t test build # Test and build affected projects
 pnpm test:devtools                  # Devtools package tests (Vitest)
@@ -169,6 +170,8 @@ The mobile overlays (NativeScript, Angular Native and the Capacitor collector) h
 
 `pnpm test:coverage` runs `pnpm test:devtools --coverage`, then `pnpm test:panel --coverage`, each with `--testTimeout=20000`: v8 instrumentation slows every test, and the slowest ones went over the default 5 seconds. The v8 provider writes an HTML report, `coverage-summary.json` and `lcov.info` to `dist/coverage/devtools` and `dist/coverage/panel`, also when a test fails. There is no threshold: the report shows what the tests reach and nothing fails on a low number. Open `dist/coverage/devtools/index.html` to read it.
 
+`pnpm lint` runs oxlint with `.oxlintrc.json` (the correctness rules plus `typescript/no-explicit-any`) and compares the warnings of each file and rule with `lint-baseline.json`. A file with more warnings of a rule than the baseline fails the check, also a new file. The baseline only goes down: after you fix warnings, `pnpm lint --update` lowers it, and it refuses to raise a count unless you pass `--allow-new`. The same ratchet keeps source files short: a `.ts` file in `packages/devtools/src` or `app/src` (tests aside) over 1,500 lines counts its lines as `pangular(max-lines)`, so it can't grow, and a new file can't pass the limit. Split a long file instead of adding to it.
+
 `pnpm skills:check` validates the frontmatter of every skill and role and checks that the files and links they mention exist. `pnpm commit:check` checks every commit on your branch that is not on `main` (it compares with `upstream/main`, then `origin/main`, then `main`).
 
 ### What CI runs
@@ -179,8 +182,8 @@ The mobile overlays (NativeScript, Angular Native and the Capacitor collector) h
   <ngmd-step title="Install">
     <code>pnpm install --frozen-lockfile</code> on the Node version from <code>.nvmrc</code>.
   </ngmd-step>
-  <ngmd-step title="Check formatting, skills and types">
-    <code>pnpm format:check</code>, <code>pnpm skills:check</code>, then <code>pnpm typecheck</code>.
+  <ngmd-step title="Check formatting, lint, skills and types">
+    <code>pnpm format:check</code>, <code>pnpm lint</code>, <code>pnpm skills:check</code>, then <code>pnpm typecheck</code>.
   </ngmd-step>
   <ngmd-step title="Test and build affected projects">
     <code>nx affected -t test build</code>, compared against the last green commit on <code>main</code>.

@@ -100,6 +100,8 @@ const PANGULAR_INSPECTORS: readonly [
   'capacitor',
   'errors',
   'plugins',
+  'performance',
+  'build',
 ];
 ```
 

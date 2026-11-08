@@ -9,11 +9,9 @@ import {
   type AnyRecord,
   type NavigationRecord,
   type RouterDebugApi,
-  type RouterSnapshot,
 } from './router.ts';
 import { ConfigTracker, activeIds, walkConfig, type RouteNode } from './router-config.ts';
 import { detectSetup, type RouterSetup } from './router-setup.ts';
-import type { NavigationLoop } from './rpc/router-loops.ts';
 
 import type { RouterAppReport } from './router-types.ts';
 export type { RouterAppReport } from './router-types.ts';
@@ -99,6 +97,8 @@ export class RouterApps {
     const found = findRouterRoots(ng, live).slice(0, MAX_ROUTER_APPS);
     const main = found.find((entry) => entry.router === primary);
     if (!main) {
+      // A copy: drop() removes each app from this.others.
+      // oxlint-disable-next-line unicorn/no-useless-spread
       for (const app of [...this.others]) this.drop(app);
       this.primary = null;
       return;

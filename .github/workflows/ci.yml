@@ -34,6 +34,9 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+      - name: Lint (no new oxlint warnings)
+        run: pnpm lint
+
       - name: Validate agent skills and roles
         run: pnpm skills:check
 

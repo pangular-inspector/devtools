@@ -14,11 +14,13 @@ import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
 import { attachPipes } from './pipes-collector.ts';
 import { attachHttp } from './http-overlay.ts';
+import { watchNativeFetch } from './fetch-collector.ts';
 import { attachCapacitor } from './capacitor-overlay.ts';
 import { attachErrors } from './errors-collector.ts';
 import { attachLeaks } from './leaks-collector.ts';
 import { attachPlugins } from './plugins-collector.ts';
 import { attachStartup } from './startup-timing.ts';
+import { attachPerformance } from './perf-collector.ts';
 import { attachIonic } from './ionic-collector.ts';
 import { attachBrowserTools } from './browser-tools.ts';
 import { attachAxe, axeOwnerNg } from './axe-runner.ts';
@@ -112,6 +114,7 @@ import {
 } from './change-detection.ts';
 import { attachChangeDetection } from './cd-overlay.ts';
 import { attachAngularInfo } from './ng-capabilities.ts';
+import { pageDebugApi, type NgDebugApi } from './debug-api.ts';
 import { createScanBackoff } from './router-attach.ts';
 import { RouterApps } from './router-apps.ts';
 import {
@@ -579,6 +582,8 @@ async function startOverlay(
   const pipes = on.pipes ? attachPipes(my, pageId, getNg) : null;
   const http = on.http ? attachHttp(my, pageId, tickMs) : null;
   if (http) own(http.stop);
+  // The page's own fetch() calls, next to the HttpClient ones (no-op when providePangularHttp did it).
+  if (http) own(watchNativeFetch());
   const capacitor = on.capacitor
     ? attachCapacitor(my, pageId, {
         maxCalls: limits.capacitorCalls,
@@ -621,6 +626,8 @@ async function startOverlay(
       })
     : null;
   const startup = on.injectors ? attachStartup(my, pageId, getNg, { tickMs }) : null;
+  const perf = on.performance ? attachPerformance(my, pageId, getNg, { tickMs }) : null;
+  if (perf) own(perf.stop);
   // Ionic's `ion-router-outlet` stacks, shown in the Capacitor tab.
   const ionic = on.capacitor ? attachIonic(my, pageId, getNg, { tickMs }) : null;
   // Runs axe-core only when the panel or an agent asks; it loads axe-core then.
@@ -863,6 +870,7 @@ async function startOverlay(
       }),
     plugins && paced(() => void plugins.push().catch(() => {})),
     startup && paced(() => void startup.push().catch(() => {})),
+    perf && paced(() => void perf.push().catch(() => {})),
     ionic && paced(() => void ionic.push().catch(() => {})),
   ].filter((collect) => typeof collect === 'function');
   // The counts on the launcher pill (`popup.ts`), handed over when they change.
@@ -1204,6 +1212,7 @@ async function startOverlay(
     leaks?.leave();
     plugins?.leave();
     startup?.leave();
+    perf?.leave();
     ionic?.leave();
     angularInfo.leave();
     browserTools.leave();
@@ -1219,6 +1228,7 @@ async function startOverlay(
     leaks?.resume();
     plugins?.resume();
     startup?.resume();
+    perf?.resume();
     ionic?.resume();
     browserTools.resume();
     void lease.refresh();
@@ -1309,6 +1319,6 @@ function read<T>(fn: () => T, fallback: T): T {
   }
 }
 
-function getNg(): any {
-  return (window as any).ng;
+function getNg(): NgDebugApi | undefined {
+  return pageDebugApi();
 }

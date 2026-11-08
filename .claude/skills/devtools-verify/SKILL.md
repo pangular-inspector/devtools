@@ -11,6 +11,7 @@ Run them in this order; all must pass:
 
 ```sh
 pnpm format:check
+pnpm lint
 pnpm commit:check
 pnpm skills:check
 pnpm typecheck

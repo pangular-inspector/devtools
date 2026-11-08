@@ -10,7 +10,7 @@ import {
   scanPipeViews,
   staleCheckFor,
   stripBundlerPrefix,
-  type NgDebugApi,
+  type PipeDebugNg,
   type PipeCall,
   type PipeClass,
   type PipeInstrumentation,
@@ -391,7 +391,7 @@ function hostsOf<H extends object>(tree: HostTree<H>): H[] {
 export function attachPipes<H extends object = Element>(
   my: Rpc,
   pageId: string,
-  getNg: () => NgDebugApi | undefined,
+  getNg: () => PipeDebugNg | undefined,
   options: PipesOptions<H> = {},
 ): PipesCollector {
   const tree = options.tree;
@@ -438,7 +438,7 @@ export function attachPipes<H extends object = Element>(
       : null;
   observer?.observe(document.documentElement, { childList: true, subtree: true });
 
-  function discover(ng: NgDebugApi): PipeUsage[] {
+  function discover(ng: PipeDebugNg): PipeUsage[] {
     if (tree) {
       const scan = scanPipeViews(ng, hostsOf(tree) as unknown as Element[]);
       usages = scan.usages;
@@ -501,7 +501,7 @@ export function attachPipes<H extends object = Element>(
     }, 0);
   }
 
-  function targetOf(ng: NgDebugApi): (component: unknown) => PipeTarget | undefined {
+  function targetOf(ng: PipeDebugNg): (component: unknown) => PipeTarget | undefined {
     const cache = new Map<unknown, PipeTarget | undefined>();
     return (component) => {
       if (cache.has(component)) return cache.get(component);

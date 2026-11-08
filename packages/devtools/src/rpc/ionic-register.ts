@@ -10,8 +10,7 @@ import {
 import { redactMessage, redactUrl } from '../router.ts';
 import { trackPageSessions } from './page-sessions.ts';
 import type { PageTtl } from './page-ttl.ts';
-
-type AnyRecord = Record<string, any>;
+import type { AnyRecord } from '../router.ts';
 
 export interface IonicPage extends IonicReport {
   reportedAt: number;

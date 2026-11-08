@@ -3,6 +3,7 @@
     "capacitor-list-calls": "capacitor",
     "capacitor-list-plugins": "capacitor",
     "change-detection": "components",
+    "chunk-sizes": "build",
     "clear-recordings": "http",
     "component-tree": "components",
     "defer-blocks": "components",
@@ -47,9 +48,11 @@
     "list-http-rules": "http",
     "list-plugins": "plugins",
     "list-routes": "router",
+    "list-server-errors": "errors",
     "list-ssr-overrides": "http",
     "list-ssr-requests": "http",
     "load-defer-block": "components",
+    "module-graph": "build",
     "navigate": "router",
     "ngrx-dispatch": "ngrx",
     "ngrx-explain-change": "ngrx",
@@ -97,7 +100,8 @@
     "tanstack-run-query": "tanstackQuery",
     "track-subscriptions": "components",
     "wait-for": "components",
-    "watch-signal": "signals"
+    "watch-signal": "signals",
+    "web-vitals": "performance"
   },
   "ACTION_TOOLS": {
     "forms": ["fill-form", "run-form-action"],
@@ -205,9 +209,11 @@
     "list-pages",
     "list-plugins",
     "list-routes",
+    "list-server-errors",
     "list-ssr-overrides",
     "list-ssr-requests",
     "load-defer-block",
+    "module-graph",
     "navigate",
     "ngrx-dispatch",
     "ngrx-explain-change",
@@ -244,7 +250,8 @@
     "tanstack-run-query",
     "track-subscriptions",
     "wait-for",
-    "watch-signal"
+    "watch-signal",
+    "web-vitals"
   ],
   "agentTags": {
     "analog-explain-render-modes": ["analog"],
@@ -269,6 +276,7 @@
     "capacitor-list-calls": ["capacitor"],
     "capacitor-list-plugins": ["capacitor"],
     "change-detection": ["components"],
+    "chunk-sizes": ["build"],
     "clear-recordings": ["http", "router", "analog"],
     "component-tree": ["components"],
     "defer-blocks": ["components"],
@@ -314,9 +322,11 @@
     "list-pages": null,
     "list-plugins": ["plugins"],
     "list-routes": ["router"],
+    "list-server-errors": ["errors"],
     "list-ssr-overrides": ["http"],
     "list-ssr-requests": ["http"],
     "load-defer-block": ["components"],
+    "module-graph": ["build"],
     "navigate": ["router"],
     "ngrx-dispatch": ["ngrx"],
     "ngrx-explain-change": ["ngrx"],
@@ -368,6 +378,7 @@
     "tanstack-run-query": ["tanstackQuery"],
     "track-subscriptions": ["components"],
     "wait-for": ["components", "router", "http", "errors", "forms"],
-    "watch-signal": ["signals"]
+    "watch-signal": ["signals"],
+    "web-vitals": ["performance"]
   }
 }

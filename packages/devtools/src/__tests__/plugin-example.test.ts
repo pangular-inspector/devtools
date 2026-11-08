@@ -20,7 +20,7 @@ import {
 import { flagsServerPlugin } from '../../../../examples/pangular-plugin-example/src/pangular-server.ts';
 import { answerText } from './tool-answer.ts';
 
-type Handler = (...args: any[]) => unknown;
+type Handler = (...args: unknown[]) => unknown;
 
 const store = () =>
   createFlagStore({

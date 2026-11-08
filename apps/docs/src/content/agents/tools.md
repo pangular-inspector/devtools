@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  One hundred and fourteen tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  One hundred and eighteen tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -105,19 +105,19 @@ The URL comes from the HTTP or router report. A page that sends neither (no rout
 
 Gives one page's full picture in one bounded markdown answer, for an agent that wants everything at once or a bug report. Reads: page. Each section comes from the tool named under its heading, with the same masking, so call that tool for the rest.
 
-| Section       | What it holds                                                                   | Full answer             |
-| ------------- | ------------------------------------------------------------------------------- | ----------------------- |
-| `page`        | Page id, URL, title, platform, Angular version, inspectors                      | `list-pages`            |
-| `components`  | The component outline                                                           | `list-components`       |
-| `route`       | The URL and the active route tree                                               | `inspect-route`         |
-| `navigations` | Recent navigations, one line each, newest first                                 | `explain-navigation`    |
-| `http`        | HttpClient calls, newest first, and a line that counts the `lint-http` findings | `list-http-calls`       |
-| `errors`      | Error groups, most recent first                                                 | `list-errors`           |
-| `console`     | Console calls, newest first                                                     | `list-console`          |
-| `forms`       | Each form with its status and error count                                       | `inspect-forms`         |
-| `signals`     | The signal graph, without Angular's own nodes and history                       | `inspect-signals`       |
-| `stores`      | NgRx stores and Redux DevTools stores                                           | `ngrx-inspect-store`    |
-| `queries`     | TanStack Query queries and mutations                                            | `tanstack-list-queries` |
+| Section       | What it holds                                                                               | Full answer             |
+| ------------- | ------------------------------------------------------------------------------------------- | ----------------------- |
+| `page`        | Page id, URL, title, platform, Angular version, inspectors                                  | `list-pages`            |
+| `components`  | The component outline                                                                       | `list-components`       |
+| `route`       | The URL and the active route tree                                                           | `inspect-route`         |
+| `navigations` | Recent navigations, one line each, newest first                                             | `explain-navigation`    |
+| `http`        | HttpClient and fetch() calls, newest first, and a line that counts the `lint-http` findings | `list-http-calls`       |
+| `errors`      | Error groups, most recent first                                                             | `list-errors`           |
+| `console`     | Console calls, newest first                                                                 | `list-console`          |
+| `forms`       | Each form with its status and error count                                                   | `inspect-forms`         |
+| `signals`     | The signal graph, without Angular's own nodes and history                                   | `inspect-signals`       |
+| `stores`      | NgRx stores and Redux DevTools stores                                                       | `ngrx-inspect-store`    |
+| `queries`     | TanStack Query queries and mutations                                                        | `tanstack-list-queries` |
 
 | Argument   | Required | What it is                                                             |
 | ---------- | -------- | ---------------------------------------------------------------------- |
@@ -131,11 +131,11 @@ Each section is also cut at 4,000 characters. When the answer reaches `maxChars`
 
 Gives the user a link that opens the panel on one tab with one item selected, and switches the panels that are open to it. Reads: page. Use it to point the user at what you found.
 
-| Argument | Required | What it is                                                                                                                                                                                                                              |
-| -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `audit`, `components`, `routes`, `signals`, `injectors`, `store`, `queries`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `analog`, `capacitor` or `plugins`. Only tabs that are on count.     |
-| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, the id of the component whose signal graph to show on `signals`, a form id on `forms`. Other tabs ignore it. |
-| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                                        |
+| Argument | Required | What it is                                                                                                                                                                                                                                                  |
+| -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`    | Yes      | The tab: `dashboard`, `timeline`, `audit`, `components`, `routes`, `signals`, `injectors`, `store`, `queries`, `forms`, `pipes`, `network` (SSR & HTTP), `errors`, `performance`, `build`, `analog`, `capacitor` or `plugins`. Only tabs that are on count. |
+| `id`     | No       | The item to select: a component id on `components`, the id of the component whose element injector to show on `injectors`, the id of the component whose signal graph to show on `signals`, a form id on `forms`. Other tabs ignore it.                     |
+| `page`   | No       | The page the item belongs to, from `list-pages`.                                                                                                                                                                                                            |
 
 The answer is a full URL, such as `http://localhost:4200/__devframes/pangular/#tab=components&id=12&page=k3x9`, when the hub serves the panel and a page has reported its address. Otherwise it is the hash to add to the panel's address. Each panel that is open and not in a background tab opens the link at once. The tool is `read`: it changes what the panel shows, not the app. See [Deep links](../getting-started/popup-and-hub.md#deep-links).
 
@@ -943,12 +943,12 @@ Built-in formatting pipes such as `date` and `currency` are pure and cheap, so i
 
 These tools read the HttpClient calls that `withPangular()` recorded and the SSR requests that `ssrMiddleware` or `withPangularSsr()` traced in your server. See [SSR & HTTP](../inspectors/ssr-http.md). Reads: page.
 
-| Tool                  | What it answers                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Arguments                                              |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                                                                                                                                                                                                                                                                   | `limit`                                                |
-| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again.                                                                                                                                                                                                                                                   | `id`, `url`                                            |
-| `list-http-calls`     | The HttpClient calls of one tab and the server render that served it, newest first: side (SSR or client), method, URL, status, duration, and flags for mocked, faulted, cancelled, redirected, transfer cache hit, the matched rule and the Angular API that likely started it (`likely httpResource()`, `likely resource()`, `likely @defer`). With `preview`, the masked response body, for failed calls too. With `view: "waterfall"`, the tab's client calls as a waterfall instead. | `url`, `failed`, `limit`, `preview`, `headers`, `view` |
-| `lint-http`           | Checks one tab's recorded client calls for duplicate GETs, waterfalls (calls that ran one after another and could start together) and server calls the browser made again. Each finding lists the call ids and what to try.                                                                                                                                                                                                                                                              | `page`                                                 |
+| Tool                  | What it answers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Arguments                                              |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `list-ssr-requests`   | Recent traced SSR requests: id, URL, status, render mode, render time, server calls, and whether a connected page loaded the response.                                                                                                                                                                                                                                                                                                                                                                                            | `limit`                                                |
+| `explain-ssr-request` | One request end to end: timings, kept response headers, the router's guard and resolver times, each server call with its transfer cache outcome, then the browser page with its hydration result and the calls the browser made again.                                                                                                                                                                                                                                                                                            | `id`, `url`                                            |
+| `list-http-calls`     | The HttpClient calls and native `fetch()` calls of one tab and the server render that served it, newest first: side (SSR or client), method, URL, status, duration, and flags for native fetch, mocked, faulted, cancelled, redirected, transfer cache hit, the matched rule and the Angular API that likely started it (`likely httpResource()`, `likely resource()`, `likely @defer`). With `preview`, the masked response body, for failed calls too. With `view: "waterfall"`, the tab's client calls as a waterfall instead. | `url`, `failed`, `limit`, `preview`, `headers`, `view` |
+| `lint-http`           | Checks one tab's recorded client calls for duplicate GETs, waterfalls (calls that ran one after another and could start together) and server calls the browser made again. Each finding lists the call ids and what to try.                                                                                                                                                                                                                                                                                                       | `page`                                                 |
 
 `explain-ssr-request` picks the request by `id`, else the newest one for `url`, else the newest one. It names each hydration mismatch by the component class the node hosts when the page could read one, else by the element (`<app-card>`) or text node (`#text`).
 
@@ -1027,15 +1027,39 @@ These tools read what a Capacitor app reported: its platform, its plugins and th
 
 These tools read what a page captured: errors from Angular's `ErrorHandler`, uncaught errors, unhandled promise rejections and console calls. See [Errors](../inspectors/errors.md). Reads: page.
 
-| Tool            | What it answers                                                                                                                                                                                                                                                                                                           | Arguments                           |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `list-errors`   | Error groups, most recent first: id, count, when last seen, the Angular error code linked to its reference page, the message, the owning component with its instance id, and the source (`handler`, `window` or `promise`).                                                                                               | `code`, `limit`                     |
-| `explain-error` | One error by `id`: message, count, sources, the owning component, the stack of the first occurrence, and for an Angular code its reference page and a short known cause. With `code` instead, the reference entry and the errors that carry it. An NG0100, a hydration mismatch or a missing provider adds its explainer. | `id`, `code`                        |
-| `list-console`  | Console calls, newest first: when, level, the text of the arguments and the Angular code it mentions. Calls repeated in a row show once with a count.                                                                                                                                                                     | `level`, `search`, `since`, `limit` |
+| Tool                 | What it answers                                                                                                                                                                                                                                                                                                           | Arguments                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `list-errors`        | Error groups, most recent first: id, count, when last seen, the Angular error code linked to its reference page, the message, the owning component with its instance id, and the source (`handler`, `window` or `promise`).                                                                                               | `code`, `limit`                     |
+| `explain-error`      | One error by `id`: message, count, sources, the owning component, the stack of the first occurrence, and for an Angular code its reference page and a short known cause. With `code` instead, the reference entry and the errors that carry it. An NG0100, a hydration mismatch or a missing provider adds its explainer. | `id`, `code`                        |
+| `list-console`       | Console calls, newest first: when, level, the text of the arguments and the Angular code it mentions. Calls repeated in a row show once with a count.                                                                                                                                                                     | `level`, `search`, `since`, `limit` |
+| `list-server-errors` | Errors on the dev server that no page reports, most recent first: SSR errors (a `console.error` during a server render, or Angular's `ErrorHandler` on the server) and Vite transform and compile errors. With `id`, one group with its message, Angular code, code frame and stack.                                      | `kind`, `id`, `limit`               |
+
+`list-server-errors` reads what the server captured in its own process, so it needs the Express hub or the Vite plugin, not the stdio MCP server; Vite errors need the Vite plugin. `kind` is `ssr` or `vite`, and `limit` goes up to 100 (default 30). A group expires 30 minutes after its last repeat. See [Server errors](../inspectors/errors.md#server-errors).
 
 The explainers are the ones the [Errors](../inspectors/errors.md#explainers) tab shows. For NG0100: the binding, the template function, the previous and current value, the component fields that hold the new value, and the named signals written with it just before the check, with the code that wrote them when write stacks are on. For NG0500 to NG0503: a diff of the server HTML Angular expected and the client DOM it found. For NG0201 and `NullInjectorError`: the token and Angular's dependency path, to pass to `explain-injection`.
 
 `code` accepts `NG0100`, `ng100` or `NG01203`. `explain-error` says so when Angular's error reference has no page for a code, and gives no known cause then. Pass the owner's instance id to `inspect-component` for its inputs and state. `list-errors` takes `limit` up to 100 (default 30), and `list-console` up to 200 (default 50). `since` keeps the console calls made since a duration back from now (`30s`, `5m`, `1h`), an ISO date or epoch milliseconds, so you can read what one reproduction logged. A call repeated in a row counts from its last repeat. The page keeps its last 200 calls and sends them while a panel or an agent watches, so an agent call to an idle page gets what it logged meanwhile. Messages, stacks and console text are masked like other live values.
+
+## Performance
+
+This tool reads the web vitals the page measured. See [Performance](../inspectors/performance.md). Reads: page.
+
+| Tool         | What it answers                                                                                                                                                                                                     | Arguments |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `web-vitals` | LCP, INP, CLS, FCP and TTFB with value and web.dev rating, and the element, event and component behind each, then the slowest interactions, the long task count, the total blocking time and the latest long tasks. | none      |
+
+A metric the browser doesn't measure, or has no entry for yet, says `none yet`, and the answer names the entry types the browser lacks.
+
+## Build
+
+These tools read what the app loads. See [Build](../inspectors/build.md).
+
+| Tool           | What it answers                                                                                                                                                                                                                         | Arguments         |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `module-graph` | The Vite dev server's module graph: the entries, the lazy boundaries (`import()`) with the modules and size each pulls in, and the biggest modules. With `search`, matching modules with their importers, imports and `import()` calls. | `search`, `limit` |
+| `chunk-sizes`  | The chunks of the last production build: initial or lazy, size, gzip size, and with `stats.json` the entry point.                                                                                                                       | `limit`           |
+
+`module-graph` needs the Vite plugin, in the dev server's process; it reads nothing on the stdio MCP server. Sizes are transformed, unminified code, for modules the browser requested. `chunk-sizes` reads the build output on disk, so it works anywhere the project is, and says how to build when there is none. `limit` defaults to 20 for `module-graph` (at most 200) and 30 for `chunk-sizes` (at most 500).
 
 ## Audit
 

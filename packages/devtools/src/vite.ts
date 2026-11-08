@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { isAuthTokens, type PangularAuthTokens } from './auth-tokens.ts';
 import type { Plugin } from 'vite';
+import type { DevframesInput } from '@devframes/hub/initiate';
 import { normalizeHubBase } from '@devframes/hub/constants';
 import type { WsOriginRegistry } from 'devframe/rpc/transports/ws-server';
 import { PANGULAR_HUB_BASE, startPangularHub } from './hub.ts';
@@ -33,6 +34,8 @@ import { pickPangularConfig, resolvePangularConfig, type PangularConfig } from '
 import { overlayTags } from './vite-overlay.ts';
 import { signalPrimitivesAlias } from './vite-signals-stub.ts';
 import { terminalsEnabled } from './hub-terminals.ts';
+import { watchViteErrors, type ViteErrorSource } from './server-errors.ts';
+import { buildRegistry, viteGraphSource } from './build-graph.ts';
 import { lanAllowed, viteLanAddress } from './vite-lan.ts';
 
 export type { PangularConfig } from './config.ts';
@@ -74,6 +77,12 @@ export interface PangularViteOptions extends PangularConfig {
   lanAddress?: boolean | string;
   /** Pangular plugins' server sides: their agent tools and shared state. */
   serverPlugins?: readonly PangularServerPlugin[];
+  /**
+   * Other devframes to mount on the same hub, after Pangular Inspector: the
+   * same input as `initHub({ devframes })`. Each gets its own dock and runs
+   * behind the plugin's request gate and one-time code.
+   */
+  extraDevframes?: DevframesInput;
 }
 
 export {
@@ -113,7 +122,8 @@ export function devtoolsUrl(local: string | undefined, base: string): string | u
 export default function pangularVite(options: PangularViteOptions = {}): Plugin {
   const base = normalizeHubBase(options.base ?? PANGULAR_HUB_BASE);
   const { config } = pickPangularConfig(options);
-  const analog = resolvePangularConfig(config).inspectors.analog;
+  const inspectors = resolvePangularConfig(config).inspectors;
+  const analog = inspectors.analog;
   const lan = viteLanAddress(options, base);
   let serving = true;
   return {
@@ -182,6 +192,7 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
           logger?.warn(message),
         ),
         serverPlugins: options.serverPlugins,
+        extraDevframes: options.extraDevframes,
         security: {
           auth: authOn,
           originCheck: true,
@@ -206,7 +217,18 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
           if (lan.url) logger.info(`  \u279C  Pangular Inspector (LAN): ${lan.url}`);
         };
       }
+      // The module graph for the Build tab, read only when the panel or an agent asks.
+      const graph = inspectors.build
+        ? viteGraphSource(server as unknown as Parameters<typeof viteGraphSource>[0])
+        : undefined;
+      if (graph) buildRegistry().vite = graph;
+      // Transform and compile errors Vite shows in its overlay, for the Errors tab.
+      const stopViteErrors = inspectors.errors
+        ? watchViteErrors(server as unknown as ViteErrorSource)
+        : () => {};
       httpServer?.once('close', () => {
+        stopViteErrors();
+        if (graph && buildRegistry().vite === graph) buildRegistry().vite = undefined;
         // A restart opens the new server before this one closes: clear only what is still ours.
         if (analog) {
           resetTransformTracer(server);
