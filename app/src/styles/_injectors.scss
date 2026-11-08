@@ -1,0 +1,379 @@
+// Styles shared by the Injectors page's sections (`app/src/pages/injectors/`), in the order the
+// page had them as one component, so each section looks as it did. Include the groups a section
+// uses in this order: mono, pill, chips, link, dot, detail-head, heading, hint, path, dep-list,
+// dep-main, token, flag, dep-meta, empty-line, state, buttons, state-buttons, state-button-focus,
+// chevron, toggle, hidden.
+@use 'mixins' as m;
+
+@mixin mono {
+  .mono {
+    font-family: var(--font-mono);
+  }
+}
+
+@mixin pill {
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    justify-content: center;
+    border-radius: 99px;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@mixin chips {
+  .chip,
+  .from,
+  .step {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid var(--control-border);
+    border-radius: 99px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    transition:
+      border-color 150ms var(--ease),
+      background-color 150ms var(--ease);
+  }
+  .chip:hover,
+  .from:hover,
+  .step:hover {
+    border-color: var(--accent-line);
+    background: var(--surface-2);
+  }
+  .chip:focus-visible,
+  .from:focus-visible,
+  .step:focus-visible,
+  .link:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+@mixin link {
+  .link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+@mixin dot {
+  .dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+}
+
+@mixin detail-head {
+  .detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-head h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 15px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+}
+
+@mixin heading {
+  h3 {
+    @include m.label;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 8px;
+  }
+}
+
+@mixin hint {
+  .hint {
+    margin: -4px 0 10px;
+    color: var(--text-3);
+    font-size: 12px;
+  }
+}
+
+@mixin path {
+  .path {
+    position: relative;
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0 0 0 18px;
+    list-style: none;
+  }
+  .path::before {
+    content: '';
+    position: absolute;
+    top: 13px;
+    bottom: 13px;
+    left: 5px;
+    width: 1px;
+    background: var(--border-strong);
+  }
+  .path li {
+    position: relative;
+    min-width: 0;
+  }
+  .path li::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: -16px;
+    width: 9px;
+    height: 1px;
+    background: var(--border-strong);
+  }
+  .path li.current .step {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .step.null {
+    cursor: default;
+    color: var(--text-2);
+  }
+  .step.null:hover {
+    border-color: var(--border-strong);
+    background: var(--surface);
+  }
+  .hint-inline {
+    color: var(--text-3);
+  }
+  .step-count {
+    color: var(--text-3);
+    font-size: 11px;
+  }
+}
+
+@mixin dep-list {
+  .deps,
+  .providers {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .dep,
+  .provider {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+  }
+  .dep.hit,
+  .provider.hit {
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+}
+
+@mixin dep-main {
+  .dep-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+@mixin token {
+  .token {
+    min-width: 0;
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+}
+
+@mixin flag {
+  .flag {
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 16px;
+  }
+}
+
+@mixin dep-meta {
+  .dep-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-top: 6px;
+    color: var(--text-3);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+}
+
+@mixin empty-line {
+  .empty-line {
+    margin: 0;
+    color: var(--text-2);
+  }
+}
+
+@mixin state {
+  .state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 40px 16px;
+    text-align: center;
+    background: var(--surface);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+    @include m.enter;
+  }
+  .state.compact {
+    padding: 24px 12px;
+    border: 0;
+  }
+  .state-title {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .state-hint {
+    max-width: 440px;
+    margin: 0;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+}
+
+@mixin buttons {
+  button {
+    font: inherit;
+  }
+}
+
+@mixin state-buttons {
+  .state button,
+  .provider-group button {
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+}
+
+@mixin state-button-focus {
+  .state button:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+@mixin chevron {
+  .refresh svg,
+  .chevron {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .chevron {
+    transition: transform 150ms var(--ease);
+  }
+  .chevron.open {
+    transform: rotate(90deg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chevron {
+      transition: none;
+    }
+  }
+}
+
+@mixin toggle {
+  .orphans-toggle,
+  .provider-group .group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: var(--control-h);
+    padding: 0 12px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--text-2);
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .provider-group .group-toggle {
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 2px 4px;
+    margin-left: -4px;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+  }
+  .orphans-toggle:hover,
+  .provider-group .group-toggle:hover {
+    color: var(--text);
+  }
+  .orphans-toggle:focus-visible,
+  .provider-group .group-toggle:focus-visible {
+    @include m.focus-ring(-2px);
+  }
+}
+
+@mixin hidden {
+  .provider-list[hidden],
+  .orphans-body[hidden],
+  .helper-hint[hidden] {
+    display: none;
+  }
+}

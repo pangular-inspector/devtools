@@ -1,0 +1,89 @@
+@use 'mixins' as m;
+@use 'injectors' as inj;
+
+@include inj.hint;
+// The source link of each card has the class path too, so it keeps these as it did on the page.
+@include inj.path;
+@include inj.token;
+@include inj.flag;
+@include inj.buttons;
+@include inj.state-buttons;
+@include inj.chevron;
+@include inj.toggle;
+.helper-hint {
+  margin: 0 0 8px;
+}
+@include inj.hidden;
+.provider-group h2 {
+  @include m.label;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.section-count {
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.provider-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.provider-card {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  transition:
+    background-color 150ms var(--ease),
+    border-color 150ms var(--ease);
+}
+.provider-card:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.provider-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.provider-header .token {
+  font-size: 13px;
+  font-weight: 600;
+}
+.provided-in {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  @include m.tint(ok);
+  border-width: 1px;
+  border-style: solid;
+}
+.provider-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.provider-meta .path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.provider-meta .as {
+  color: var(--text-2);
+}

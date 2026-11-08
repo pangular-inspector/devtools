@@ -1,0 +1,103 @@
+@use 'mixins' as m;
+@use 'injectors' as inj;
+
+@include inj.mono;
+@include inj.pill;
+@include inj.chips;
+@include inj.link;
+@include inj.dot;
+@include inj.heading;
+@include inj.hint;
+@include inj.dep-list;
+@include inj.dep-main;
+@include inj.token;
+@include inj.flag;
+@include inj.dep-meta;
+.from {
+  height: 22px;
+  padding: 0 8px;
+  color: var(--text-2);
+}
+.from .mono {
+  color: var(--text);
+}
+.from.absent {
+  cursor: default;
+  background: none;
+}
+.from.missing {
+  cursor: default;
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  background: none;
+  color: var(--warn);
+}
+@include inj.empty-line;
+@include inj.buttons;
+.resolve-toggle {
+  font-size: 12px;
+}
+.resolution[hidden] {
+  display: none;
+}
+.resolve-graph {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+}
+.resolve-graph li {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+.resolve-graph li::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: -6px;
+  bottom: 50%;
+  width: 2px;
+  background: var(--border-strong);
+}
+.resolve-graph li:first-child::before {
+  display: none;
+}
+.resolve-dot {
+  position: absolute;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface);
+}
+.resolve-provides .resolve-dot {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+.resolve-throws .resolve-dot {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+.resolve-state {
+  color: var(--text-2);
+}
+.resolve-provides .resolve-state {
+  color: var(--ok-text);
+  font-weight: 600;
+}
+.resolve-throws .resolve-state {
+  color: var(--danger-text);
+}
+.resolve-not-asked .resolve-state,
+.resolve-skipped .resolve-state {
+  color: var(--text-3);
+}

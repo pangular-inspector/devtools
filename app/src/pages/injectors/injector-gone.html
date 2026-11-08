@@ -1,0 +1,13 @@
+<header class="detail-head">
+  <h2 id="di-detail-title" class="mono">{{ name() }}</h2>
+</header>
+<div class="state compact">
+  <p class="state-hint">
+    This injector is no longer on the page. Its component or directive was destroyed.
+  </p>
+  @if (rows()[0]; as first) {
+    <button type="button" (click)="reveal(first.node.injector.id)">
+      Show {{ label(first.node) }}
+    </button>
+  }
+</div>
