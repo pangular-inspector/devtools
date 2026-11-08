@@ -276,7 +276,7 @@ Makes one `@defer` block fetch its dependencies and show its main content now, a
 | `block`  | Yes      | A block id from [`defer-blocks`](#defer-blocks), such as `d3`.             |
 | `page`   | No       | The page id. Required when more than one tab reports a block with that id. |
 
-The page loads the block the way `DeferBlockFixture.render` does in Angular's testing package, then runs change detection with `ng.applyChanges`. When the dependencies fail to load, the block shows its `@error` block and the answer says so. A block without an `@error` block is left on its placeholder. The block's own triggers do not fire, so a load does not prove they work.
+The page loads the block the way `DeferBlockFixture.render` does in Angular's testing package, then runs change detection with `ng.applyChanges`. If change detection throws while the block renders, the answer quotes the error. When the dependencies fail to load, the block shows its `@error` block and the answer says so. A block without an `@error` block is left on its placeholder. The block's own triggers do not fire, so a load does not prove they work.
 
 It refuses, and loads nothing, when:
 

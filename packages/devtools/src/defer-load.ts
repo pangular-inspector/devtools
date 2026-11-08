@@ -44,6 +44,8 @@ export interface DeferLoadResult {
   state?: string;
   /** The block already showed its main content, so nothing was loaded. */
   already?: true;
+  /** What change detection threw while it rendered the loaded block. */
+  renderError?: string;
   error?: string;
 }
 
@@ -166,15 +168,28 @@ export async function loadDeferBlock(
     };
   }
   internals.renderDeferBlockState(failed ? ERROR : COMPLETE, found.tNode, found.lContainer, true);
+  let renderError: string | undefined;
   for (const root of roots) {
+    let component: unknown;
     try {
-      const component = ng.getComponent?.(root);
-      if (component) ng.applyChanges?.(component);
+      component = ng.getComponent?.(root);
     } catch {
       // A root that is gone; the next tick of the app renders the block all the same.
+      continue;
+    }
+    if (!component) continue;
+    try {
+      ng.applyChanges?.(component);
+    } catch (error) {
+      // The block's own template can throw once it renders; the agent is told.
+      renderError ??= error instanceof Error ? error.message : String(error);
     }
   }
-  return { ok: true, state: failed ? 'error' : 'complete' };
+  return {
+    ok: true,
+    state: failed ? 'error' : 'complete',
+    ...(renderError !== undefined ? { renderError: renderError.slice(0, 500) } : {}),
+  };
 }
 
 interface LoadRpc {

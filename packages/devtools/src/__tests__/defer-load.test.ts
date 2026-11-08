@@ -73,6 +73,21 @@ describe('loadDeferBlock', () => {
     expect(ng.applyChanges).toHaveBeenCalledWith(component);
   });
 
+  it('says what change detection threw while it rendered the block', async () => {
+    const { root, innerAnchor, internals, ng } = app();
+    ng.applyChanges.mockImplementation(() => {
+      throw new Error('NG0100: changed after checked');
+    });
+    const result = await loadDeferBlock(ng, internals, { host: innerAnchor, block: info() }, [
+      root,
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      state: 'complete',
+      renderError: 'NG0100: changed after checked',
+    });
+  });
+
   it('shows the @error block when the dependencies fail', async () => {
     const { root, innerAnchor, internals, ng, rendered } = app({ failed: true, errorBlock: true });
     const result = await loadDeferBlock(ng, internals, { host: innerAnchor, block: info() }, [

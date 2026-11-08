@@ -38,6 +38,9 @@ function toResult(result: unknown): DeferLoadResult {
       ok: true,
       state: r['state'] === 'error' ? 'error' : 'complete',
       ...(r['already'] === true ? { already: true as const } : {}),
+      ...(typeof r['renderError'] === 'string'
+        ? { renderError: r['renderError'].slice(0, 500) }
+        : {}),
     };
   }
   return {
@@ -56,13 +59,16 @@ export function deferLoadText(
   if (result.already) {
     return untrusted(`Defer block ${where} already shows its main content, so nothing was loaded.`);
   }
+  const threw = result.renderError
+    ? ` Change detection threw while it rendered: ${result.renderError}. Check pangular:list-errors.`
+    : '';
   if (result.state === 'error') {
     return untrusted(
-      `Loaded defer block ${where}, but its dependencies failed, so it shows its @error block. Check pangular:list-errors and the browser's network panel for the failed chunk.`,
+      `Loaded defer block ${where}, but its dependencies failed, so it shows its @error block. Check pangular:list-errors and the browser's network panel for the failed chunk.${threw}`,
     );
   }
   return untrusted(
-    `Loaded defer block ${where}: its dependencies were fetched and it now shows its main content. Its own triggers did not fire, so this does not prove they work. Read pangular:defer-blocks again to see its new state.`,
+    `Loaded defer block ${where}: its dependencies were fetched and it now shows its main content. Its own triggers did not fire, so this does not prove they work. Read pangular:defer-blocks again to see its new state.${threw}`,
   );
 }
 
