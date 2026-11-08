@@ -72,7 +72,7 @@ With `popup.hotkey: false` there is no shortcut to bring the button back, so pas
 | **renders** | Component template updates since the page loaded, as Angular's profiler reports them. The count pauses while the tab is in the background.        |
 | **errors**  | Errors the [Errors inspector](../inspectors/errors.md) caught on the page, each repeat included. It stays at 0 when that inspector is turned off. |
 
-It is off by default. The panel saves its own copy under `pangular-pref:pill` in its `localStorage`, and, like passive mode, the popup keeps a separate copy under `pangular-popup` in your app's `localStorage`. The panel in the popup changes the popup's copy, and so does the panel the popup moved to its own window, which sends the change to the page that opened it. In passive mode the button stays hidden, pill or not.
+It is off by default. The panel saves its own copy under `pangular-pref:pill` in its `localStorage`. Like passive mode, the popup keeps a separate copy under `pangular-popup` in your app's `localStorage`. The panel in the popup changes the popup's copy. A panel that the popup moved to its own window also changes it. That panel sends the change to the page that opened it. In passive mode the button stays hidden, pill or not.
 
 ## Saved filters
 
