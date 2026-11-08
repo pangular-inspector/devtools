@@ -128,6 +128,30 @@ describe('clear-router-navigations', () => {
     expect((await page()).apps!.find((a) => a.id === 'cart')!.navigations).toHaveLength(1);
   });
 
+  it('refuses an app id the page does not report and clears nothing', async () => {
+    const { ctx, invoke, router } = await boot();
+    const broadcast = vi.spyOn(ctx.rpc, 'broadcast');
+    const apps = [
+      { id: 'app-root', name: 'Shell', selector: 'app-root', primary: true },
+      { id: 'cart', name: 'Cart', selector: 'cart-widget', navigations: [nav(7)] },
+    ];
+    await invoke('push-router', report('p1', [nav(1, { url: '/home' })], { apps }));
+    await expect(
+      invoke('clear-router-navigations', { pageId: 'p1', app: 'no-such-app' }),
+    ).rejects.toThrow('no app with the id "no-such-app"');
+    await invoke('push-router', report('p2', [nav(2)]));
+    await expect(invoke('clear-router-navigations', { pageId: 'p2', app: 'cart' })).rejects.toThrow(
+      'leave app out',
+    );
+    const pages = (await router()).pages;
+    expect(pages.find((p) => p.pageId === 'p1')!.navigations).toHaveLength(1);
+    expect(pages.find((p) => p.pageId === 'p1')!.apps![1]!.navigations).toHaveLength(1);
+    expect(pages.find((p) => p.pageId === 'p2')!.navigations).toHaveLength(1);
+    expect(broadcast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'pangular:router-clear' }),
+    );
+  });
+
   it('keeps the list empty when the page reports after clearing', async () => {
     const { invoke, router } = await boot();
     await invoke('push-router', report('p1', looping));

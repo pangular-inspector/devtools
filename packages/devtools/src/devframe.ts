@@ -131,6 +131,7 @@ import {
 } from './rpc/pipes-tools.ts';
 import {
   clearRouterNavigations,
+  unknownRouterApp,
   currentRouter,
   expireRouterPages,
   isRouterReport,
@@ -1247,8 +1248,9 @@ const pangular = defineDevframe({
         const pageId = typeof target === 'string' ? target : record['pageId'];
         const app = typeof record['app'] === 'string' && record['app'] ? record['app'] : undefined;
         if (typeof pageId !== 'string') throw new Error('Give the id of the page to clear.');
-        const page = routerPages.get(pageId);
-        const secondary = !!app && !!page?.apps?.some((a) => a.id === app && !a.primary);
+        const unknownApp = unknownRouterApp(routerPages, pageId, app);
+        if (unknownApp) throw new Error(unknownApp);
+        const secondary = routerPages.get(pageId)?.apps?.some((a) => a.id === app && !a.primary);
         if (clearRouterNavigations(routerPages, pageId, Date.now(), app)) {
           applyRouter(currentRouter(routerPages));
         }
