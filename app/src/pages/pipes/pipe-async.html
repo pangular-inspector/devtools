@@ -1,0 +1,41 @@
+<h2 id="async-title">
+  Async subscriptions <span class="pill">{{ async().length }}</span>
+</h2>
+<p class="hint">
+  Each <span class="mono">| async</span> subscribes on its own. Two on the same source mean the work
+  runs twice. A source that changes on every check, like
+  <span class="mono">getData() | async</span>, resubscribes each time.
+</p>
+@if (asyncTotal(); as total) {
+  <p class="hint">Showing {{ async().length }} of {{ total }} subscriptions.</p>
+}
+<ul class="async-list">
+  @for (a of async(); track $index) {
+    <li class="async-row" (mouseenter)="highlight(a.target)" (mouseleave)="highlight(null)">
+      @if (a.target; as target) {
+        <button
+          type="button"
+          class="component-name mono"
+          [attr.aria-label]="'Highlight ' + a.component + ' on the page'"
+          (click)="highlight(target)"
+          (focus)="highlight(target)"
+          (blur)="highlight(null)"
+        >
+          {{ a.component }}
+        </button>
+      } @else {
+        <span class="mono component-name">{{ a.component }}</span>
+      }
+      @if (!a.hasSource) {
+        <span class="chip">no source</span>
+      }
+      @if (a.duplicate) {
+        <span class="chip warn">possible duplicate subscription</span>
+      }
+      @if (a.resubscribing) {
+        <span class="chip warn">resubscribing</span>
+      }
+      <span class="mono value latest">{{ a.latestValue ?? 'no value yet' }}</span>
+    </li>
+  }
+</ul>

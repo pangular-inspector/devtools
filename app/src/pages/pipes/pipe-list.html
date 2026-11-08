@@ -1,0 +1,78 @@
+@if (filtered().length) {
+  <ul class="pipe-list" aria-label="Pipes" appRovingList="[data-pipe-row]">
+    @for (p of filtered(); track p.file + p.name) {
+      @let live = liveFor(p.name);
+      <li>
+        <button
+          type="button"
+          class="row"
+          data-pipe-row
+          aria-controls="pipe-detail"
+          [attr.aria-current]="isSelected(p) || null"
+          [class.selected]="isSelected(p)"
+          (click)="select(p)"
+          (mouseenter)="highlightPipe(live)"
+          (mouseleave)="highlight(null)"
+          (focus)="highlightPipe(live)"
+          (blur)="highlight(null)"
+        >
+          <span class="row-main">
+            <span class="name mono">{{ p.name }}</span>
+            <span class="sub mono">{{ p.className }}</span>
+          </span>
+          <span class="row-meta">
+            @if (live?.churn) {
+              <span class="chip warn">churning</span>
+            }
+            @if (live?.stale) {
+              <span class="chip warn">stale?</span>
+            }
+            @if (live?.call; as call) {
+              <span class="chip hot">{{ plural(call.callCount, 'call') }}</span>
+              @if (call.totalMs !== undefined) {
+                <span class="chip hot">{{ ms(call.totalMs) }}</span>
+              }
+            }
+            @if (live) {
+              <span class="chip live">{{ live.instanceCount }} live</span>
+            }
+            @if (p.builtin) {
+              <span class="chip">built-in</span>
+            }
+            @if (p.runtime) {
+              <span class="chip">runtime only</span>
+            }
+            @if (!p.isStandalone) {
+              <span class="chip">NgModule</span>
+            }
+            <span class="chip" [class.impure]="!p.isPure">{{ p.isPure ? 'pure' : 'impure' }}</span>
+          </span>
+          <span class="row-file mono">
+            @if (p.runtime) {
+              <span class="no-source">No source location</span>
+            } @else {
+              {{ p.file }}:{{ p.line }}
+            }
+            @if (p.builtin && (p.usageCount ?? 0) > 1) {
+              <span class="more">+{{ (p.usageCount ?? 1) - 1 }} more</span>
+            } @else if (!p.builtin && p.usageCount) {
+              <span class="more">{{ p.usageCount }} {{ p.usageCount === 1 ? 'use' : 'uses' }}</span>
+            }
+          </span>
+        </button>
+      </li>
+    }
+  </ul>
+} @else {
+  <div class="state compact" role="status">
+    <p class="state-title">No pipes match</p>
+    <p class="state-hint">
+      @if (filter().trim()) {
+        Nothing matches “{{ filter().trim() }}” in this view.
+      } @else {
+        None of the pipes fit this filter.
+      }
+    </p>
+    <button type="button" (click)="clearFilters()">Clear filters</button>
+  </div>
+}

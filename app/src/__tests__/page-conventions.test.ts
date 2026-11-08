@@ -132,7 +132,7 @@ describe('pages with a keyboard list use the shared roving list', () => {
     const sources = await pageSources();
     const lists = {
       'capacitor-inspector.ts': '[data-cap-call]',
-      'pipes-inspector.ts': '[data-pipe-row]',
+      'pipes/pipe-list.ts': '[data-pipe-row]',
       'network/call-timeline.ts': '',
       'network/ssr-requests.ts': '',
       'query-inspector.ts': '',
