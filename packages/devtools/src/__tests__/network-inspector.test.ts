@@ -38,7 +38,7 @@ class StubSelect {
 Component({
   selector: 'app-select',
   template: '',
-  inputs: ['options', 'value', 'labelledBy', 'emptyText', 'placeholder'],
+  inputs: ['options', 'value', 'labelledBy', 'emptyText', 'placeholder', 'describedBy'],
   outputs: ['valueChange'],
 })(StubSelect);
 
