@@ -185,6 +185,8 @@ export function ssrRequestStory(
   const refetched = (page?.calls ?? []).filter(
     (c) =>
       c.side === 'client' &&
+      // The page's own fetch() never reads the transfer cache, so it is no cache miss.
+      !c.nativeFetch &&
       !c.cacheHit &&
       !c.mocked &&
       c.at >= request.at &&

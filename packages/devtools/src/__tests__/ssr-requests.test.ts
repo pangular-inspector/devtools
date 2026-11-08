@@ -349,6 +349,8 @@ describe('ssrRequestStory', () => {
         calls: [
           httpCall({ id: 'c1', side: 'client', url: '/api/products', cacheHit: true, at: 1200 }),
           httpCall({ id: 'c2', side: 'client', url: '/api/quote', method: 'POST', at: 1200 }),
+          // The page's own fetch() to a URL the server fetched too: no transfer cache miss.
+          httpCall({ id: 'c3', side: 'client', url: '/api/products', at: 1300, nativeFetch: true }),
         ],
       }),
     ];

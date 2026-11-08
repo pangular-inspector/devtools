@@ -813,16 +813,18 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
                   </button>
                 }
                 <app-call-copy [call]="detail" (done)="message.set($event)" />
-                <button
-                  type="button"
-                  class="ghost"
-                  aria-controls="rule-form"
-                  [disabled]="!canWrite()"
-                  [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
-                  (click)="mockCall(detail)"
-                >
-                  Mock this request
-                </button>
+                @if (!detail.nativeFetch) {
+                  <button
+                    type="button"
+                    class="ghost"
+                    aria-controls="rule-form"
+                    [disabled]="!canWrite()"
+                    [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+                    (click)="mockCall(detail)"
+                  >
+                    Mock this request
+                  </button>
+                }
                 <button type="button" class="ghost" (click)="closePreview()">Close</button>
               </div>
             </div>
@@ -837,6 +839,12 @@ const HTTP_STATUS_OPTIONS: SelectOption[] = [
               >
               <span class="preview-url" [title]="detail.url">{{ detail.url }}</span>
             </p>
+            @if (detail.nativeFetch) {
+              <p class="muted small">
+                Made with <code>fetch()</code> directly, which skips the HttpClient interceptor, so
+                a fault rule cannot mock it.
+              </p>
+            }
             @if (rulePatternOf(detail); as pattern) {
               <p class="preview-rule">
                 Matched rule <code>{{ pattern }}</code>
@@ -2483,6 +2491,8 @@ export class NetworkInspector {
     return page.calls.filter(
       (c) =>
         c.side === 'client' &&
+        // The page's own fetch() never goes through the transfer cache, so it is no cache miss.
+        !c.nativeFetch &&
         !c.cacheHit &&
         !c.mocked &&
         c.at >= request.at &&

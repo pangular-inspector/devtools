@@ -81,6 +81,8 @@ describe('NetworkInspector SSR requests', () => {
         calls: [
           call({ id: 'b1', side: 'client', url: '/api/products', cacheHit: true, at: 1200 }),
           call({ id: 'b2', side: 'client', url: '/api/quote', method: 'POST', at: 1200 }),
+          // A native fetch() to the same URL never reads the transfer cache: no cache miss.
+          call({ id: 'b3', side: 'client', url: '/api/products', at: 1300, nativeFetch: true }),
         ],
       },
     ]);
