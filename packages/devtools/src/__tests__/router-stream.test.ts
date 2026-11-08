@@ -34,6 +34,34 @@ describe('NavigationStream', () => {
     expect(stream.read(read.cursor).entries).toEqual([]);
   });
 
+  it('keeps the apps of one page apart and reads the first app with null', () => {
+    const stream = new NavigationStream();
+    stream.record('a', [nav(1)]);
+    stream.record('a', [nav(1)], 'cart-widget');
+    // The same navigation id in two apps is two entries.
+    expect(stream.read(0).entries.map((e) => [e.nav.id, e.appId])).toEqual([
+      [1, undefined],
+      [1, 'cart-widget'],
+    ]);
+    expect(stream.read(0, 'a', null).entries.map((e) => e.appId)).toEqual([undefined]);
+    expect(stream.read(0, 'a', 'cart-widget').entries.map((e) => e.appId)).toEqual(['cart-widget']);
+    expect(streamText(stream.read(0, 'a', 'cart-widget'), { waited: false })).toContain(
+      'page `a` app `cart-widget` #1',
+    );
+    stream.record('a', [nav(1, { outcome: 'succeeded', endedAt: 5 })], 'cart-widget');
+    expect(stream.read(2, 'a', 'cart-widget').entries[0].updated).toBe(true);
+
+    // Clearing one app leaves the other; the first app is cleared with null.
+    stream.clear('a', 'cart-widget');
+    expect(stream.read(0).entries.map((e) => e.appId)).toEqual([undefined]);
+    stream.record('a', [nav(2)], 'cart-widget');
+    stream.clear('a', null);
+    expect(stream.read(0).entries.map((e) => e.appId)).toEqual(['cart-widget']);
+    stream.clear('a');
+    expect(stream.read(0).entries).toEqual([]);
+    expect(stream.pageIds().size).toBe(0);
+  });
+
   it('keeps pages apart and filters by page', () => {
     const stream = new NavigationStream();
     stream.record('a', [nav(1)]);

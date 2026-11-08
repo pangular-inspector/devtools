@@ -5,6 +5,7 @@ import { decode, isSecretKey, knownSecrets, redactText, rememberSecret } from '.
 import { clip } from './text.ts';
 import { matchedRoutesOf } from './router-matched.ts';
 import { navigationFromQuery, redirectFromQuery } from './router-open-redirect.ts';
+import { trackOf } from './router-track.ts';
 import type {
   RouteGuards,
   ActiveRoute,
@@ -109,18 +110,22 @@ interface NavState {
 const navState = new WeakMap<NavigationRecord, NavState>();
 const seenRoutes = new WeakSet<object>();
 
-let pendingCaller: { text: string; at: number; sticky?: boolean } | null = null;
-let pendingRedirect: { from: number; kind: string } | null = null;
-let configGeneration = 0;
 let navigationLimit = 50;
 
-export function setCaller(text: string, sticky = false) {
-  if (!sticky && pendingCaller?.sticky && Date.now() - pendingCaller.at < 50) return;
-  pendingCaller = { text: clip(redactText(text, knownSecrets), 200), at: Date.now(), sticky };
+/**
+ * Notes who starts the next navigation of `router`: a RouterLink click, the
+ * code that called `navigate()`, or a DevTools action. Each Router keeps its
+ * own (`router-track.ts`), so one app's caller never lands on another's.
+ */
+export function setCaller(text: string, sticky = false, router?: object | null) {
+  const track = trackOf(router);
+  if (!sticky && track.caller?.sticky && Date.now() - track.caller.at < 50) return;
+  track.caller = { text: clip(redactText(text, knownSecrets), 200), at: Date.now(), sticky };
 }
 
-export function setGeneration(generation: number) {
-  configGeneration = generation;
+/** The config generation the next navigations of `router` are stamped with. */
+export function setGeneration(generation: number, router?: object | null) {
+  trackOf(router).generation = generation;
 }
 
 /** How many navigations a page keeps (`limits.navigations`). */
@@ -833,16 +838,16 @@ export function noteRun(navigations: NavigationRecord[], run: GuardRun) {
   nav.runs = [...(nav.runs ?? []), { ...run, result: redactMessage(run.result) }].slice(-40);
 }
 
-let failedCalls = 0;
-
 export function noteFailedCall(
   navigations: NavigationRecord[],
   url: string,
   error: unknown,
   at: number,
+  router?: object | null,
 ) {
+  const track = trackOf(router);
   navigations.push({
-    id: -++failedCalls,
+    id: -++track.failedCalls,
     url: redactUrl(url),
     trigger: 'imperative',
     startedAt: at,
@@ -850,8 +855,8 @@ export function noteFailedCall(
     outcome: 'failed',
     reason: errorText(error),
     errorCode: errorCodeOf(error),
-    caller: pendingCaller?.text,
-    generation: configGeneration,
+    caller: track.caller?.text,
+    generation: track.generation,
   });
   trimNavigations(navigations, navigationLimit);
 }
@@ -907,6 +912,7 @@ export function applyRouterEvent(
   const type = routerEventType(event);
   const id = read(() => event['id'] as number, -1);
   const current = findPending(navigations);
+  const track = trackOf(router);
   if (type === undefined) {
     if (isRedirectRequest(event)) {
       let source: NavigationRecord | undefined;
@@ -932,7 +938,7 @@ export function applyRouterEvent(
           nav.id > source!.id && nav.outcome === 'pending' && nav.redirectedFrom === undefined,
       );
       if (follower) follower.redirectedFrom = source.id;
-      else pendingRedirect = { from: source.id, kind: source.redirectKind };
+      else track.redirect = { from: source.id, kind: source.redirectKind };
       return true;
     }
     if (!current) return false;
@@ -950,7 +956,7 @@ export function applyRouterEvent(
       trigger: String(event['navigationTrigger'] ?? 'imperative'),
       startedAt: at,
       outcome: 'pending',
-      generation: configGeneration,
+      generation: track.generation,
     };
     const state = stateOf(nav);
     state.secrets = configSecretsFor(router, url);
@@ -963,13 +969,13 @@ export function applyRouterEvent(
     }, null);
     const listed = extrasOf(extras, event['restoredState']);
     if (listed) nav.extras = listed;
-    if (pendingCaller && at - pendingCaller.at < 2000 && nav.trigger === 'imperative') {
-      nav.caller = pendingCaller.text;
+    if (track.caller && at - track.caller.at < 2000 && nav.trigger === 'imperative') {
+      nav.caller = track.caller.text;
     }
-    pendingCaller = null;
-    if (pendingRedirect) {
-      nav.redirectedFrom = pendingRedirect.from;
-      pendingRedirect = null;
+    track.caller = null;
+    if (track.redirect) {
+      nav.redirectedFrom = track.redirect.from;
+      track.redirect = null;
     } else {
       linkCancelledRedirect(navigations, nav);
     }
@@ -1024,11 +1030,11 @@ export function applyRouterEvent(
       trigger: skippedTriggerOf(router, id),
       startedAt: at,
       outcome: 'pending',
-      generation: configGeneration,
+      generation: track.generation,
     };
-    if (pendingCaller && at - pendingCaller.at < 2000 && nav.trigger === 'imperative')
-      nav.caller = pendingCaller.text;
-    pendingCaller = null;
+    if (track.caller && at - track.caller.at < 2000 && nav.trigger === 'imperative')
+      nav.caller = track.caller.text;
+    track.caller = null;
     navigations.push(nav);
   }
   const nav = navigations.find((n) => n.id === id);
@@ -1197,7 +1203,7 @@ export function lastNavigationOf(router: AnyRecord, at: number): NavigationRecor
     startedAt: at,
     outcome: 'succeeded',
     beforeConnect: true,
-    generation: configGeneration,
+    generation: trackOf(router).generation,
   };
 }
 
@@ -1225,7 +1231,7 @@ export function currentNavigationOf(router: AnyRecord, at: number): NavigationRe
     startedAt: at,
     outcome: 'pending',
     beforeConnect: true,
-    generation: configGeneration,
+    generation: trackOf(router).generation,
   };
   stateOf(record).secrets = secrets;
   return record;

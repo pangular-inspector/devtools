@@ -1,5 +1,10 @@
 import { diffNavigationsText } from './rpc/router-diff.ts';
-import { APP_ARGUMENT, routerStateForApp } from './rpc/router-apps.ts';
+import {
+  APP_ARGUMENT,
+  FOLLOW_APP_ARGUMENT,
+  routerStateForApp,
+  streamAppFor,
+} from './rpc/router-apps.ts';
 import { MAX_WAIT_MS, streamText, type NavigationStream } from './rpc/router-stream.ts';
 import { previewNavigationText } from './rpc/router-preview.ts';
 import type { HttpCall } from './http-rules.ts';
@@ -197,11 +202,12 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
   agent.registerTool({
     id: 'pangular:follow-navigations',
     title: 'Follow navigations',
-    description: `New and changed navigations since a cursor, oldest first, to follow a login or redirect flow without polling. Without \`since\`, the latest 5 and a cursor; pass it back as \`since\`, with \`waitMs\` (up to ${MAX_WAIT_MS}) to wait for the next one.`,
+    description: `New and changed navigations since a cursor, oldest first, to follow a login or redirect flow without polling. Without \`since\`, the latest 5 and a cursor; pass it back as \`since\`, with \`waitMs\` (up to ${MAX_WAIT_MS}) to wait for the next one. \`app\` follows another app of a page that runs several.`,
     inputSchema: {
       type: 'object',
       properties: {
         page: pageProperty,
+        app: FOLLOW_APP_ARGUMENT,
         since: {
           type: 'integer',
           minimum: 0,
@@ -216,21 +222,24 @@ export function registerRouterAgentTools(env: RegisterRouterAgentToolsEnv) {
         },
       },
     },
-    handler: async (args: { page?: string; since?: number; waitMs?: number }) => {
+    handler: async (args: { page?: string; app?: unknown; since?: number; waitMs?: number }) => {
       const state = routerState.value() as RouterState;
       if (args.page && !state.pages.some((p) => p.pageId === args.page)) {
         return { markdown: noPage(args.page, state) };
       }
+      const scoped = streamAppFor(state, args);
+      if ('error' in scoped) return { markdown: refusal(scoped.error) };
+      const { page, app, note } = scoped;
       if (typeof args.since !== 'number' || !Number.isFinite(args.since)) {
-        const all = navigationStream.read(0, args.page);
+        const all = navigationStream.read(0, page, app);
         const read = { ...all, entries: all.entries.slice(-5) };
         delete read.reset;
-        return { markdown: streamText(read, { waited: false }) };
+        return { markdown: streamText(read, { waited: false }) + note };
       }
       const since = Math.floor(args.since);
       const wait = typeof args.waitMs === 'number' && args.waitMs > 0 ? args.waitMs : 0;
-      const read = await navigationStream.wait(since, wait, args.page);
-      return { markdown: streamText(read, { since, waited: wait > 0 }) };
+      const read = await navigationStream.wait(since, wait, page, app);
+      return { markdown: streamText(read, { since, waited: wait > 0 }) + note };
     },
   });
 

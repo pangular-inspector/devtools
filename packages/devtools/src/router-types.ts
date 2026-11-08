@@ -416,6 +416,14 @@ export interface RouterAppReport {
   configTruncated?: number;
   activeIds?: string[];
   setup?: RouterSetup;
+  /** This app's outlet tree, from its own Router. */
+  outlets?: OutletInfo[];
+  /** The RouterLink and RouterLinkActive directives created with this app's Router. */
+  links?: LinkInfo[];
+  linksTruncated?: number;
+  linksUnchecked?: number;
+  /** The preloads this app's own preloader ran. */
+  preloads?: PreloadRecord[];
   /** Navigation loops in this app's history; the server adds them, the page never sends them. */
   loops?: NavigationLoop[];
 }

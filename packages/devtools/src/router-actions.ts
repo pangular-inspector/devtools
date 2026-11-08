@@ -26,6 +26,13 @@ import {
   type RouterDebugApi,
   WRAPPED,
 } from './router.ts';
+import {
+  joinWrapper,
+  keepWrapper,
+  targetOfRun,
+  targetsOf,
+  type GuardTarget,
+} from './router-guard-targets.ts';
 import type { PreloadRecord } from './router-types.ts';
 export type { PreloadRecord } from './router-types.ts';
 
@@ -85,6 +92,16 @@ export function routerLinkOf(target: Element | null, ng?: RouterDebugApi): Eleme
   return null;
 }
 
+/**
+ * The Router a RouterLink navigates with (its `router` field, as
+ * `isRouterLink` reads it), or null when the debug API can't tell.
+ */
+export function linkRouterOf(link: Element, ng?: RouterDebugApi): AnyRecord | null {
+  if (!ng?.getDirectives) return null;
+  const directive = read(() => (ng.getDirectives?.(link) ?? []).find(isRouterLink), undefined);
+  return read(() => (directive?.['router'] as AnyRecord | undefined) ?? null, null);
+}
+
 const INSTRUMENT_KEY = 'pangular-router-instrument';
 
 /** Whether instrumentation is on for this tab: on unless it was turned off. */
@@ -136,7 +153,7 @@ export function captureCallers(
     router[method] = function (this: unknown, ...args: unknown[]) {
       if (!fromClick && depth === 0) {
         const caller = stackCaller();
-        setCaller(`${method}()${caller ? ` from ${caller}` : ''}`);
+        setCaller(`${method}()${caller ? ` from ${caller}` : ''}`, false, router);
       }
       fromClick = false;
       depth++;
@@ -147,7 +164,7 @@ export function captureCallers(
           () => (typeof args[0] === 'string' ? args[0] : JSON.stringify(args[0])) ?? '',
           '',
         );
-        noteFailedCall(navigations, target, error, Date.now());
+        noteFailedCall(navigations, target, error, Date.now(), router);
         throw error;
       } finally {
         depth--;
@@ -157,8 +174,11 @@ export function captureCallers(
   const onClick = (event: Event) => {
     const link = routerLinkOf(event.target as Element | null, ng);
     if (!link) return;
+    // On a page with several apps, a link of another app starts that app's navigation.
+    const owner = linkRouterOf(link, ng);
+    if (owner && owner !== router) return;
     fromClick = true;
-    setCaller(`RouterLink ${describeElement(link)}`, true);
+    setCaller(`RouterLink ${describeElement(link)}`, true, router);
     queueMicrotaskOutside(() => {
       setTimeoutOutside(() => (fromClick = false));
     });
@@ -431,23 +451,26 @@ function resolverLabelAt(entry: unknown) {
 function wrapFunction(
   original: AnyRecord,
   label: { guard: string; kind: string; route: string },
-  router: AnyRecord,
-  navigations: NavigationRecord[],
+  targets: GuardTarget[],
   labelAt?: (args: unknown[]) => { guard?: string; route?: string },
 ): AnyRecord {
   const wrapped = function (this: unknown, ...args: unknown[]) {
     const started = performance.now();
     const at = (labelAt && read(() => labelAt(args), null)) ?? {};
-    const record: Recorder = (value, threw, outcome) =>
-      noteRun(navigations, {
+    // Picked when the run starts: the app whose navigation runs this guard.
+    const target = targetOfRun(targetsOf(wrapped, targets));
+    const record: Recorder = (value, threw, outcome) => {
+      if (!target) return;
+      noteRun(target.navigations, {
         ...label,
         guard: at.guard ?? label.guard,
         route: at.route ?? label.route,
         result: threw
           ? `threw ${redactMessage(String((threw as AnyRecord)?.['message'] ?? threw))}`
-          : (outcome ?? describeResult(value, router)),
+          : (outcome ?? describeResult(value, target.router)),
         ms: Math.round(performance.now() - started),
       });
+    };
     try {
       return track((original as unknown as (...a: unknown[]) => unknown).apply(this, args), record);
     } catch (error) {
@@ -464,11 +487,36 @@ function isClass(entry: unknown, method: string): boolean {
   return read(() => typeof (entry as AnyRecord)['prototype']?.[method] === 'function', false);
 }
 
+/**
+ * Wraps the function held at one place (a guard class method, a routes array
+ * entry, a resolve key) for `target`, or adds `target` to the wrapper another
+ * app put there. A function some other code marked as wrapped is left alone.
+ */
+function wrapAt(
+  holder: AnyRecord,
+  key: string | number,
+  target: GuardTarget,
+  wrapping: Wrapping,
+  wrap: (original: AnyRecord, targets: GuardTarget[]) => AnyRecord,
+): void {
+  const current = read(() => holder[key] as unknown, null);
+  if (typeof current !== 'function') return;
+  const joined = joinWrapper(current, target);
+  if (joined !== null) {
+    if (joined) wrapping.restore.push(joined);
+    return;
+  }
+  if ((current as AnyRecord)[WRAPPED]) return;
+  const targets = [target];
+  const wrapper = wrap(current as AnyRecord, targets);
+  holder[key] = wrapper;
+  wrapping.restore.push(keepWrapper(wrapper, targets, () => (holder[key] = current)));
+}
+
 function instrumentRoutes(
   routes: AnyRecord[],
   parent: string,
-  router: AnyRecord,
-  navigations: NavigationRecord[],
+  target: GuardTarget,
   wrapping: Wrapping,
   depth: number,
 ) {
@@ -482,27 +530,20 @@ function instrumentRoutes(
       list.forEach((entry, index) => {
         const method = GUARD_METHODS[kind];
         if (isClass(entry, method)) {
-          const proto = (entry as AnyRecord)['prototype'];
-          const original = proto[method];
-          if (original[WRAPPED]) return;
-          proto[method] = wrapFunction(
-            original,
-            { guard: nameOf(entry), kind, route: path },
-            router,
-            navigations,
-            guardLabelAt(kind, entry),
+          wrapAt((entry as AnyRecord)['prototype'], method, target, wrapping, (original, targets) =>
+            wrapFunction(
+              original,
+              { guard: nameOf(entry), kind, route: path },
+              targets,
+              guardLabelAt(kind, entry),
+            ),
           );
-          wrapping.restore.push(() => (proto[method] = original));
-        } else if (typeof entry === 'function' && !(entry as AnyRecord)[WRAPPED]) {
+        } else if (typeof entry === 'function') {
           const label =
             nameOf(entry) === 'anonymous function' ? `${kind}[${index}]` : nameOf(entry);
-          list[index] = wrapFunction(
-            entry as AnyRecord,
-            { guard: label, kind, route: path },
-            router,
-            navigations,
+          wrapAt(list as AnyRecord, index, target, wrapping, (original, targets) =>
+            wrapFunction(original, { guard: label, kind, route: path }, targets),
           );
-          wrapping.restore.push(() => (list[index] = entry));
         }
       });
     }
@@ -511,35 +552,26 @@ function instrumentRoutes(
       const entry = (resolve as AnyRecord)[key as string];
       const label = { guard: `${keyName(key)}: ${nameOf(entry)}`, kind: 'resolve', route: path };
       if (isClass(entry, 'resolve')) {
-        const proto = entry['prototype'];
-        const original = proto['resolve'];
-        if (original[WRAPPED]) continue;
-        proto['resolve'] = wrapFunction(
-          original,
-          label,
-          router,
-          navigations,
-          resolverLabelAt(entry),
+        wrapAt(entry['prototype'], 'resolve', target, wrapping, (original, targets) =>
+          wrapFunction(original, label, targets, resolverLabelAt(entry)),
         );
-        wrapping.restore.push(() => (proto['resolve'] = original));
-      } else if (typeof entry === 'function' && !entry[WRAPPED]) {
-        (resolve as AnyRecord)[key as string] = wrapFunction(entry, label, router, navigations);
-        wrapping.restore.push(() => ((resolve as AnyRecord)[key as string] = entry));
+      } else if (typeof entry === 'function') {
+        wrapAt(resolve as AnyRecord, key as string, target, wrapping, (original, targets) =>
+          wrapFunction(original, label, targets),
+        );
       }
     }
     instrumentRoutes(
       read(() => route['children'] as AnyRecord[], []),
       path,
-      router,
-      navigations,
+      target,
       wrapping,
       depth + 1,
     );
     instrumentRoutes(
       read(() => route['_loadedRoutes'] as AnyRecord[], []),
       path,
-      router,
-      navigations,
+      target,
       wrapping,
       depth + 1,
     );
@@ -557,8 +589,7 @@ export function instrument(router: AnyRecord, navigations: NavigationRecord[]): 
   instrumentRoutes(
     read(() => router['config'] as AnyRecord[], []),
     '',
-    router,
-    navigations,
+    { router, navigations },
     wrapping,
     0,
   );
@@ -810,7 +841,7 @@ function probe(router: AnyRecord, navigations: NavigationRecord[], url: string):
     // Set before navigating: a skipped navigation (same URL) emits its event synchronously.
     const current = navigationIdOf(router);
     targetId = current < 0 ? current : current + 1;
-    setCaller('probe from DevTools', true);
+    setCaller('probe from DevTools', true, router);
     // 'reload' so probing the current URL is matched instead of skipped as the same URL.
     let promise: Promise<unknown> | null = null;
     try {
@@ -887,7 +918,7 @@ export async function runAction(
       const extras: AnyRecord = {};
       if (request.extras?.replaceUrl) extras['replaceUrl'] = true;
       if (request.extras?.skipLocationChange) extras['skipLocationChange'] = true;
-      setCaller('navigate from DevTools', true);
+      setCaller('navigate from DevTools', true, router);
       const promise = read(() => router['navigateByUrl'](url, extras) as Promise<unknown>, null);
       promise?.catch?.(() => {});
       const id = navigationIdOf(router);
@@ -931,7 +962,7 @@ export async function runAction(
       const extras: AnyRecord = {};
       if (record.extras?.includes('replaceUrl')) extras['replaceUrl'] = true;
       if (record.extras?.includes('skipLocationChange')) extras['skipLocationChange'] = true;
-      setCaller(`replay of #${record.id} from DevTools`, true);
+      setCaller(`replay of #${record.id} from DevTools`, true, router);
       const promise = read(
         () => router['navigateByUrl'](record.url, extras) as Promise<unknown>,
         null,
