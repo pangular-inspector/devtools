@@ -15,18 +15,8 @@ export interface MatchCountCall {
  */
 @Component({
   selector: 'app-rule-match-count',
-  template: ` <p class="match" role="status">{{ text() }}</p> `,
-  styles: `
-    :host {
-      display: block;
-    }
-    .match {
-      margin: 0;
-      min-height: 1.5em;
-      color: var(--text-2);
-      font-size: 12px;
-    }
-  `,
+  templateUrl: './rule-match-count.html',
+  styleUrl: './rule-match-count.scss',
 })
 export class RuleMatchCount {
   readonly calls = input<readonly MatchCountCall[]>([]);

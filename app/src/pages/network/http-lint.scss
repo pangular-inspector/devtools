@@ -1,0 +1,84 @@
+@use 'mixins' as m;
+
+:host {
+  display: block;
+}
+.intro,
+.none,
+.hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.none {
+  margin-top: 8px;
+}
+.findings {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.kind {
+  @include m.label;
+  grid-column: 1;
+}
+.message {
+  grid-column: 1;
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.cost {
+  color: var(--text-2);
+}
+.hint {
+  grid-column: 1;
+}
+button {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease);
+  &:hover {
+    background: var(--surface-3);
+  }
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+@media (max-width: 640px) {
+  li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  button {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+}

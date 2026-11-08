@@ -1,0 +1,39 @@
+@use 'network' as net;
+
+@include net.controls;
+.mismatches li {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.mismatch-row {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.mismatch-row code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mismatch-label {
+  flex: none;
+  width: 64px;
+  color: var(--text-2);
+}
+@include net.status;
+@include net.pre;
+.plain {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plain li {
+  overflow-wrap: anywhere;
+}
+@include net.stats;

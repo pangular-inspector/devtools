@@ -1,0 +1,11 @@
+<button
+  type="button"
+  [disabled]="!calls().length"
+  aria-describedby="har-export-note"
+  (click)="save()"
+>
+  Export HAR
+</button>
+<span id="har-export-note" class="sr-only"
+  >Saves the timeline as a HAR file with secrets masked.</span
+>

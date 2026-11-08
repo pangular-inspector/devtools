@@ -1,0 +1,59 @@
+<p class="page-intro">
+  HttpClient calls made while rendering on the server and in the browser, from the live page and the
+  devtools server, with hydration stats, the TransferState payload and fault injection.
+</p>
+@if (loading()) {
+  <app-state kind="loading">Loading HTTP calls…</app-state>
+} @else if (failed()) {
+  <app-state kind="error" (retry)="retry()">
+    Could not reach the devtools server.
+    <p detail>Check that the app's dev server is running with the devtools plugin.</p>
+  </app-state>
+}
+
+<div class="toolbar" [hidden]="loading()">
+  <div class="page-picker">
+    <span id="page-picker-label">Page</span>
+    <app-select
+      labelledBy="page-picker-label"
+      emptyText="No connected page"
+      placeholder="No connected page"
+      [options]="pageOptions()"
+      [value]="selected()?.pageId ?? null"
+      (valueChange)="selectPage($event)"
+    />
+  </div>
+  <button
+    type="button"
+    [disabled]="!canWrite()"
+    [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+    (click)="clearCalls()"
+  >
+    Clear timeline
+  </button>
+  <app-har-export
+    [calls]="timeline()"
+    [ssrRequest]="pageSsrRequest()"
+    [title]="selected()?.title ?? ''"
+    [pageUrl]="selected()?.url"
+    (done)="message.set($event)"
+  />
+  <p class="message" role="status">{{ message() }}</p>
+</div>
+
+<div class="grid" [hidden]="loading()">
+  <section appSsrRequests class="panel wide" aria-labelledby="ssr-heading"></section>
+  <section appCallTimeline class="panel wide" aria-labelledby="timeline-heading"></section>
+  <section class="panel wide" aria-labelledby="lint-heading">
+    <h2 id="lint-heading">HTTP lint</h2>
+    <app-http-lint
+      [calls]="selected()?.calls ?? []"
+      [serverCalls]="renderServerCalls()"
+      (open)="openCall($event)"
+    />
+  </section>
+  <section appFaultRules class="panel" aria-labelledby="rules-heading"></section>
+  <section appSsrOverrides class="panel" aria-labelledby="overrides-heading"></section>
+  <section appHydrationStats class="panel" aria-labelledby="hydration-heading"></section>
+  <section appTransferPayload class="panel wide" aria-labelledby="payload-heading"></section>
+</div>
