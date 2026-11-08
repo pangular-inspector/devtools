@@ -72,7 +72,7 @@ When DevTools opens, the extension checks the inspected page for Angular: an `ng
 
 When the top page has no Angular, the extension looks in its frames, such as a Storybook preview, a micro-frontend shell or an embedded preview. It checks up to 20 `http` and `https` frames in the order DevTools lists them, and uses the first one that runs Angular. The panel then reads that frame for everything: the page id, the Elements selection, **Reveal in Elements** and **Open source**. It looks for the devtools server on the frame's origin, not the top page's.
 
-The top page always wins when it runs Angular itself. The search gives up after 3 seconds and uses the top page. The **Angular component** pane in the Elements panel reads the top page only, since Chrome evaluates its expression there.
+The top page always wins when it runs Angular itself. The search gives up after 3 seconds and uses the top page. Chrome picks a frame by its URL, so frames that share a URL count as one: the extension checks and reads the first of them only. If your app runs in one of several frames with the same URL, give that frame a URL of its own, for example with a query parameter. The **Angular component** pane in the Elements panel reads the top page only, since Chrome evaluates its expression there.
 
 ### Finding the server
 

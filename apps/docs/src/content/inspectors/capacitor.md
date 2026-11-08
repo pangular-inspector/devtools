@@ -134,7 +134,7 @@ The overlay reads the stack through the `IonRouterOutlet` directive of `@ionic/a
 
 Without the directive, the card reads the outlet's `.ion-page` children from the DOM: the active page is the last one without `ion-page-hidden`, and there are no URLs. Here the direction is always inferred from how the stack changed. Either way, the overlay changes nothing in the app.
 
-The section shows when the page the tab shows has an `ion-app` or an `ion-router-outlet`. It lists up to 20 outlets with up to 50 pages each, and says how many it left out. URLs are masked like router URLs.
+The section shows when the page the tab shows has an `ion-app` or an `ion-router-outlet`. The tab only lists pages where `window.Capacitor` is set, so an Ionic page without Capacitor, such as an Ionic app that never loads `@capacitor/core`, shows no stacks. It lists up to 20 outlets with up to 50 pages each, and says how many it left out. URLs are masked like router URLs.
 
 ## Where the data comes from
 
