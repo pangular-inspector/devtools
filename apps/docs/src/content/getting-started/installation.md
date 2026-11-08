@@ -33,27 +33,27 @@ The devtools ship as one npm package, `@pangular-inspector/devtools`. It contain
 
 Every setup has a server part, which serves the panel. To see live data from a page, the page also runs the [overlay](./overlay.md). The standalone CLI on its own reads only your source files and needs no overlay. Find your app in the table, then follow its page.
 
-| Your app                                       | Dev server or builder                                 | Server part                                                       | Steps  | Install check |
-| ---------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------- | ------ | ------------- |
-| Angular CLI with SSR                           | `ng serve` or the built SSR server (`@angular/build`) | [`initPangularHub()` in `server.ts`](./express.md)                | 3      | Weekly        |
-| Angular CLI without SSR                        | `ng serve` with a proxy (`@angular/build`)            | [Standalone CLI next to `ng serve`](#client-only-angular-cli-app) | 5      | Weekly        |
-| Analog                                         | Vite                                                  | [Vite plugin](./vite.md)                                          | 2      | Weekly        |
-| Another Angular app with its own `vite.config` | Vite                                                  | [Vite plugin](./vite.md)                                          | 2      | No            |
-| Angular SSR on Hono, h3 or Fastify             | Your server                                           | [`initPangularHub()` handler](./other-servers.md)                 | 3      | No            |
-| Your source files, with no app running         | None                                                  | [Standalone CLI](./cli.md)                                        | 1      | Weekly        |
-| NativeScript, Angular Native or Capacitor      | The platform's own tooling                            | Standalone CLI or a hub                                           | 3 to 4 | No            |
+| Your app                                       | Dev server or builder                                 | Server part                                              | Steps  | Install check |
+| ---------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- | ------ | ------------- |
+| Angular CLI with SSR                           | `ng serve` or the built SSR server (`@angular/build`) | [`initPangularHub()` in `server.ts`](./express.md)       | 3      | Weekly        |
+| Angular CLI without SSR                        | `ng serve` (`@angular/build`)                         | [The `dev-server` builder](#client-only-angular-cli-app) | 3      | Weekly        |
+| Analog                                         | Vite                                                  | [Vite plugin](./vite.md)                                 | 2      | Weekly        |
+| Another Angular app with its own `vite.config` | Vite                                                  | [Vite plugin](./vite.md)                                 | 2      | No            |
+| Angular SSR on Hono, h3 or Fastify             | Your server                                           | [`initPangularHub()` handler](./other-servers.md)        | 3      | No            |
+| Your source files, with no app running         | None                                                  | [Standalone CLI](./cli.md)                               | 1      | Weekly        |
+| NativeScript, Angular Native or Capacitor      | The platform's own tooling                            | Standalone CLI or a hub                                  | 3 to 4 | No            |
 
 Steps count what you add to the app, from the install to the first **Live** panel. The [Chrome extension](./chrome-extension.md) works on top of any setup with a browser page and adds no server part. [Platforms](./platforms.md) lists the device targets and what is checked on each.
 
 ### Builders
 
-The builder bundles your app and the overlay import in `main.ts`. Only the Vite plugin plugs into it. The other server parts run in your server or in the standalone CLI.
+The builder bundles your app and the overlay import in `main.ts`. The Vite plugin plugs into a Vite dev server, and the `@pangular-inspector/devtools:dev-server` builder into the Angular CLI dev server. The other server parts run in your server or in the standalone CLI.
 
 | Builder                                                      | Status                                                                                                                                                                                                                |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@angular/build:application` and `@angular/build:dev-server` | Supported. The weekly install check runs it on Angular 20.3, 21 and 22, with and without SSR.                                                                                                                         |
 | Vite, through `@analogjs/platform`                           | Supported. The weekly install check runs a fresh Analog app.                                                                                                                                                          |
-| Vite, with your own `vite.config`                            | Supported through the same plugin, but not tested. The Angular CLI dev server does not accept Vite plugins, so `ng serve` apps use the hub or the CLI instead.                                                        |
+| Vite, with your own `vite.config`                            | Supported through the same plugin, but not tested. The Angular CLI dev server does not accept Vite plugins, so `ng serve` apps use the `dev-server` builder, the hub or the CLI instead.                              |
 | `@angular-devkit/build-angular:browser` (webpack)            | Supported, but not in the install check. Load the overlay in `main.ts` and run the standalone CLI next to `ng serve`, or the Express hub for an SSR app. See [Setup on Angular 12 to 19](#setup-on-angular-12-to-19). |
 | Nx executors                                                 | Not tested. The standalone CLI reads every `project.json` of the workspace, see [Nx workspaces](./cli.md#nx-workspaces). The rest depends on the builder the executor runs.                                           |
 | Rsbuild and other bundlers                                   | Not tested.                                                                                                                                                                                                           |
@@ -175,14 +175,16 @@ ng add @pangular-inspector/devtools
 
 It looks at the project and picks the setup this page describes for it:
 
-| The project has                               | What `ng add` does                                                                                                                                                                             |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A `vite.config.ts` (Analog)                   | Adds `pangular()` to the `plugins` of the [Vite plugin](./vite.md). The plugin loads the overlay, so `main.ts` stays as it is.                                                                 |
-| An Express `server.ts` (Angular SSR)          | Adds `initPangularHub({ws: false})` and `app.use(devtools.nodeMiddleware)` right after `const app = express()`, as in [Angular CLI and Express](./express.md). Loads the overlay in `main.ts`. |
-| Neither                                       | Loads the overlay in `main.ts`, and prints the steps to run the standalone CLI behind the `ng serve` proxy, as in [Client-only Angular CLI app](#client-only-angular-cli-app).                 |
-| A `server.ts` on another server, such as Hono | Loads the overlay in `main.ts`, leaves `server.ts` alone and points at [Hono, h3 and Fastify](./other-servers.md).                                                                             |
+| The project has                               | What `ng add` does                                                                                                                                                                                             |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `vite.config.ts` (Analog)                   | Adds `pangular()` to the `plugins` of the [Vite plugin](./vite.md). The plugin loads the overlay, so `main.ts` stays as it is.                                                                                 |
+| An Express `server.ts` (Angular SSR)          | Adds `initPangularHub({ws: false})` and `app.use(devtools.nodeMiddleware)` right after `const app = express()`, as in [Angular CLI and Express](./express.md). Loads the overlay in `main.ts`.                 |
+| Neither                                       | Loads the overlay in `main.ts`, and switches the `serve` target in `angular.json` to the `@pangular-inspector/devtools:dev-server` builder, as in [Client-only Angular CLI app](#client-only-angular-cli-app). |
+| A `server.ts` on another server, such as Hono | Loads the overlay in `main.ts`, leaves `server.ts` alone and points at [Hono, h3 and Fastify](./other-servers.md).                                                                                             |
 
 The overlay goes after bootstrap, behind the `ngDevMode` check shown in [Browser part](#browser-part). Pass `--project <name>` in a workspace with several applications. Without it, `ng add` takes the only application, or the first one.
+
+`ng add` only switches a `serve` target that runs `@angular/build:dev-server` or `@angular-devkit/build-angular:dev-server` for an `application` or `browser-esbuild` build. For an `@angular-devkit/build-angular` dev server it keeps that builder in the `builder` option. A webpack build (`browser`) keeps its target, since its dev server takes no middleware, and `ng add` prints the standalone CLI steps instead. To keep the `serve` target and get the CLI steps, pass `--dev-server=false`. An SSR app with an Express `server.ts` keeps its `serve` target: the hub runs in `server.ts`.
 
 `ng add` only inserts lines next to code it recognizes, such as `import express from 'express'` and `const app = express()`. When a file looks different, it leaves the file alone and prints the snippet to add by hand. It reads `angular.json` the way the Angular CLI does, with comments and trailing commas. When it can't read it, it changes nothing and prints the overlay snippet, and with `--project` it stops with an error that names `angular.json`. Running it again changes nothing: it skips files that already import the devtools. It saves the package as a dependency, which every setup works with. See [Dependency or dev dependency](#dependency-or-dev-dependency) to move it.
 
@@ -191,7 +193,7 @@ The overlay goes after bootstrap, behind the `ngDevMode` check shown in [Browser
 | Setup                                      | Install it as                                                                                                                                                                                          |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Vite or Analog                             | A dev dependency. The Vite plugin only runs in the dev server.                                                                                                                                         |
-| Client-only Angular CLI app                | A dev dependency. The CLI runs next to `ng serve`, and the overlay import only runs in development builds.                                                                                             |
+| Client-only Angular CLI app                | A dev dependency. The `dev-server` builder and the CLI only run with `ng serve`, and the overlay import only runs in development builds.                                                               |
 | Standalone CLI                             | A dev dependency, or no install at all with `npx`.                                                                                                                                                     |
 | Angular SSR with Express or another server | A dependency, because `server.ts` imports the hub when the production server starts. To keep it a dev dependency, import the hub only in development, with a dynamic `import()` behind your own check. |
 
@@ -263,15 +265,13 @@ npx @pangular-inspector/devtools
 
 ```json group="setup" name="Client-only Angular CLI" image="https://cdn.simpleicons.org/angular/DD0031"
 {
-  "/__pangular": {
-    "target": "http://localhost:9999",
-    "pathRewrite": {"^/__pangular": ""},
-    "ws": true
+  "serve": {
+    "builder": "@pangular-inspector/devtools:dev-server"
   }
 }
 ```
 
-A client-only app (no SSR) has no server of its own to mount the devtools in. Its tab shows `proxy.conf.json`, which forwards `/__pangular` to the standalone CLI. See [Client-only Angular CLI app](#client-only-angular-cli-app).
+A client-only app (no SSR) has no server of its own to mount the devtools in. Its tab shows the `serve` target in `angular.json` (excerpt): the `dev-server` builder runs `ng serve` with the hub mounted. See [Client-only Angular CLI app](#client-only-angular-cli-app).
 
 ### Browser part
 
@@ -299,7 +299,44 @@ The standalone CLI on its own has no page connected, so it needs no browser part
 
 ### Client-only Angular CLI app
 
-An app created with `ng new --ssr=false` only runs `ng serve`. Run the standalone CLI next to it, and let `ng serve` forward `/__pangular/` to the CLI. The overlay and the popup look for the devtools at `/__pangular/` on the page's own origin, so they find the CLI there.
+An app created with `ng new --ssr=false` only runs `ng serve`. Mount the devtools in `ng serve` with the `dev-server` builder, or run the standalone CLI next to it behind a proxy.
+
+#### With the dev-server builder
+
+`@pangular-inspector/devtools:dev-server` runs the Angular CLI dev server and adds the hub's middleware to it, so the panel answers at `/__devframes/` on the `ng serve` origin. `ng add` sets it up. To set it up by hand, change the `builder` of the `serve` target in `angular.json` (excerpt):
+
+```json {6}
+{
+  "projects": {
+    "my-app": {
+      "architect": {
+        "serve": {
+          "builder": "@pangular-inspector/devtools:dev-server",
+          "configurations": {
+            "development": {"buildTarget": "my-app:build:development"}
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    }
+  }
+}
+```
+
+Then load the overlay in `main.ts`, as in the [browser part](#browser-part) above, and run `ng serve`. It prints the panel URL next to the app URL, and the button appears on the page.
+
+The builder takes every option of the dev server it runs, such as `port`, `proxyConfig` and `ssl`, and that builder checks them and applies its defaults. It adds two options of its own:
+
+| Option     | Default                                                                                              | What it does                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `devtools` | `true`                                                                                               | Mounts the hub. Set it to `false`, for example in a configuration, to serve the app without the devtools. |
+| `builder`  | `@angular/build:dev-server`, or `@angular-devkit/build-angular:dev-server` when only it is installed | The dev server to run. It is loaded from your workspace, so it is the version your app already uses.      |
+
+The hub runs with its defaults: the one-time code, the origin check, requests from this machine only, and server-sent events instead of a WebSocket. It is off when `NODE_ENV` is `production`. The builder needs an `application` or `browser-esbuild` build. The webpack `browser` build has a dev server that takes no middleware, so use the standalone CLI there.
+
+#### With the standalone CLI and a proxy
+
+Run the standalone CLI next to `ng serve`, and let `ng serve` forward `/__pangular/` to the CLI. The overlay and the popup look for the devtools at `/__pangular/` on the page's own origin, so they find the CLI there.
 
 <ngmd-workflow>
   <ngmd-step title="Start the devtools server">
@@ -350,7 +387,7 @@ Point the dev server at the proxy file in `angular.json` (excerpt):
 }
 ```
 
-The full-page panel is at `/__pangular/` on your app's origin.
+With the proxy, the full-page panel is at `/__pangular/` on your app's origin.
 
 ### Configure the devtools
 
@@ -364,7 +401,7 @@ The [Chrome extension](./chrome-extension.md) adds a panel to Chrome DevTools. I
 
 <ngmd-workflow>
   <ngmd-step title="Start your app in development mode">
-    Run <code>ng serve</code> for an Angular CLI app, or the Vite dev server for an Analog app. For a client-only app, keep <code>pangular dev</code> running next to <code>ng serve</code>.
+    Run <code>ng serve</code> for an Angular CLI app, or the Vite dev server for an Analog app. For a client-only app behind the proxy, keep <code>pangular dev</code> running next to <code>ng serve</code>.
   </ngmd-step>
   <ngmd-step title="Look for the button">
     The Pangular Inspector button appears in the bottom-right corner of the page. The overlay adds it.
@@ -373,7 +410,7 @@ The [Chrome extension](./chrome-extension.md) adds a panel to Chrome DevTools. I
     Click the button. The header shows <strong>Live</strong> once the panel is connected.
   </ngmd-step>
   <ngmd-step title="Open the full-page viewer">
-    Go to <code>/__devframes/</code> on the same server to see the devtools on their own page. For a client-only app, the full-page viewer is at <code>/__pangular/</code> on your app's origin.
+    Go to <code>/__devframes/</code> on the same server to see the devtools on their own page. For a client-only app behind the proxy, the full-page viewer is at <code>/__pangular/</code> on your app's origin.
   </ngmd-step>
 </ngmd-workflow>
 

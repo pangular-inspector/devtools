@@ -78,4 +78,24 @@ export const schematicsConfig = {
   ],
 } satisfies UserConfig;
 
-export default defineConfig([browserConfig, nodeConfig, schematicsConfig]);
+/**
+ * The `dev-server` builder, as CommonJS for the same reason: the Angular CLI
+ * loads builders with `require()`. The Angular packages and the hub stay
+ * external: the builder loads them from the workspace and the installed
+ * package at runtime. `builders` in `package.json` points at the manifest.
+ */
+export const buildersConfig = {
+  name: 'builders',
+  entry: { 'builders/dev-server/builder': 'src/builders/dev-server/builder.ts' },
+  format: 'cjs',
+  platform: 'node',
+  dts: false,
+  external: [/^@angular-devkit\//, /^@angular\//, /^@pangular-inspector\//],
+  outExtensions: () => ({ js: '.cjs' }),
+  copy: (resolved) => [
+    { from: 'src/builders/builders.json', to: `${resolved.outDir}/builders` },
+    { from: 'src/builders/dev-server/schema.json', to: `${resolved.outDir}/builders/dev-server` },
+  ],
+} satisfies UserConfig;
+
+export default defineConfig([browserConfig, nodeConfig, schematicsConfig, buildersConfig]);

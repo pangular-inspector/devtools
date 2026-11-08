@@ -31,6 +31,7 @@
     "pangular": "./bin.mjs"
   },
   "schematics": "./dist/schematics/collection.json",
+  "builders": "./dist/builders/builders.json",
   "exports": {
     ".": "./src/entries/devframe.ts",
     "./devframe": "./src/entries/devframe.ts",
@@ -204,6 +205,7 @@
     }
   },
   "devDependencies": {
+    "@angular-devkit/architect": "0.2201.8",
     "@angular/common": "^22.1.0",
     "@angular/compiler": "^22.1.0",
     "@angular/core": "^22.1.0",

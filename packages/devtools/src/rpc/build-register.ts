@@ -33,6 +33,12 @@ function masked(graph: BuildGraph): BuildGraph {
   };
 }
 
+/** `12.34` as `12.3 ms`; empty for a module that was not timed. */
+export function formatMs(ms: number | undefined): string {
+  if (ms === undefined) return '';
+  return ms < 1000 ? `${ms.toFixed(1)} ms` : `${(ms / 1000).toFixed(2)} s`;
+}
+
 /** The `module-graph` answer. */
 export function moduleGraphText(
   graph: BuildGraph,
@@ -53,12 +59,12 @@ export function moduleGraphText(
     if (hits.length) {
       lines.push(
         '',
-        '| Module | Size | Importers | Imports | import() |',
-        '| --- | --- | --- | --- | --- |',
+        '| Module | Size | Time | Importers | Imports | import() |',
+        '| --- | --- | --- | --- | --- | --- |',
       );
       for (const mod of hits.slice(0, limit)) {
         lines.push(
-          `| ${code(mod.file ?? mod.url)} | ${formatBytes(mod.size)} | ${mod.importers} | ${mod.imports} | ${mod.dynamicImports.map(code).join(', ')} |`,
+          `| ${code(mod.file ?? mod.url)} | ${formatBytes(mod.size)} | ${formatMs(mod.time?.total)} | ${mod.importers} | ${mod.imports} | ${mod.dynamicImports.map(code).join(', ')} |`,
         );
       }
     }
@@ -79,7 +85,34 @@ export function moduleGraphText(
   for (const mod of vite.modules.slice(0, limit)) {
     lines.push(`| ${code(mod.file ?? mod.url)} | ${formatBytes(mod.size)} | ${mod.importers} |`);
   }
+  lines.push('', ...slowestModules(vite, limit));
   return lines.join('\n');
+}
+
+/** The modules the dev server spent the most time on, or why there are no timings. */
+function slowestModules(vite: NonNullable<BuildGraph['vite']>, limit: number): string[] {
+  const lines = ['### Slowest modules', ''];
+  if (!vite.timings) {
+    return [...lines, 'No timings: this Vite dev server does not expose its plugin container.'];
+  }
+  const timed = vite.modules
+    .filter((mod) => mod.time)
+    .sort((a, b) => b.time!.total - a.time!.total)
+    .slice(0, limit);
+  if (!timed.length) return [...lines, 'No module was timed yet. Load the app in the browser.'];
+  lines.push(
+    `Wall-clock milliseconds the dev server spent on each module: resolve adds up every import resolved to it, load and transform are the last run through all plugins.${vite.timings.capped ? ' The oldest timings were dropped past the cap.' : ''}`,
+    '',
+    '| Module | Total | Resolve | Load | Transform |',
+    '| --- | --- | --- | --- | --- |',
+  );
+  for (const mod of timed) {
+    const time = mod.time!;
+    lines.push(
+      `| ${code(mod.file ?? mod.url)} | ${formatMs(time.total)} | ${formatMs(time.resolve)} | ${formatMs(time.load)} | ${formatMs(time.transform)} |`,
+    );
+  }
+  return lines;
 }
 
 /** The `chunk-sizes` answer. */
@@ -145,7 +178,7 @@ export function registerBuild(host: BuildHost): void {
     id: 'pangular:module-graph',
     title: 'Show the module graph',
     description:
-      "The Vite dev server's module graph: lazy boundaries (import()) with the modules and size each pulls in, and the biggest modules. `search` finds modules with their importers and imports. Sizes are transformed, unminified. Needs the Vite plugin.",
+      "The Vite dev server's module graph: lazy boundaries (import()) with what each pulls in, the biggest modules, and the slowest with resolve, load and transform times. `search` finds modules with size, time, importers and imports. Sizes are transformed, unminified. Needs the Vite plugin.",
     inputSchema: {
       type: 'object',
       properties: {

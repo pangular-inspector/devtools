@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import type { ModuleTiming, ModuleTimings } from './vite-timings.ts';
 
 /** One module as the Vite dev server knows it. */
 export interface GraphModule {
@@ -21,6 +22,12 @@ export interface GraphModule {
   imports: number;
   /** URLs this module imports with `import()`. */
   dynamicImports: string[];
+  /**
+   * Milliseconds the dev server spent on it, wall clock, from the Vite
+   * plugin: every resolution of an import to it added up, its last load and
+   * its last transform through all plugins. Missing when it was not timed.
+   */
+  time?: ModuleTiming & { total: number };
 }
 
 /** A module loaded with `import()`, and what it pulls in that the entry doesn't. */
@@ -44,6 +51,8 @@ export interface ViteGraph {
   /** Transformed size reachable from the entries without `import()`. */
   initialSize: number;
   lazy: LazyBoundary[];
+  /** How many modules carry a `time`, and whether older timings were dropped past the cap. */
+  timings?: { modules: number; capped: boolean };
 }
 
 export interface BuildChunk {
@@ -82,6 +91,8 @@ export interface BuildGraph {
 /** The part of a Vite module node the graph reads; `staticImportedUrls` is internal and optional. */
 export interface ViteModuleLike {
   url: string;
+  /** The resolved id, which the timings are kept under. */
+  id?: string | null;
   file: string | null;
   type: string;
   importers: Set<ViteModuleLike>;
@@ -93,6 +104,8 @@ export interface ViteModuleLike {
 export interface ViteGraphSource {
   modules(): Iterable<ViteModuleLike>;
   root: string;
+  /** Per-module timings, when the Vite plugin records them. */
+  timings?: ModuleTimings;
 }
 
 export interface BuildRegistry {
@@ -109,17 +122,35 @@ export function buildRegistry(): BuildRegistry {
 }
 
 /** The client module graph of a Vite dev server (`environments.client`, or `moduleGraph` before Vite 6). */
-export function viteGraphSource(server: {
-  config?: { root?: string };
-  environments?: Record<string, { moduleGraph?: { idToModuleMap?: Map<string, unknown> } }>;
-  moduleGraph?: { idToModuleMap?: Map<string, unknown> };
-}): ViteGraphSource | undefined {
+export function viteGraphSource(
+  server: {
+    config?: { root?: string };
+    environments?: Record<string, { moduleGraph?: { idToModuleMap?: Map<string, unknown> } }>;
+    moduleGraph?: { idToModuleMap?: Map<string, unknown> };
+  },
+  timings?: ModuleTimings,
+): ViteGraphSource | undefined {
   const graph = server.environments?.['client']?.moduleGraph ?? server.moduleGraph;
   const map = graph?.idToModuleMap;
   if (!map) return undefined;
   return {
     root: server.config?.root ?? process.cwd(),
     modules: () => map.values() as Iterable<ViteModuleLike>,
+    ...(timings ? { timings } : {}),
+  };
+}
+
+const tenths = (ms: number) => Math.round(ms * 10) / 10;
+
+/** A module's timing in tenths of a millisecond, with the total. */
+function timeOf(source: ViteGraphSource, mod: ViteModuleLike): GraphModule['time'] {
+  const timing = mod.id ? source.timings?.get(mod.id) : undefined;
+  if (!timing) return undefined;
+  return {
+    resolve: tenths(timing.resolve),
+    load: tenths(timing.load),
+    transform: tenths(timing.transform),
+    total: tenths(timing.resolve + timing.load + timing.transform),
   };
 }
 
@@ -175,8 +206,11 @@ export function readViteGraph(source: ViteGraphSource): ViteGraph {
     };
   });
   lazy.sort((a, b) => b.size - a.size);
+  let timed = 0;
   const modules: GraphModule[] = all.map((mod) => {
     const file = rel(source.root, mod.file);
+    const time = timeOf(source, mod);
+    if (time) timed++;
     return {
       url: mod.url,
       ...(file ? { file } : {}),
@@ -185,6 +219,7 @@ export function readViteGraph(source: ViteGraphSource): ViteGraph {
       importers: mod.importers.size,
       imports: mod.importedModules.size,
       dynamicImports: [...mod.importedModules].filter((n) => !isStatic(mod, n)).map((n) => n.url),
+      ...(time ? { time } : {}),
     };
   });
   modules.sort((a, b) => b.size - a.size);
@@ -194,6 +229,7 @@ export function readViteGraph(source: ViteGraphSource): ViteGraph {
     entries: entries.map((mod) => mod.url),
     initialSize: [...initial].reduce((sum, mod) => sum + sizeOf(mod), 0),
     lazy,
+    ...(source.timings ? { timings: { modules: timed, capped: source.timings.capped } } : {}),
   };
 }
 

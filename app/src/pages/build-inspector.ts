@@ -1,6 +1,7 @@
 import { Component, computed, effect, input, signal } from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { SearchField } from '../ui/search-field';
+import { SortHeader, sortRows, type SortState } from '../ui/sort-header';
 
 /** One module of the Vite dev server's graph, as `build-graph.ts` sends it. */
 export interface GraphModule {
@@ -11,6 +12,8 @@ export interface GraphModule {
   importers: number;
   imports: number;
   dynamicImports: string[];
+  /** Wall-clock milliseconds the dev server spent on it, when the Vite plugin timed it. */
+  time?: { resolve: number; load: number; transform: number; total: number };
 }
 
 export interface LazyBoundary {
@@ -38,6 +41,7 @@ export interface BuildGraph {
     entries: string[];
     initialSize: number;
     lazy: LazyBoundary[];
+    timings?: { modules: number; capped: boolean };
   };
   viteNote?: string;
   output?: {
@@ -59,12 +63,22 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1_000_000).toFixed(2)} MB`;
 }
 
+/** `12.34` as `12.3 ms`, `2500` as `2.50 s`. */
+export function formatMs(ms: number): string {
+  return ms < 1000 ? `${ms.toFixed(1)} ms` : `${(ms / 1000).toFixed(2)} s`;
+}
+
+/** What the dev server spent on a module, phase by phase. */
+export function timeBreakdown(time: NonNullable<GraphModule['time']>): string {
+  return `Resolve ${formatMs(time.resolve)}, load ${formatMs(time.load)}, transform ${formatMs(time.transform)}`;
+}
+
 /** Rows shown per table before **Show all**. */
 export const BUILD_ROWS = 25;
 
 @Component({
   selector: 'app-build-inspector',
-  imports: [SearchField],
+  imports: [SearchField, SortHeader],
   template: `
     <p class="intro">
       What the app loads: the Vite dev server's module graph with its lazy boundaries, and the
@@ -90,6 +104,14 @@ export const BUILD_ROWS = 25;
             only what the browser requested). {{ bytes(vite.initialSize) }} load without
             <code>import()</code> from {{ vite.entries.length }}
             {{ vite.entries.length === 1 ? 'entry' : 'entries' }}.
+            @if (vite.timings; as timings) {
+              Time is what the dev server spent on {{ timings.modules }}
+              {{ timings.modules === 1 ? 'module' : 'modules' }}, wall clock: resolving imports to
+              it, and its last load and transform through all plugins.
+              @if (timings.capped) {
+                The oldest timings were dropped.
+              }
+            }
           </p>
           <h3>Lazy boundaries</h3>
           @if (!vite.lazy.length) {
@@ -149,14 +171,19 @@ export const BUILD_ROWS = 25;
             <div class="scroll">
               <table>
                 <caption class="sr-only">
-                  Modules, biggest first
+                  Modules, biggest first unless sorted
                 </caption>
                 <thead>
                   <tr>
-                    <th scope="col">Module</th>
-                    <th scope="col" class="num">Size</th>
-                    <th scope="col" class="num">Importers</th>
-                    <th scope="col" class="num">Imports</th>
+                    <th scope="col" appSortHeader="module" [(sort)]="moduleSort">Module</th>
+                    <th scope="col" class="num" appSortHeader="size" [(sort)]="moduleSort">Size</th>
+                    <th scope="col" class="num" appSortHeader="time" [(sort)]="moduleSort">Time</th>
+                    <th scope="col" class="num" appSortHeader="importers" [(sort)]="moduleSort">
+                      Importers
+                    </th>
+                    <th scope="col" class="num" appSortHeader="imports" [(sort)]="moduleSort">
+                      Imports
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -166,6 +193,11 @@ export const BUILD_ROWS = 25;
                         <code>{{ row.file ?? row.url }}</code>
                       </td>
                       <td class="num">{{ bytes(row.size) }}</td>
+                      @if (row.time; as time) {
+                        <td class="num" [title]="breakdown(time)">{{ ms(time.total) }}</td>
+                      } @else {
+                        <td class="num"></td>
+                      }
                       <td class="num">{{ row.importers }}</td>
                       <td class="num">{{ row.imports }}</td>
                     </tr>
@@ -347,6 +379,8 @@ export class BuildInspector {
   readonly rpc = input<DevframeRpcClient | null>(null);
 
   protected readonly bytes = formatBytes;
+  protected readonly ms = formatMs;
+  protected readonly breakdown = timeBreakdown;
 
   readonly graph = signal<BuildGraph | null>(null);
   readonly loading = signal(false);
@@ -354,13 +388,21 @@ export class BuildInspector {
   readonly status = signal('');
   readonly filter = signal('');
   readonly allModules = signal(false);
+  readonly moduleSort = signal<SortState | null>(null);
 
   readonly shownModules = computed(() => {
     const modules = this.graph()?.vite?.modules ?? [];
     const text = this.filter().trim().toLowerCase();
-    return text
+    const matching = text
       ? modules.filter((mod) => `${mod.url} ${mod.file ?? ''}`.toLowerCase().includes(text))
       : modules;
+    return sortRows(matching, this.moduleSort(), {
+      module: (mod) => mod.file ?? mod.url,
+      size: (mod) => mod.size,
+      time: (mod) => mod.time?.total,
+      importers: (mod) => mod.importers,
+      imports: (mod) => mod.imports,
+    });
   });
   readonly visibleModules = computed(() =>
     this.allModules() ? this.shownModules() : this.shownModules().slice(0, BUILD_ROWS),
