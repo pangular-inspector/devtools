@@ -105,7 +105,9 @@ type PangularInspector =
   | 'analog'
   | 'capacitor'
   | 'errors'
-  | 'plugins';
+  | 'plugins'
+  | 'performance'
+  | 'build';
 
 type PangularAction =
   'forms' | 'router' | 'ngrx' | 'http' | 'analog' | 'components' | 'tanstackQuery' | 'plugins';
@@ -297,14 +299,28 @@ It is off by default because it starts processes on your machine. A value other 
 
 `extraDevframes` is an option of the Express hub and the Vite plugin only. It mounts other devframes on the hub that serves Pangular Inspector, so a team's own devtools or another library's devframe sit next to the Pangular docks without a second server. It takes the same input as `initHub({ devframes })` from `@devframes/hub`: devframe definitions, `{ devframe, dock }` entries to change a dock, promises and functions that return them.
 
-```ts
-import {initPangularHub} from '@pangular-inspector/devtools/hub';
-import {acmeDevframe} from '@acme/devtools';
+This one adds a devframe with one RPC function. `defineDevframe` comes from the `devframe` package, which the hub runs on:
 
-const devtools = initPangularHub({extraDevframes: [acmeDevframe]});
+```ts
+import {defineDevframe} from 'devframe';
+import {initPangularHub} from '@pangular-inspector/devtools/hub';
+
+const teamTools = defineDevframe({
+  id: 'team-tools',
+  name: 'Team tools',
+  version: '1.0.0',
+  packageName: 'team-tools',
+  homepage: 'https://example.com/team-tools',
+  description: "The team's own devtools",
+  setup(ctx) {
+    ctx.rpc.register({name: 'team-tools:ping', type: 'static', handler: () => 'pong'});
+  },
+});
+
+const devtools = initPangularHub({extraDevframes: [teamTools]});
 ```
 
-The extra devframes run behind the same origin check, request gate and one-time code as Pangular Inspector. An entry with the id `pangular` would replace Pangular Inspector, so it is dropped with a warning, and a value that is not an array is ignored with a warning.
+The extra devframes run behind the same origin check, request gate and one-time code as Pangular Inspector. The hub mounts Pangular Inspector under the id `pangular`, so an entry with that id is dropped with a warning. That includes a devframe a promise or a function resolves to, which is checked once it resolves; the other entries keep their order. A value that is not an array is ignored with a warning.
 
 ### LAN address
 
