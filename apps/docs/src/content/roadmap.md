@@ -80,11 +80,10 @@ Tracked in [#343](https://github.com/pangular-inspector/devtools/issues/343) (do
 
 These items remain from phase 3, [#342](https://github.com/pangular-inspector/devtools/issues/342).
 
-| Item             | What it does                                                                        | Issue                                                             |
-| ---------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `ng add`         | One command sets up the overlay and the hub in an Angular CLI app.                  | [#342](https://github.com/pangular-inspector/devtools/issues/342) |
-| Extension stores | The Chrome extension in the Chrome Web Store and Edge Add-ons, and a Firefox build. | [#342](https://github.com/pangular-inspector/devtools/issues/342) |
-| Ionic support    | Ionic apps, on top of the Capacitor support.                                        | [#307](https://github.com/pangular-inspector/devtools/issues/307) |
+| Item             | What it does                                                       | Issue                                                             |
+| ---------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `ng add`         | One command sets up the overlay and the hub in an Angular CLI app. | [#342](https://github.com/pangular-inspector/devtools/issues/342) |
+| Extension stores | The Chrome extension in the Chrome Web Store and Edge Add-ons.     | [#342](https://github.com/pangular-inspector/devtools/issues/342) |
 
 [Platforms](./getting-started/platforms.md#planned) lists the planned platforms and extension stores together.
 
