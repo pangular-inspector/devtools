@@ -2,12 +2,20 @@ import type { RouterAppReport } from '../router-apps.ts';
 import { code } from './forms-tools.ts';
 import { detectLoops } from './router-loops.ts';
 import { pickPage, type RouterPage, type RouterState } from './router-tools.ts';
+import type { StreamApp } from './router-stream.ts';
 
 /** The `app` argument of the router agent tools. */
 export const APP_ARGUMENT = {
   type: 'string',
   description:
     'On a page that runs several Angular apps with a Router, the app to read: its id or root component name, as the answer lists them. Defaults to the first app.',
+} as const;
+
+/** The `app` argument of `follow-navigations`. */
+export const FOLLOW_APP_ARGUMENT = {
+  type: 'string',
+  description:
+    "On a page that runs several Angular apps with a Router, the app to follow: its id or root component name, as `inspect-route` lists them. Defaults to each page's first app.",
 } as const;
 
 /** The apps of a page that runs more than one Angular app with a Router, else none. */
@@ -107,5 +115,45 @@ export function routerStateForApp(
     state: { pages: state.pages.map((p) => (p === page ? view : p)) },
     page: page.pageId,
     note: routerAppsNote(view),
+  };
+}
+
+/**
+ * The page and app `follow-navigations` reads, for its `app` argument.
+ * Without `app` it follows the first app of every page (or of `page`), as on
+ * a page with one app; the note then names the other apps where there are any.
+ */
+export function streamAppFor(
+  state: RouterState,
+  args: { page?: string; app?: unknown },
+): { page?: string; app: StreamApp; note: string } | { error: string } {
+  if (args.app === undefined || args.app === null || args.app === '') {
+    const several = state.pages.filter(
+      (p) => (!args.page || p.pageId === args.page) && routerAppsOf(p).length,
+    );
+    const note = several.length
+      ? `\n\n${several.length === 1 ? `Page ${code(several[0].pageId)} runs` : `${several.length} pages run`} several Angular apps with a Router; this follows the first app. Pass \`app\` to follow another.`
+      : '';
+    return { page: args.page, app: null, note };
+  }
+  if (typeof args.app !== 'string') return { error: 'Pass `app` as a string.' };
+  const page = pickPage(state, args.page);
+  if (!page) return { error: 'No page reports a Router yet, so there is no app to follow.' };
+  const apps = routerAppsOf(page);
+  if (!apps.length) {
+    return {
+      error: `Page ${code(page.pageId)} runs one Angular app with a Router, so there is no app to pick. Leave \`app\` out.`,
+    };
+  }
+  const app = findRouterApp(page, args.app);
+  if (!app) {
+    return {
+      error: `Page ${code(page.pageId)} has no app ${code(args.app.slice(0, 60))}. Its apps are ${apps.map(label).join(', ')}.`,
+    };
+  }
+  return {
+    page: page.pageId,
+    app: app.primary ? null : app.id,
+    note: routerAppsNote({ ...page, appId: app.id }),
   };
 }

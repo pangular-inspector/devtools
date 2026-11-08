@@ -1519,6 +1519,14 @@ async function runActions(state) {
     r.markdown.slice(0, 400),
   );
   await act('record-guards', { on: true });
+  // follow-navigations follows one app of a page that runs several; the demo runs one.
+  r = await act('follow-navigations', { app: 'app-root' }, 'refusal');
+  write(
+    'follow-navigations',
+    'an app on a page with one app is refused with the reason',
+    /one Angular app/.test(r.markdown),
+    r.markdown.slice(0, 300),
+  );
   // The old actions are gone: `probe` is not a `navigate` action any more.
   await act('navigate', { action: 'probe', url: '/trips' }, 'refusal');
   const navs = await read('explain-navigation', { limit: 3 });

@@ -1019,6 +1019,9 @@ const pangular = defineDevframe({
         // A report that failed to merge left no page, so its navigations stay out of the stream.
         if (routerPages.has(report.pageId)) {
           navigationStream.record(report.pageId, report.navigations);
+          for (const app of report.apps ?? []) {
+            if (!app.primary) navigationStream.record(report.pageId, app.navigations ?? [], app.id);
+          }
         }
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },
@@ -1255,8 +1258,8 @@ const pangular = defineDevframe({
         if (clearRouterNavigations(routerPages, pageId, Date.now(), app)) {
           applyRouter(currentRouter(routerPages));
         }
-        // The stream follows the first app only.
-        if (!secondary) navigationStream.clear(pageId);
+        // Each app's navigations in the stream go with its history; the first app's carry no id.
+        navigationStream.clear(pageId, app ? (secondary ? app : null) : undefined);
         void my.rpc.broadcast({
           method: 'router-clear',
           args: [app ? { pageId, app } : { pageId }],
