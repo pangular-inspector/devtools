@@ -323,6 +323,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - **Show in Signals** for a page that has not reported its graph yet shows that page once it reports, and picking another component drops a signal still waiting to be selected.
 - A signal store change to a key that needs quotes, such as `profile["first name"]`, is logged with the path the **NgRx Store** state tree uses, so the tree marks it and **Copy path** matches `ngrx-explain-change`.
 - The forms collector reads a control inside a disabled `<fieldset>` as disabled on the page, so it no longer looks enabled in the DOM facts.
+- A component report whose `detail.selector` is not text no longer passes it on to the agent tools; the server leaves it out.
 
 ### Docs
 
