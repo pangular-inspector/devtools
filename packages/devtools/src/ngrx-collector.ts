@@ -6,6 +6,7 @@ import { className, tokenName } from './injector-tree.ts';
 import {
   devtoolsProblem,
   diff,
+  joinStatePath,
   dispatchProblem,
   NGRX_BURST_WINDOW_MS,
   NGRX_DIFF_MORE_CAP,
@@ -256,7 +257,8 @@ function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): C
   for (const key of keys) {
     if (out.length >= MAX_DIFF && overflow.more >= NGRX_DIFF_MORE_CAP) break;
     if (before[key] === after[key]) continue;
-    const root = String(key);
+    // Quoted the way the state tree writes a child path, as in `["first name"]`.
+    const root = typeof key === 'string' ? joinStatePath('', key) : String(key);
     if (typeof key === 'string' && isRedactedKey(key)) {
       if (out.length < MAX_DIFF) {
         out.push({ path: root, op: 'change', before: REDACTED, after: REDACTED });
@@ -270,6 +272,7 @@ function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): C
       MAX_DIFF - out.length,
       undefined,
       overflow,
+      root,
     );
     if (!found.length && overflow.more === counted) {
       out.push(
@@ -286,15 +289,8 @@ function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): C
       continue;
     }
     for (const entry of found) {
-      const path =
-        entry.path === '(root)'
-          ? root
-          : entry.path.startsWith('[')
-            ? `${root}${entry.path}`
-            : `${root}.${entry.path}`;
       out.push({
         ...entry,
-        path,
         ...('before' in entry ? { before: serialize(entry.before, SMALL) } : {}),
         ...('after' in entry ? { after: serialize(entry.after, SMALL) } : {}),
       });

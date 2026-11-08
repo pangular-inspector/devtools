@@ -321,6 +321,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `ngrx-explain-change` keeps its `store` filter when it explains one entry by `seq`, answers a refusal with `isError`, and puts a single untrusted notice on an unknown page answer.
 - During a keyboard pick on the **Components** tab, a message that repeats, such as the same component again, is read out again.
 - **Show in Signals** for a page that has not reported its graph yet shows that page once it reports, and picking another component drops a signal still waiting to be selected.
+- A signal store change to a key that needs quotes, such as `profile["first name"]`, is logged with the path the **NgRx Store** state tree uses, so the tree marks it and **Copy path** matches `ngrx-explain-change`.
 
 ### Docs
 
