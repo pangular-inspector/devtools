@@ -24,7 +24,7 @@
     "pangular(max-lines)": 2742
   },
   "app/src/pages/network-inspector.ts": {
-    "pangular(max-lines)": 3033
+    "pangular(max-lines)": 3143
   },
   "app/src/pages/pipes-inspector.ts": {
     "pangular(max-lines)": 1612
@@ -33,7 +33,7 @@
     "pangular(max-lines)": 2547
   },
   "app/src/pages/store-inspector.ts": {
-    "pangular(max-lines)": 2836
+    "pangular(max-lines)": 2870
   },
   "app/src/pages/store-types.ts": {
     "typescript(no-explicit-any)": 1
@@ -232,13 +232,13 @@
     "unicorn(prefer-string-starts-ends-with)": 1
   },
   "packages/devtools/src/config.ts": {
-    "pangular(max-lines)": 2767
+    "pangular(max-lines)": 2778
   },
   "packages/devtools/src/console-tap.ts": {
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/devframe.ts": {
-    "pangular(max-lines)": 3224,
+    "pangular(max-lines)": 3238,
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/dom-diff.ts": {
