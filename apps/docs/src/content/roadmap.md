@@ -50,13 +50,15 @@ Tracked in [#341](https://github.com/pangular-inspector/devtools/issues/341) (do
 
 Tracked in [#342](https://github.com/pangular-inspector/devtools/issues/342). The items below are done; the rest of the phase is under [Planned](#planned).
 
-| Feature                 | What it does                                                                   | Read more                                               |
-| ----------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| Command palette         | <kbd>⌘K</kbd> or <kbd>Ctrl+K</kbd> opens any tab or action.                    | [Command palette](./getting-started/command-palette.md) |
-| Settings                | Theme, tab order and visibility, and a passive mode for the popup.             | [Settings](./getting-started/settings.md)               |
-| One timeline            | Router, HTTP, NgRx, change detection, forms and signals on one time axis.      | [Timeline](./inspectors/timeline.md)                    |
-| NG0xxx errors explained | Runtime errors with their code, a docs link and the component that threw them. | [Errors](./inspectors/errors.md)                        |
-| Terminals dock          | Runs the project's build and test commands next to the panel.                  | [Terminals](./getting-started/terminals.md)             |
+| Feature                 | What it does                                                                   | Read more                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Command palette         | <kbd>⌘K</kbd> or <kbd>Ctrl+K</kbd> opens any tab or action.                    | [Command palette](./getting-started/command-palette.md)                                      |
+| Settings                | Theme, tab order and visibility, and a passive mode for the popup.             | [Settings](./getting-started/settings.md)                                                    |
+| One timeline            | Router, HTTP, NgRx, change detection, forms and signals on one time axis.      | [Timeline](./inspectors/timeline.md)                                                         |
+| NG0xxx errors explained | Runtime errors with their code, a docs link and the component that threw them. | [Errors](./inspectors/errors.md)                                                             |
+| Terminals dock          | Runs the project's build and test commands next to the panel.                  | [Terminals](./getting-started/terminals.md)                                                  |
+| `ng add`                | One command sets up the overlay and the hub in an Angular CLI app.             | [Set up with ng add](./getting-started/installation.md#set-up-with-ng-add)                   |
+| Dev server builder      | `ng serve` mounts the hub, so a client-only app needs no second server.        | [Client-only Angular CLI app](./getting-started/installation.md#client-only-angular-cli-app) |
 
 ### Deeper diagnosis
 
@@ -82,7 +84,6 @@ These items remain from phase 3, [#342](https://github.com/pangular-inspector/de
 
 | Item             | What it does                                                                        | Issue                                                             |
 | ---------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `ng add`         | One command sets up the overlay and the hub in an Angular CLI app.                  | [#342](https://github.com/pangular-inspector/devtools/issues/342) |
 | Extension stores | The Chrome extension in the Chrome Web Store and Edge Add-ons, and a Firefox build. | [#342](https://github.com/pangular-inspector/devtools/issues/342) |
 | Ionic support    | Ionic apps, on top of the Capacitor support.                                        | [#307](https://github.com/pangular-inspector/devtools/issues/307) |
 

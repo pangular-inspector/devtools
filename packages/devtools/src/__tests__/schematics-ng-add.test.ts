@@ -6,8 +6,10 @@ import { SchematicTestRunner } from '@angular-devkit/schematics/testing';
 import { build } from 'tsdown';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import {
+  DEV_SERVER_BUILDER,
   detectSetup,
   OVERLAY_SNIPPET,
+  switchServeBuilder,
   parseWorkspaceJson,
   ngAdd,
   wireExpressServer,
@@ -94,6 +96,34 @@ const WORKSPACE = {
     },
   },
 };
+
+/** A client-only app as `ng new --ssr=false` writes it on Angular 20 to 22 (excerpt). */
+function clientOnly(
+  serveBuilder = '@angular/build:dev-server',
+  buildBuilder = '@angular/build:application',
+) {
+  return {
+    version: 1,
+    projects: {
+      web: {
+        projectType: 'application',
+        root: '',
+        sourceRoot: 'src',
+        architect: {
+          build: { builder: buildBuilder, options: { browser: 'src/main.ts' } },
+          serve: {
+            builder: serveBuilder,
+            configurations: {
+              production: { buildTarget: 'web:build:production' },
+              development: { buildTarget: 'web:build:development' },
+            },
+            defaultConfiguration: 'development',
+          },
+        },
+      },
+    },
+  };
+}
 
 function workspace(files: Record<string, string>, angular: object | null = WORKSPACE) {
   const tree = new HostTree();
@@ -465,6 +495,138 @@ describe('ngAdd', () => {
   });
 });
 
+describe('switchServeBuilder', () => {
+  const text = (angular: object) => `${JSON.stringify(angular, null, 2)}\n`;
+  const serveOf = (out: string | undefined) =>
+    (JSON.parse(out ?? '{}') as ReturnType<typeof clientOnly>).projects.web.architect.serve as {
+      builder: string;
+      options?: Record<string, unknown>;
+      configurations: unknown;
+    };
+
+  it('points the serve target at the dev-server builder, keeping the file layout', () => {
+    const before = text(clientOnly());
+    const result = switchServeBuilder(before, 'web');
+    expect(result.status).toBe('added');
+    expect(serveOf(result.text).builder).toBe(DEV_SERVER_BUILDER);
+    expect(serveOf(result.text).options).toBeUndefined();
+    expect(serveOf(result.text).configurations).toEqual(
+      clientOnly().projects.web.architect.serve.configurations,
+    );
+    expect(result.text).toBe(before.replace('@angular/build:dev-server', DEV_SERVER_BUILDER));
+    expect(switchServeBuilder(result.text!, 'web').status).toBe('present');
+  });
+
+  it('keeps an @angular-devkit/build-angular dev server as the builder option', () => {
+    const result = switchServeBuilder(
+      text(
+        clientOnly(
+          '@angular-devkit/build-angular:dev-server',
+          '@angular-devkit/build-angular:application',
+        ),
+      ),
+      'web',
+    );
+    expect(result.status).toBe('added');
+    expect(serveOf(result.text)).toMatchObject({
+      builder: DEV_SERVER_BUILDER,
+      options: { builder: '@angular-devkit/build-angular:dev-server' },
+    });
+  });
+
+  it('keeps the indent of the file', () => {
+    const fourSpaces = `${JSON.stringify(clientOnly(), null, 4)}\n`;
+    expect(switchServeBuilder(fourSpaces, 'web').text).toContain(`\n    "projects"`);
+  });
+
+  it('skips a webpack build and a serve target it cannot run, with a reason', () => {
+    const webpack = switchServeBuilder(
+      text(
+        clientOnly(
+          '@angular-devkit/build-angular:dev-server',
+          '@angular-devkit/build-angular:browser',
+        ),
+      ),
+      'web',
+    );
+    expect(webpack).toMatchObject({
+      status: 'unsure',
+      skip: expect.stringContaining('no middleware'),
+    });
+    const custom = switchServeBuilder(text(clientOnly('@nx/angular:dev-server')), 'web');
+    expect(custom).toMatchObject({
+      status: 'unsure',
+      skip: expect.stringContaining('@nx/angular:dev-server'),
+    });
+    expect(switchServeBuilder(text(WORKSPACE), 'web').skip).toContain('no serve target');
+  });
+
+  it('edits an angular.json with comments only where the builder name is unambiguous', () => {
+    const commented = `// The workspace.\n${text(clientOnly())}`;
+    const result = switchServeBuilder(commented, 'web');
+    expect(result.status).toBe('added');
+    expect(result.text).toContain('// The workspace.');
+    expect(result.text).toContain(`"builder": "${DEV_SERVER_BUILDER}"`);
+    const two = clientOnly();
+    const twoApps = { ...two, projects: { ...two.projects, admin: two.projects.web } };
+    expect(switchServeBuilder(`// Two apps.\n${text(twoApps)}`, 'web')).toEqual({
+      status: 'unsure',
+    });
+    const legacy = `// Legacy.\n${text(clientOnly('@angular-devkit/build-angular:dev-server'))}`;
+    expect(switchServeBuilder(legacy, 'web')).toEqual({ status: 'unsure' });
+  });
+});
+
+describe('ngAdd and the dev-server builder', () => {
+  it('switches a client-only app to the builder instead of printing the CLI steps', () => {
+    const tree = workspace({ 'src/main.ts': MAIN }, clientOnly());
+    const { logs, warn } = run(tree);
+    expect(read(tree, 'angular.json')).toContain(`"builder": "${DEV_SERVER_BUILDER}"`);
+    expect(read(tree, 'src/main.ts')).toContain('@pangular-inspector/devtools/overlay');
+    expect(logs()).toContain(`ng serve now runs ${DEV_SERVER_BUILDER}`);
+    expect(logs()).not.toContain('npx pangular dev');
+    expect(warn).not.toHaveBeenCalled();
+    const angular = read(tree, 'angular.json');
+    expect(run(tree).logs()).toContain('already has the');
+    expect(read(tree, 'angular.json')).toBe(angular);
+  });
+
+  it('keeps the serve target with --dev-server=false and prints the CLI steps', () => {
+    const tree = workspace({ 'src/main.ts': MAIN }, clientOnly());
+    const before = read(tree, 'angular.json');
+    const { logs } = run(tree, { devServer: false });
+    expect(read(tree, 'angular.json')).toBe(before);
+    expect(logs()).toContain('npx pangular dev --port 9999');
+  });
+
+  it('prints the CLI steps for a webpack app, which the builder cannot serve', () => {
+    const tree = workspace(
+      { 'src/main.ts': MAIN },
+      clientOnly(
+        '@angular-devkit/build-angular:dev-server',
+        '@angular-devkit/build-angular:browser',
+      ),
+    );
+    const before = read(tree, 'angular.json');
+    const { logs, warn } = run(tree);
+    expect(read(tree, 'angular.json')).toBe(before);
+    expect(logs()).toContain('whose dev server takes no middleware');
+    expect(logs()).toContain('npx pangular dev --port 9999');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('leaves the serve target of an Express SSR app alone', () => {
+    const ssr = clientOnly();
+    const project = ssr.projects.web.architect.build.options as Record<string, unknown>;
+    project['ssr'] = { entry: 'src/server.ts' };
+    const tree = workspace({ 'src/server.ts': SERVER, 'src/main.ts': MAIN }, ssr);
+    const before = read(tree, 'angular.json');
+    run(tree);
+    expect(read(tree, 'angular.json')).toBe(before);
+    expect(read(tree, 'src/server.ts')).toContain('initPangularHub');
+  });
+});
+
 describe('the published schematic', () => {
   const work = mkdtempSync(join(tmpdir(), 'pangular-schematics-'));
   afterAll(() => rmSync(work, { recursive: true, force: true }));
@@ -493,5 +655,18 @@ describe('the published schematic', () => {
     expect(tree.readContent('src/main.ts')).toContain('@pangular-inspector/devtools/overlay');
     const again = await runner.runSchematic('ng-add', {}, tree);
     expect(again.readContent('src/server.ts')).toBe(tree.readContent('src/server.ts'));
+    // The schema's default switches a client-only app; `devServer: false` keeps it.
+    const client = await runner.runSchematic(
+      'ng-add',
+      {},
+      workspace({ 'src/main.ts': MAIN }, clientOnly()),
+    );
+    expect(client.readContent('angular.json')).toContain(DEV_SERVER_BUILDER);
+    const kept = await runner.runSchematic(
+      'ng-add',
+      { devServer: false },
+      workspace({ 'src/main.ts': MAIN }, clientOnly()),
+    );
+    expect(kept.readContent('angular.json')).not.toContain(DEV_SERVER_BUILDER);
   }, 60_000);
 });

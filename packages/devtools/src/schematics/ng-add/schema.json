@@ -10,6 +10,11 @@
       "$default": {
         "$source": "projectName"
       }
+    },
+    "devServer": {
+      "type": "boolean",
+      "description": "For a project with no Express server.ts and no Vite config, switch its serve target to the @pangular-inspector/devtools:dev-server builder, which mounts the devtools hub in ng serve. Set it to false to keep the serve target and print the standalone CLI steps instead.",
+      "default": true
     }
   },
   "additionalProperties": false
