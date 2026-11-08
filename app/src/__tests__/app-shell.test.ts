@@ -334,7 +334,9 @@ describe('App scroll memory', () => {
     Object.defineProperty(main, 'scrollTop', {
       configurable: true,
       get: () => top,
-      set: (value: number) => (top = value),
+      set: (value: number) => {
+        top = value;
+      },
     });
     const buttons = () => [...host(fixture).querySelectorAll<HTMLButtonElement>('nav button')];
     // An earlier test can leave another tab in the URL.
@@ -373,7 +375,9 @@ describe('App scroll memory while content loads', () => {
     Object.defineProperty(main, 'scrollTop', {
       configurable: true,
       get: () => top,
-      set: (value: number) => (top = Math.max(0, Math.min(value, max))),
+      set: (value: number) => {
+        top = Math.max(0, Math.min(value, max));
+      },
     });
     const buttons = () => [...host(fixture).querySelectorAll<HTMLButtonElement>('nav button')];
     buttons()[0].click();

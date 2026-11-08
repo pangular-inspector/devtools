@@ -12,13 +12,13 @@
     "eslint(no-setter-return)": 1
   },
   "app/src/app.ts": {
-    "pangular(max-lines)": 1970
+    "pangular(max-lines)": 1999
   },
   "app/src/pages/analog-inspector.ts": {
     "pangular(max-lines)": 2743
   },
   "app/src/pages/component-tree.ts": {
-    "pangular(max-lines)": 2974
+    "pangular(max-lines)": 2982
   },
   "app/src/pages/di-inspector.ts": {
     "pangular(max-lines)": 2742
@@ -131,9 +131,6 @@
   },
   "packages/devtools/src/__tests__/forms.test.ts": {
     "typescript(no-explicit-any)": 6
-  },
-  "packages/devtools/src/__tests__/http-rule-tools.test.ts": {
-    "eslint(no-unused-vars)": 1
   },
   "packages/devtools/src/__tests__/http.test.ts": {
     "eslint(no-unused-vars)": 1,

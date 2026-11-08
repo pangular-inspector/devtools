@@ -157,7 +157,9 @@ describe('the network live controls', () => {
     Object.defineProperty(wrap, 'scrollTop', {
       configurable: true,
       get: () => top,
-      set: (value: number) => (top = value),
+      set: (value: number) => {
+        top = value;
+      },
     });
     const follow = host().querySelector<HTMLInputElement>('app-live-controls input')!;
     expect(follow.checked).toBe(false);
@@ -204,7 +206,9 @@ describe('Follow newest with SSR requests on the page', () => {
       Object.defineProperty(wrap, 'scrollTop', {
         configurable: true,
         get: () => tops[i],
-        set: (value: number) => (tops[i] = value),
+        set: (value: number) => {
+          tops[i] = value;
+        },
       }),
     );
     host().querySelector<HTMLInputElement>('app-live-controls input')!.click();

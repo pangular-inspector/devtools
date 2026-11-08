@@ -72,7 +72,9 @@ describe('restoreScroll', () => {
     Object.defineProperty(el, 'scrollTop', {
       configurable: true,
       get: () => top,
-      set: (value: number) => (top = Math.max(0, Math.min(value, max()))),
+      set: (value: number) => {
+        top = Math.max(0, Math.min(value, max()));
+      },
     });
     return el;
   }
