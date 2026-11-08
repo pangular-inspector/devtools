@@ -91,6 +91,18 @@ describe('redirectTarget', () => {
   it('drops the query and fragment of the URL for an absolute redirect with none of its own', () => {
     expect(redirectTarget('/a?tab=x#top', [config[4]], {})).toBe('/b');
   });
+
+  it("copies the URL's query parameter into a :name value of the redirect's query", () => {
+    const node: RouteNode = {
+      id: '9',
+      path: 'old',
+      fullPath: '/old',
+      kind: 'redirect',
+      redirectTo: '/new?tab=:section&from=old&missing=:gone#top',
+      pathMatch: 'full',
+    };
+    expect(redirectTarget('/old?section=a%20b', [node], {})).toBe('/new?tab=a%20b&from=old#top');
+  });
 });
 
 describe('previewNavigation', () => {

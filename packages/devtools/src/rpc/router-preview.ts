@@ -53,7 +53,8 @@ function fill(path: string, params: Record<string, string>): string {
  * Where a `redirectTo` route sends `url`, the way the default redirect does:
  * an absolute target replaces the URL, a relative one replaces the matched
  * segments under the parent route; `:params` are filled in, and the rest of
- * the URL and its query stay. Undefined for a function redirect.
+ * the URL and its query stay. A `:name` query value in `redirectTo` copies the
+ * URL's query parameter `name`. Undefined for a function redirect.
  */
 export function redirectTarget(
   url: string,
@@ -66,7 +67,7 @@ export function redirectTarget(
   const { path, rest } = splitUrl(url);
   const consumed = parts(node.fullPath).length;
   const remaining = node.pathMatch === 'full' ? [] : parts(path).slice(consumed);
-  const [targetPath, targetRest = ''] = redirect.split(/(?=[?#])/);
+  const { path: targetPath, rest: targetRest } = splitUrl(redirect);
   const parent = chain.length > 1 ? fill(chain[chain.length - 2].fullPath, params) : '';
   const base = targetPath.startsWith('/')
     ? fill(targetPath, params)
@@ -74,7 +75,31 @@ export function redirectTarget(
   const joined = `/${[...parts(base), ...remaining].join('/')}`;
   // Angular keeps the query and fragment of the URL only for a relative redirect;
   // an absolute one takes them from `redirectTo` alone.
-  return `${joined}${targetRest || (targetPath.startsWith('/') ? '' : rest)}`;
+  return `${joined}${targetRest ? redirectQuery(targetRest, rest) : targetPath.startsWith('/') ? '' : rest}`;
+}
+
+/**
+ * The query and fragment of `redirectTo` (`target`, from `?` or `#`), with each
+ * `:name` value copied from the query parameter `name` of the URL (`rest`), as
+ * Angular's redirect does. A key whose parameter the URL lacks is dropped.
+ */
+function redirectQuery(target: string, rest: string): string {
+  if (!target.startsWith('?')) return target;
+  const hash = target.indexOf('#');
+  const query = hash < 0 ? target.slice(1) : target.slice(1, hash);
+  const fragment = hash < 0 ? '' : target.slice(hash);
+  const actual = new URLSearchParams(rest.split('#')[0]);
+  const pairs: string[] = [];
+  for (const pair of query.split('&')) {
+    const [key, value = ''] = pair.split(/=(.*)/s);
+    if (!value.startsWith(':')) {
+      pairs.push(pair);
+      continue;
+    }
+    const copied = actual.get(value.slice(1));
+    if (copied !== null) pairs.push(`${key}=${encodeURIComponent(copied)}`);
+  }
+  return `${pairs.length ? `?${pairs.join('&')}` : ''}${fragment}`;
 }
 
 function findNodes(nodes: RouteNode[] | undefined, ids: Set<string>, out: RouteNode[] = []) {
