@@ -7,6 +7,10 @@ import { NetworkInspector } from '../../../../app/src/pages/network-inspector.ts
 import { Select } from '../../../../app/src/ui/select.ts';
 import { LiveControls } from '../../../../app/src/ui/live-feed.ts';
 import { SortHeader } from '../../../../app/src/ui/sort-header.ts';
+import { CallTimeline } from '../../../../app/src/pages/network/call-timeline.ts';
+import { FaultRules } from '../../../../app/src/pages/network/fault-rules.ts';
+import { ResponsePreview } from '../../../../app/src/pages/network/response-preview.ts';
+import { SsrOverrides } from '../../../../app/src/pages/network/ssr-overrides.ts';
 import { initAngularTestBed } from './angular-version.ts';
 
 initAngularTestBed();
@@ -23,6 +27,9 @@ const signalInput = (name: string, alias = name, required = false) => [
 (SortHeader as unknown as { propDecorators: unknown }).propDecorators = {
   column: signalInput('column', 'appSortHeader', true),
   sort: [...signalInput('sort'), { type: Output, args: ['sortChange'] }],
+};
+(ResponsePreview as unknown as { propDecorators: unknown }).propDecorators = {
+  call: signalInput('call', 'call', true),
 };
 
 class StubSelect {
@@ -53,10 +60,13 @@ const call = (id: string, extra: Partial<Call[number]> = {}): Call[number] => ({
 let fixture: ComponentFixture<NetworkInspector>;
 
 function mount(calls: Call = []) {
-  TestBed.overrideComponent(NetworkInspector, {
-    remove: { imports: [Select] },
-    add: { imports: [StubSelect] },
-  });
+  // The page and the sections that show a dropdown.
+  for (const component of [NetworkInspector, CallTimeline, FaultRules, SsrOverrides]) {
+    TestBed.overrideComponent(component, {
+      remove: { imports: [Select] },
+      add: { imports: [StubSelect] },
+    });
+  }
   fixture = TestBed.createComponent(NetworkInspector);
   document.body.append(fixture.nativeElement);
   fixture.componentInstance.serverCalls.set(calls);

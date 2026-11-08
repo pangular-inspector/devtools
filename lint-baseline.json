@@ -23,9 +23,6 @@
   "app/src/pages/di-inspector.ts": {
     "pangular(max-lines)": 2742
   },
-  "app/src/pages/network-inspector.ts": {
-    "pangular(max-lines)": 3143
-  },
   "app/src/pages/pipes-inspector.ts": {
     "pangular(max-lines)": 1612
   },
