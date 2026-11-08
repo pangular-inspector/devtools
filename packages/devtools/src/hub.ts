@@ -252,7 +252,10 @@ export function startPangularHub(
 
 /**
  * The `extraDevframes` entries to mount. One with Pangular Inspector's own id
- * would replace it on the hub, so it is dropped with a warning.
+ * would replace it on the hub, so it is dropped with a warning. A lazy entry
+ * (a promise, or a function that returns one) is wrapped so the same check
+ * runs on what it resolves to; the hub awaits the entries in order, so the
+ * order stays as given.
  */
 export function extraDevframesOf(
   input: DevframesInput | undefined,
@@ -263,14 +266,36 @@ export function extraDevframesOf(
     warn('[pangular] Ignoring extraDevframes: pass an array, as initHub({ devframes }) takes.');
     return [];
   }
-  return input.filter((entry) => {
-    const id = devframeIdOf(entry);
-    if (id !== 'pangular') return true;
+  const keep = (entry: unknown) => {
+    if (devframeIdOf(entry) !== 'pangular') return true;
     warn(
       '[pangular] Ignoring an extraDevframes entry with the id "pangular": the hub mounts Pangular Inspector itself.',
     );
     return false;
+  };
+  type Entry = DevframesInput[number];
+  type Resolved = Awaited<ReturnType<Extract<Entry, () => unknown>>>;
+  return input.flatMap((entry): Entry[] => {
+    if (isThenable(entry) || typeof entry === 'function') {
+      const lazy = entry as PromiseLike<Resolved> | (() => PromiseLike<Resolved>);
+      return [
+        async () => {
+          const resolved = await (typeof lazy === 'function' ? lazy() : lazy);
+          const list = Array.isArray(resolved) ? resolved : [resolved];
+          return list.filter((item) => item == null || keep(item));
+        },
+      ];
+    }
+    return keep(entry) ? [entry] : [];
   });
+}
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    !!value &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 /** The id of a devframe or a `{ devframe }` entry; `undefined` for lazy entries. */

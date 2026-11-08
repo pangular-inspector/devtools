@@ -313,6 +313,51 @@ describe('Pangular Inspector hub extraDevframes', () => {
     expect(extraDevframesOf(undefined, warn)).toEqual([]);
     expect(warn).toHaveBeenCalledTimes(3);
   });
+
+  it('drops a pangular devframe that a lazy entry resolves to, keeping the order', async () => {
+    const warn = vi.fn();
+    const entries = extraDevframesOf(
+      [
+        extra('first'),
+        Promise.resolve(extra('pangular')),
+        () => Promise.resolve([extra('acme'), { devframe: extra('pangular') }, null]),
+        extra('last'),
+      ],
+      warn,
+    );
+    expect(entries).toHaveLength(4);
+    expect(warn).not.toHaveBeenCalled();
+    const resolved = await Promise.all(
+      entries.map((entry) => (typeof entry === 'function' ? entry() : entry)),
+    );
+    const ids = resolved
+      .flat()
+      .map((entry) => (entry && 'devframe' in entry ? entry.devframe.id : entry?.id));
+    expect(ids).toEqual(['first', 'acme', undefined, 'last']);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts the hub when a lazy extra devframe has the pangular id and throws on duplicates', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const hub = initPangularHub({
+      cwd: makeProject({ 'package.json': '{}' }),
+      ws: false,
+      auth: false,
+      allowedOrigins: false,
+      extraDevframes: [
+        // With 'throw', a second `pangular` devframe would fail the whole hub.
+        async () => ({ ...extra('pangular'), duplicationStrategy: 'throw' as const }),
+        Promise.resolve(extra('acme')),
+      ],
+    });
+    hubs.push(hub);
+    await hub.ready;
+    const ctx = await hub.context;
+    expect(ctx.rpc.has('acme:ping')).toBe(true);
+    expect(ctx.rpc.has('pangular:ping')).toBe(false);
+    expect((await ctx.agent.invoke('pangular:inspect-forms', {})) as string).toContain('No forms');
+    warn.mockRestore();
+  });
 });
 
 describe('Pangular Inspector hub behind a web router', () => {
