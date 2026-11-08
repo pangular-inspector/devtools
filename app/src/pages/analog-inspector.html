@@ -68,45 +68,26 @@
     }
   </div>
 
-  @switch (view()) {
-    @case ('routes') {
-      <div
-        appAnalogRoutes
-        class="panel"
-        role="tabpanel"
-        id="analog-panel-routes"
-        aria-labelledby="analog-tab-routes"
-      ></div>
-    }
-    @case ('server') {
-      <div
-        appAnalogServer
-        class="panel"
-        role="tabpanel"
-        id="analog-panel-server"
-        aria-labelledby="analog-tab-server"
-      ></div>
-    }
-    @case ('render') {
-      <div
-        appAnalogRender
-        class="panel"
-        role="tabpanel"
-        id="analog-panel-render"
-        aria-labelledby="analog-tab-render"
-      ></div>
-    }
-    @case ('content') {
-      <div
-        appAnalogContent
-        class="panel"
-        role="tabpanel"
-        id="analog-panel-content"
-        aria-labelledby="analog-tab-content"
-      ></div>
-    }
-    @case ('data') {
-      <div class="panel" role="tabpanel" id="analog-panel-data" aria-labelledby="analog-tab-data">
+  <div
+    class="panel"
+    role="tabpanel"
+    [id]="'analog-panel-' + view()"
+    [attr.aria-labelledby]="'analog-tab-' + view()"
+  >
+    @switch (view()) {
+      @case ('routes') {
+        <div appAnalogRoutes></div>
+      }
+      @case ('server') {
+        <div appAnalogServer></div>
+      }
+      @case ('render') {
+        <div appAnalogRender></div>
+      }
+      @case ('content') {
+        <div appAnalogContent></div>
+      }
+      @case ('data') {
         <app-analog-data
           [rpc]="rpc()"
           [page]="page()"
@@ -114,26 +95,13 @@
           [duplicates]="state().duplicates ?? []"
           [refetches]="state().refetches ?? []"
         />
-      </div>
-    }
-    @case ('runtime') {
-      <div
-        class="panel"
-        role="tabpanel"
-        id="analog-panel-runtime"
-        aria-labelledby="analog-tab-runtime"
-      >
+      }
+      @case ('runtime') {
         <app-analog-runtime [rpc]="rpc()" />
-      </div>
+      }
+      @case ('lint') {
+        <div appAnalogLint></div>
+      }
     }
-    @case ('lint') {
-      <div
-        appAnalogLint
-        class="panel"
-        role="tabpanel"
-        id="analog-panel-lint"
-        aria-labelledby="analog-tab-lint"
-      ></div>
-    }
-  }
+  </div>
 }
