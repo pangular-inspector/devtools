@@ -37,7 +37,12 @@ export class ModuleTimings {
   /** Whether a module was dropped to stay under the cap. */
   capped = false;
 
-  constructor(readonly max = MAX_TIMED_MODULES) {}
+  readonly max: number;
+
+  // No parameter property: Node loads vite.config.ts with type stripping only.
+  constructor(max = MAX_TIMED_MODULES) {
+    this.max = max;
+  }
 
   get size(): number {
     return this.byId.size;
