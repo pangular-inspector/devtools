@@ -64,6 +64,7 @@ app/                          # Devtools UI SPA (Angular + Vite)
 packages/
   devtools/                   # Publishable npm package
     src/devframe.ts           # defineDevframe(): the tool definition
+    src/devframe-*.ts         # Its parts: shared types, registrars, the page registry, and the state, RPC functions and agent tools of the areas kept here (other inspectors live in `src/rpc/<area>-register.ts`)
     src/overlay.ts            # Client script running in the user's page (the overlay-manual entry)
     src/overlay-auto.ts       # The overlay entry: starts the overlay and the floating button on import
     src/rpc/                  # Node-side RPC functions and agent tools
@@ -269,7 +270,7 @@ If a code change needs no docs change, add the `no-docs` label to the pull reque
 ### Add an RPC function
 
 1. Create the function in `packages/devtools/src/rpc/`.
-2. Register it in `packages/devtools/src/devframe.ts`.
+2. Register it in `packages/devtools/src/devframe.ts`, or in the `devframe-<area>.ts` module of its inspector.
 3. Map it to its inspector in `RPC_INSPECTOR` in `packages/devtools/src/config.ts`, so turning the inspector off removes it.
 4. Call it from the UI in `app/src/pages/`.
 
