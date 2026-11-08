@@ -32,7 +32,7 @@ Read `docs/contributing/coding-standards.md` ("Reading data from the page") befo
 
 ## Server side (`devframe.ts`, `rpc/`)
 
-- `devframe.ts` wires the setup. A new inspector goes in its own `rpc/<area>-register.ts` (see `rpc/errors-register.ts`). An existing area keeps its state and RPC functions in `devframe-<area>.ts` and its agent tools in `devframe-<area>-tools.ts`; both take the setup values they read as an `env` object typed through `devframe-env.ts`. The page registry (owners, heartbeats, lease) is `devframe-pages.ts` and the registrars are `devframe-registrars.ts`. Keep `devframe.ts` under the line ratchet of `pnpm lint`.
+- `devframe.ts` wires the setup. A new inspector goes in its own `rpc/<area>-register.ts` (see `rpc/errors-register.ts`). An existing area keeps its state and RPC functions in `devframe-<area>.ts`. Its agent tools are in that module or in a separate `devframe-*-tools.ts` module. These modules take the setup values they read as an `env` object typed through `devframe-env.ts`. The page registry (owners, heartbeats, lease) is `devframe-pages.ts` and the registrars are `devframe-registrars.ts`. Keep `devframe.ts` under the line ratchet of `pnpm lint`.
 
 - Keep a `Map<pageId, report>` with `reportedAt`, drop pages older than `ttl(pageId)` (from `visibility.ttl()`, so a page with a current heartbeat never expires) in the shared expiry interval, and write the combined value into the shared state.
 - Page actions that the panel triggers (restore, highlight, run) go panel -> `request-<area>-action` -> broadcast `<area>-action` to the page -> `<area>-action-result`, keyed by `requestId`, with a timeout.
