@@ -780,7 +780,7 @@ async function startOverlay(
           config = walkConfig(router, cut);
           configTruncated = cut.routes;
           setup = detectSetup(ng, router, routerCount, routerRoot);
-          setGeneration(configTracker.generation);
+          setGeneration(configTracker.generation, router);
           if (instrumented) {
             stopInstrument?.();
             stopInstrument = instrument(router, navigations);
