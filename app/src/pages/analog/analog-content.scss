@@ -1,0 +1,11 @@
+@use 'analog' as a;
+
+// A wrapper only: the view's parts are items of the page's panel grid, as they were.
+:host {
+  display: contents;
+}
+
+@include a.base;
+@include a.form;
+@include a.table;
+@include a.cards;
