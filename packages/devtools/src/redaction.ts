@@ -10,7 +10,9 @@
  * masks they left, for the counts the panel and agent answers show.
  */
 import type { AnalogRuntimeReport } from './analog-runtime.ts';
-import { REDACTED, isRedactedKey } from './forms-privacy.ts';
+import { redactCredentials } from './credential-redact.ts';
+import { redactHighEntropy } from './entropy-redact.ts';
+import { REDACTED, isRedactedKey, redactJwt } from './forms-privacy.ts';
 import { MAX_HEADERS, MAX_HEADER_VALUE, type HeaderRecord } from './http-headers.ts';
 import type { HttpCall } from './http-rules.ts';
 import { redactText, redactUrl } from './router.ts';
@@ -19,9 +21,37 @@ import { clip } from './text.ts';
 
 export { countRedacted, countRedactedText, redactionNote } from './redaction-count.ts';
 
-// JSON text
+// Messages and log lines
 
-const REDACTED_VALUE = JSON.stringify(REDACTED);
+const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
+
+export function redactMessage(text: string, secrets: Iterable<string> = []): string {
+  return redactMessageWith(text, longestFirst(secrets));
+}
+
+/**
+ * Credentials inside text (`credential-redact.ts`), JWTs and bearer tokens:
+ * the value-shape rules every message and log line goes through.
+ */
+export function redactTokens(text: string): string {
+  return redactJwt(redactCredentials(text, REDACTED)).replace(BEARER, `Bearer ${REDACTED}`);
+}
+
+/** `secrets` as `redactMessageWith` takes them: 3 characters or more, longest first. */
+export function longestFirst(secrets: Iterable<string>): string[] {
+  const out = [...secrets].filter((secret) => secret.length >= 3);
+  out.sort((a, b) => b.length - a.length);
+  return out;
+}
+
+/** `redactMessage` with secrets `longestFirst` already prepared, for many texts in a row. */
+export function redactMessageWith(text: string, ordered: readonly string[]): string {
+  let out = redactTokens(text);
+  for (const secret of ordered) out = out.split(secret).join(REDACTED);
+  return redactHighEntropy(out, REDACTED);
+}
+
+// JSON text
 
 function stringEnd(text: string, start: number): number {
   for (let i = start + 1; i < text.length; i++) {
@@ -71,7 +101,7 @@ export function redactJsonText(text: string, isSecret: (key: string) => boolean)
       key = token.slice(1, -1);
     }
     if (!isSecret(key)) continue;
-    out += `${sep[0]}${REDACTED_VALUE}`;
+    out += `${sep[0]}${JSON.stringify(REDACTED)}`;
     i = valueEnd(text, i + sep[0].length);
   }
   return out;

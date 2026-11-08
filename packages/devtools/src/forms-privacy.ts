@@ -1,6 +1,10 @@
-import { redactCredentials } from './credential-redact.ts';
-import { redactHighEntropy, setEntropyRedaction, type EntropyOptions } from './entropy-redact.ts';
+import { setEntropyRedaction, type EntropyOptions } from './entropy-redact.ts';
+import { redactMessage } from './redaction.ts';
 import { RedactionScope } from './redaction-scope.ts';
+
+// The message redaction lives with the other helpers in `redaction.ts`; these
+// names stay here so the collectors that import them from this module keep working.
+export { longestFirst, redactMessage, redactMessageWith, redactTokens } from './redaction.ts';
 
 export const REDACTED = '[redacted]';
 
@@ -157,7 +161,6 @@ export function redactJwt(text: string): string {
   }
   return parts.length ? parts.join('') + text.slice(last) : text;
 }
-const BEARER = /\bBearer\s+[\w.~+/=-]+/gi;
 
 interface PrivacyConfig {
   mask?: string[];
@@ -325,32 +328,6 @@ function safeQuery(element: Element, selector: string): boolean {
   } catch {
     return false;
   }
-}
-
-export function redactMessage(text: string, secrets: Iterable<string> = []): string {
-  return redactMessageWith(text, longestFirst(secrets));
-}
-
-/**
- * Credentials inside text (`credential-redact.ts`), JWTs and bearer tokens:
- * the value-shape rules every message and log line goes through.
- */
-export function redactTokens(text: string): string {
-  return redactJwt(redactCredentials(text, REDACTED)).replace(BEARER, `Bearer ${REDACTED}`);
-}
-
-/** `secrets` as `redactMessageWith` takes them: 3 characters or more, longest first. */
-export function longestFirst(secrets: Iterable<string>): string[] {
-  const out = [...secrets].filter((secret) => secret.length >= 3);
-  out.sort((a, b) => b.length - a.length);
-  return out;
-}
-
-/** `redactMessage` with secrets `longestFirst` already prepared, for many texts in a row. */
-export function redactMessageWith(text: string, ordered: readonly string[]): string {
-  let out = redactTokens(text);
-  for (const secret of ordered) out = out.split(secret).join(REDACTED);
-  return redactHighEntropy(out, REDACTED);
 }
 
 /** Most earlier secret values a `SecretSet` keeps hiding after they changed. */
