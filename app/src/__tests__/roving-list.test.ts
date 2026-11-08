@@ -59,6 +59,16 @@ describe('RovingList', () => {
     expect(tabStops(fixture)).toEqual(['c']);
   });
 
+  it('moves the Tab stop to a row that becomes selected without focus', async () => {
+    const fixture = mount();
+    await settle(fixture);
+    expect(tabStops(fixture)).toEqual(['a']);
+    // A click in Safari selects a row without focusing it.
+    fixture.componentInstance.selected.set('c');
+    await settle(fixture);
+    expect(tabStops(fixture)).toEqual(['c']);
+  });
+
   it('moves focus with the arrow keys, Home and End, and stops at the ends', async () => {
     const fixture = mount();
     await settle(fixture);

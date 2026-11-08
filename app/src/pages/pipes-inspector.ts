@@ -18,6 +18,7 @@ import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 import { SourceLink } from '../ui/source-link';
 import { plural } from '../format';
+import { RovingList } from '../ui/roving-list';
 import { SearchField } from '../ui/search-field';
 
 interface UsageSite {
@@ -156,7 +157,7 @@ const SORT_OPTIONS: readonly SelectOption<PipeSort>[] = [
 
 @Component({
   selector: 'app-pipes-inspector',
-  imports: [SearchField, Select, SourceLink],
+  imports: [RovingList, SearchField, Select, SourceLink],
   template: `
     <p class="intro">
       Pipes declared in your source, the built-in pipes your templates use and library pipes seen on
@@ -256,7 +257,7 @@ const SORT_OPTIONS: readonly SelectOption<PipeSort>[] = [
       <div class="layout">
         <div class="list-wrap">
           @if (filtered().length) {
-            <ul class="pipe-list" aria-label="Pipes" (keydown)="onListKey($event)">
+            <ul class="pipe-list" aria-label="Pipes" appRovingList="[data-pipe-row]">
               @for (p of filtered(); track p.file + p.name) {
                 @let live = liveFor(p.name);
                 <li>
@@ -1600,22 +1601,5 @@ export class PipesInspector {
         target ? { ...target, ...(reveal ? { reveal } : {}) } : null,
       )
       .catch(() => {});
-  }
-
-  onListKey(event: KeyboardEvent) {
-    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
-    if (!keys.includes(event.key)) return;
-    const rows = Array.from(
-      this.host.nativeElement.querySelectorAll<HTMLButtonElement>('[data-pipe-row]'),
-    );
-    if (!rows.length) return;
-    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
-    let next = at;
-    if (event.key === 'ArrowDown') next = Math.min(at + 1, rows.length - 1);
-    else if (event.key === 'ArrowUp') next = Math.max(at - 1, 0);
-    else if (event.key === 'Home') next = 0;
-    else next = rows.length - 1;
-    event.preventDefault();
-    rows[next]?.focus();
   }
 }

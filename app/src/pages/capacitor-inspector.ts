@@ -40,6 +40,7 @@ import {
   type CapacitorPage,
   type CapacitorSummary,
 } from './capacitor-types';
+import { RovingList } from '../ui/roving-list';
 import { SearchField } from '../ui/search-field';
 import { rememberSelection } from '../view-memory';
 import { AppState } from '../ui/app-state';
@@ -65,6 +66,7 @@ const FILTER_LABELS: Record<CallFilter, string> = {
     CapacitorCallDetail,
     CapacitorIonic,
     CapacitorState,
+    RovingList,
   ],
   template: `
     @if (!loaded()) {
@@ -239,7 +241,7 @@ const FILTER_LABELS: Record<CallFilter, string> = {
               <ol
                 class="calls"
                 aria-label="Plugin calls, newest first"
-                (keydown)="onListKey($event)"
+                appRovingList="[data-cap-call]"
               >
                 @for (call of shownCalls(); track call.id) {
                   <li>
@@ -249,8 +251,6 @@ const FILTER_LABELS: Record<CallFilter, string> = {
                       data-cap-call
                       [class.selected]="selected()?.id === call.id"
                       [attr.aria-pressed]="selected()?.id === call.id"
-                      [attr.tabindex]="tabStop() === call.id ? 0 : -1"
-                      (focus)="focusedCallId.set(call.id)"
                       (click)="select(call.id)"
                     >
                       <code class="name">{{ call.plugin }}.{{ call.method }}()</code>
@@ -831,8 +831,6 @@ export class CapacitorInspector {
         : defaultCapacitorPage(pages, this.hostPageId),
   });
   readonly selectedCallId = signal<number | null>(null);
-  /** The row that last had focus, so the list keeps one tab stop on it. */
-  readonly focusedCallId = signal<number | null>(null);
   readonly filter = signal('');
   readonly callFilter = signal<CallFilter>('all');
   /** Ticks every second, for pending ages and "3 s ago". */
@@ -874,14 +872,6 @@ export class CapacitorInspector {
   readonly selected = computed(() => {
     const calls = this.shownCalls();
     return calls.find((call) => call.id === this.selectedCallId()) ?? null;
-  });
-  /** The one row Tab reaches: the focused one, else the selected one, else the newest. */
-  readonly tabStop = computed(() => {
-    const calls = this.shownCalls();
-    for (const id of [this.focusedCallId(), this.selectedCallId()]) {
-      if (id !== null && calls.some((call) => call.id === id)) return id;
-    }
-    return calls[0]?.id ?? null;
   });
   /** The slowest visible call, which the duration bars are scaled to. */
   readonly slowest = computed(() => {
@@ -957,24 +947,6 @@ export class CapacitorInspector {
       },
       { injector: this.injector },
     );
-  }
-
-  /** Arrow keys, Home and End move between calls. */
-  onListKey(event: KeyboardEvent) {
-    const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
-    if (!keys.includes(event.key)) return;
-    const rows = Array.from(
-      this.host.nativeElement.querySelectorAll<HTMLButtonElement>('[data-cap-call]'),
-    );
-    if (!rows.length) return;
-    const at = rows.indexOf(document.activeElement as HTMLButtonElement);
-    let next = at;
-    if (event.key === 'ArrowDown') next = Math.min(at + 1, rows.length - 1);
-    else if (event.key === 'ArrowUp') next = Math.max(at - 1, 0);
-    else if (event.key === 'Home') next = 0;
-    else next = rows.length - 1;
-    event.preventDefault();
-    rows[next]?.focus();
   }
 
   setSearch(text: string) {

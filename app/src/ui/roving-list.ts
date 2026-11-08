@@ -10,8 +10,9 @@ const SELECTED =
 /**
  * Makes a long list one Tab stop. Only the current item is in the Tab order,
  * and ArrowUp, ArrowDown, Home and End move focus between the items that
- * `appRovingList` selects. The current item is the one last focused, or else
- * the selected one, or else the first.
+ * `appRovingList` selects. The current item is the one last focused or
+ * selected, or else the first. A click selects without focusing in some
+ * browsers (Safari), so an item that becomes selected becomes current too.
  */
 @Directive({
   selector: '[appRovingList]',
@@ -41,9 +42,22 @@ export class RovingList {
     afterNextRender(() => {
       this.sync();
       if (typeof MutationObserver === 'undefined') return;
-      // Rows come and go as data arrives; only added or removed nodes matter.
-      const observer = new MutationObserver(() => this.sync());
-      observer.observe(this.host, { childList: true, subtree: true });
+      // Rows come and go as data arrives, and the selection moves between them.
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          const target = record.target as HTMLElement;
+          if (record.type === 'attributes' && this.isItem(target) && target.matches(SELECTED)) {
+            this.current = target;
+          }
+        }
+        this.sync();
+      });
+      observer.observe(this.host, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['aria-pressed', 'aria-expanded', 'aria-current', 'class'],
+      });
       destroyRef.onDestroy(() => observer.disconnect());
     });
   }
