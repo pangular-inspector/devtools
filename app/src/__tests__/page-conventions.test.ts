@@ -63,10 +63,10 @@ describe('pages with a splitter', () => {
     const page = (name: string) => sources.get(name) ?? '';
     expect(page('di-inspector.ts')).toMatch(/<app-splitter[^>]*view="injectors"/s);
     expect(page('di-inspector.ts')).toContain("storedPaneSize('injectors', 420)");
-    expect(page('store-inspector.ts')).toMatch(
+    expect(page('store/store-log.ts')).toMatch(
       /<app-splitter[^>]*view="store-log"[^>]*pane="before"/s,
     );
-    expect(page('store-inspector.ts')).toContain("storedPaneSize('store-log', 300)");
+    expect(page('store/store-log.ts')).toContain("storedPaneSize('store-log', 300)");
   });
 });
 
@@ -80,7 +80,7 @@ describe('pages use the shared state component', () => {
       'plugins-inspector.ts',
       'audit-inspector.ts',
       'query-inspector.ts',
-      'store-inspector.ts',
+      'store/store-live.ts',
       'network-inspector.ts',
       'live-route.ts',
       'route-lint.ts',
@@ -137,7 +137,8 @@ describe('pages with a keyboard list use the shared roving list', () => {
       'network/ssr-requests.ts': '',
       'query-inspector.ts': '',
       'signal-inspector.ts': '',
-      'store-inspector.ts': '',
+      'store/store-log.ts': '',
+      'store/store-events.ts': '',
       'timeline.ts': '',
     };
     for (const [file, selector] of Object.entries(lists)) {

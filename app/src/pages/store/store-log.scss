@@ -1,0 +1,15 @@
+@use 'store';
+
+@include store.base;
+@include store.lists;
+@include store.methods;
+@include store.log;
+@include store.entry;
+@media (max-width: 760px) {
+  .log-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .log-layout > app-splitter {
+    display: none;
+  }
+}

@@ -1,0 +1,16 @@
+@use 'store';
+
+@include store.base;
+@include store.lists;
+@include store.detail;
+@include store.code;
+@include store.methods;
+@include store.log;
+@include store.dispatch;
+@include store.history-stats;
+@include store.paused;
+@media (max-width: 480px) {
+  .kv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
