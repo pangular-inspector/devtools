@@ -251,14 +251,14 @@ To reproduce a job, add the same `overrides` block to `pnpm-workspace.yaml`, run
 
 ### Pull request checks
 
-Two more workflows run on pull requests. A pull request title or a commit message that breaks the commit format fails `Commit message`. `Docs check` only warns.
+Two more workflows run on pull requests. A pull request title or a commit message that breaks the commit format fails `Commit message`. A code change without a docs change fails `Docs check`.
 
 | Workflow         | File                                   | What it checks                                                                                                                                                         |
 | ---------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Commit message` | `.github/workflows/commit-message.yml` | The pull request title and every commit message. The title becomes the commit on `main` when the pull request is squash merged. A bad title or commit fails the check. |
 | `Docs check`     | `.github/workflows/docs-check.yml`     | That a change to `packages/devtools/src/`, `app/src/` or the top-level files in `extension/` also changes a page in `apps/docs/src/content`. Tests don't count.        |
 
-If a code change needs no docs change, add the `no-docs` label to the pull request and say why in the description. The `Docs check` workflow then skips the warning.
+If a code change needs no docs change, add the `no-docs` label to the pull request and say why in the description. The `Docs check` workflow then passes.
 
 ## Make changes
 
