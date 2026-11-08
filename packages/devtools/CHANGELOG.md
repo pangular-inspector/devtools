@@ -350,6 +350,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - A CI job installs the packed package on Node.js 22.12.0, the `engines.node` floor, and loads its CLI and its `cli`, `hub`, `ssr` and `vite` entry points there (#373).
 - `pnpm extension:build:firefox` builds a Firefox copy of the extension into `dist/extension-firefox`, with the add-on ID and version floor under `browser_specific_settings` and without the Chrome-only manifest keys. It is not published (#342).
 - The `Commit message` check fails on a commit message that breaks the format, not only on a bad pull request title (#373).
+- The compatibility workflow runs the Vite plugin tests on Vite 6 and Vite 7, the majors the `vite` peer range allows below the installed one (#373).
 - The `Docs check` fails, instead of warning, when a pull request changes code but no docs page and has no `no-docs` label (#373).
 - The packed `package.json` leaves out `devDependencies`, `scripts` and the `nx` block, and declares `sideEffects`.
 - Dependencies: devframe and `@devframes/*` 1.2.6 (was 1.2.0). `@devframes/plugin-messages`, `@devframes/plugin-terminals` and `axe-core` are added. `h3` is no longer a dependency.
