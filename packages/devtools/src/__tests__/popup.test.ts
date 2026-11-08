@@ -297,6 +297,13 @@ describe.sequential('devtools popup', () => {
     expect(missing.querySelector('a')!.getAttribute('href')).toMatch(/^https:/);
     expect(missing.querySelector('h2')!.id).toBe(missing.getAttribute('aria-labelledby'));
     expect(missing.querySelector('a')!.textContent).toContain('opens in a new tab');
+    const trouble = [...missing.querySelectorAll('a')].find((a) =>
+      a.textContent?.startsWith('Troubleshooting'),
+    )!;
+    expect(trouble.getAttribute('href')).toBe(
+      'https://pangular-inspector.dev/getting-started/troubleshooting/#no-devtools-server-found',
+    );
+    expect(trouble.textContent).toContain('opens in a new tab');
     expect(shadow.querySelector('.sr-only[role="status"]')!.textContent).toBe(
       'No devtools server found',
     );

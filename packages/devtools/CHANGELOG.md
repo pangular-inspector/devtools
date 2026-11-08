@@ -328,6 +328,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - A Nitro task run that fails on the **Analog** tab keeps its confirm panel and payload open, so it can be fixed and run again.
 - Turning **Counts launcher** on or off in a popped-out panel changes the launcher on the app page that opened it. The popup takes the change only from the window it popped the panel out into.
 - The **Pipes** list is one Tab stop with arrow keys, Home and End, like the other lists in the panel, and in every list the Tab stop follows a row selected with a click that does not focus it, as in Safari (#370).
+- The popup's **No devtools server found** state and the panel's **Can't reach the devtools server** message link to the troubleshooting docs (#373).
 
 ### Docs
 

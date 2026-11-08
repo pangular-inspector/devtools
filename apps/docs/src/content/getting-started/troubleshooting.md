@@ -39,7 +39,7 @@ With the [Vite plugin](./vite.md), `main.ts` needs no import: the plugin adds th
 
 ### No devtools server found
 
-The overlay found no server part. It logs an error that starts with `[pangular] No devtools server found` and lists the paths it tried, and the panel says **No devtools server found**.
+The overlay found no server part. It logs an error that starts with `[pangular] No devtools server found` and lists the paths it tried, and the panel says **No devtools server found**, with a **Troubleshooting** link to this section.
 
 | Cause                                                               | Fix                                                                                                                      |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -51,7 +51,7 @@ The overlay found no server part. It logs an error that starts with `[pangular] 
 
 ### The panel says Disconnected
 
-The panel lost the server, or never reached it. It tries again after 1, 2, 5 and then every 10 seconds, so a dev server that restarts connects without a reload. Click **Retry now** to try at once. If it stays disconnected, check that the server runs and that the hub is mounted before `express.static` and the SSR handler. See [Connection status](./popup-and-hub.md#connection-status).
+The panel lost the server, or never reached it. It tries again after 1, 2, 5 and then every 10 seconds, so a dev server that restarts connects without a reload. Click **Retry now** to try at once. When the panel cannot reach the server at all, its message links here under **Troubleshooting**. If it stays disconnected, check that the server runs and that the hub is mounted before `express.static` and the SSR handler. See [Connection status](./popup-and-hub.md#connection-status).
 
 If the panel does not connect at all with Hono, h3 or Fastify, the hub advertises a WebSocket that no upgrade reaches. Pass `ws: false`, pass `ws: {sidecar: true}`, or call `devtools.attach(server)`. See [Hono, h3 and Fastify](./other-servers.md#troubleshooting).
 

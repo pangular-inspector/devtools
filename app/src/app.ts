@@ -203,6 +203,10 @@ function readView(): View | null {
   return HUB_VIEWS.find((known) => known === view) ?? null;
 }
 
+/** The docs on a panel that can't reach its server. */
+export const TROUBLESHOOTING_DOCS_URL =
+  'https://pangular-inspector.dev/getting-started/troubleshooting/#the-panel-says-disconnected';
+
 @Component({
   selector: 'app-root',
   host: {
@@ -516,7 +520,12 @@ function readView(): View | null {
             Can't reach the devtools server. Check that the dev server is running. The panel keeps
             trying to connect.
           </p>
-          <button type="button" (click)="retryConnection()">Retry now</button>
+          <div class="connection-actions">
+            <button type="button" (click)="retryConnection()">Retry now</button>
+            <a [href]="troubleshootingUrl" target="_blank" rel="noopener noreferrer"
+              >Troubleshooting<span class="sr-only"> (opens in a new tab)</span></a
+            >
+          </div>
         </div>
       } @else if (!rpc()) {
         <p class="turned-off" role="status">Connecting to the devtools server…</p>
@@ -1037,6 +1046,18 @@ function readView(): View | null {
       p {
         margin: 0 0 10px;
       }
+      .connection-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 16px;
+      }
+      a {
+        color: var(--accent);
+        &:focus-visible {
+          @include m.focus-ring;
+        }
+      }
       button {
         display: inline-flex;
         align-items: center;
@@ -1207,6 +1228,7 @@ export class App implements OnInit, OnDestroy {
   private readonly openedDock = signal<{ dock: string } | null>(null);
   connected = signal(false);
   readonly connectionFailed = signal(false);
+  protected readonly troubleshootingUrl = TROUBLESHOOTING_DOCS_URL;
   /** A client the server does not trust yet: the panel asks for the one-time code. */
   readonly pairing = signal<DevframeRpcClient | null>(null);
   /** Says "Connected." once the one-time code is accepted. */

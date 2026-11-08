@@ -1,4 +1,10 @@
-import { DEVTOOLS_BASES, POPUP_ROOT_ID, SETUP_URL, insideDevtoolsPanel } from './panel-frame.ts';
+import {
+  DEVTOOLS_BASES,
+  POPUP_ROOT_ID,
+  SETUP_URL,
+  TROUBLESHOOTING_URL,
+  insideDevtoolsPanel,
+} from './panel-frame.ts';
 import { DEFAULT_POPUP_HOTKEY, matchesHotkey, normalizeHotkey } from './config.ts';
 // In-page floating devtools popup. Renders an iframe pointing at the devtools SPA.
 
@@ -431,6 +437,12 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   newTab.classList.add('sr-only');
   newTab.textContent = ' (opens in a new tab)';
   setupLink.append(newTab);
+  const troubleLink = document.createElement('a');
+  troubleLink.href = TROUBLESHOOTING_URL;
+  troubleLink.target = '_blank';
+  troubleLink.rel = 'noopener noreferrer';
+  troubleLink.textContent = 'Troubleshooting';
+  troubleLink.append(newTab.cloneNode(true));
   const retryBtn = document.createElement('button');
   retryBtn.type = 'button';
   retryBtn.classList.add('retry');
@@ -442,7 +454,7 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
   });
   const missingActions = document.createElement('p');
   missingActions.classList.add('missing-actions');
-  missingActions.append(retryBtn, setupLink);
+  missingActions.append(retryBtn, setupLink, troubleLink);
   missing.append(missingTitle, missingHint, missingActions);
 
   // The splitter sits on the docked edge. It is a focusable separator, so the

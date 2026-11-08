@@ -9,6 +9,9 @@ export const POPUP_ROOT_ID = 'pangular-popup-root';
 export const DEVTOOLS_BASES = ['/__devframes/pangular/', '/__pangular/', './', '/__devframe/'];
 
 export const SETUP_URL = 'https://pangular-inspector.dev/getting-started/installation/';
+/** The docs on finding the server, linked when the popup finds none. */
+export const TROUBLESHOOTING_URL =
+  'https://pangular-inspector.dev/getting-started/troubleshooting/#no-devtools-server-found';
 
 /** True in the popup's own frame, where the host app would otherwise start a second overlay. */
 export function insideDevtoolsPanel(): boolean {
