@@ -1,0 +1,176 @@
+<div class="toolbar">
+  <app-search-field
+    #filterInput
+    placeholder="Filter by name or kind"
+    saveKey="signals"
+    [(value)]="filter"
+  />
+  @if (pageOptions().length > 1) {
+    <div class="picker page-picker">
+      <span class="label-key" id="signals-page-label">Page</span>
+      <app-select
+        labelledBy="signals-page-label"
+        [options]="pageOptions()"
+        [value]="shownPageId()"
+        (valueChange)="selectPage($event)"
+      />
+    </div>
+  }
+  @if (componentOptions().length) {
+    <div class="picker">
+      <span class="label-key" id="signals-component-label">Graph of</span>
+      <app-select
+        labelledBy="signals-component-label"
+        [options]="componentOptions()"
+        [value]="pickerValue()"
+        (valueChange)="pickComponent($event)"
+      />
+    </div>
+  }
+</div>
+<p class="sr-only" role="status">{{ announcement() }}</p>
+
+@if (graph()?.component; as comp) {
+  <p class="showing">
+    <span class="showing-name">{{ comp.name }}</span>
+    <span class="mono">{{ comp.path }}</span>
+    @if (graph()!.source) {
+      <span class="source-note">{{ sourceNote(graph()!.source!) }}</span>
+    }
+  </p>
+} @else if (graph()?.injector; as injector) {
+  <p class="showing">
+    <span class="showing-name">{{ injectorLabel(injector) }}</span>
+    <span class="source-note">environment injector</span>
+  </p>
+} @else if (graph()?.element; as element) {
+  <p class="showing">
+    <span class="showing-name">{{ element.directives.join(', ') || '<' + element.tag + '>' }}</span>
+    <span class="mono">&lt;{{ element.tag }}&gt;</span>
+    <span class="source-note">directives, no component</span>
+  </p>
+}
+@if (graph() && picked() && graph()!.source !== 'selected') {
+  <p class="fallback" role="status">
+    The picked component or injector is gone or has no signal graph, so this shows another one.
+  </p>
+}
+
+<p class="intro">
+  @if (graph()?.injector) {
+    The effects registered on this injector and the signals they read. A signal that no effect reads
+    is not part of the graph. Pick a kind to filter.
+  } @else if (graph()) {
+    The live signal graph of one component. Only signals that its template or an effect has read
+    appear here; a signal nothing has read yet is not part of the graph. Pick a kind to filter.
+  } @else if (!graphKnown()) {
+    Loading the live signal graph…
+  } @else {
+    Every signal, computed and effect found in your source. Pick a kind to filter.
+  }
+</p>
+@if (!graph()) {
+  <app-angular-unavailable
+    [page]="angularPage()"
+    capability="signalGraph"
+    [missing]="unsupported()"
+    compact
+  >
+    This list comes from a source scan.
+  </app-angular-unavailable>
+}
+@if (graph()?.writeHook === false) {
+  <p class="fallback" role="status">
+    The signal write hook did not load. Value history shows sampled values only, with no exact set
+    entries.
+  </p>
+}
+@if (graph()?.nodeCount; as total) {
+  <p class="fallback" role="status">
+    Showing {{ graph()!.nodes.length }} of {{ total }} signals. The rest and their edges are left
+    out.
+  </p>
+}
+@if (kindChips().length) {
+  <div class="kinds" role="group" aria-label="Filter by kind">
+    <button
+      type="button"
+      class="kind-chip"
+      [class.active]="!kind()"
+      [attr.aria-pressed]="!kind()"
+      (click)="kind.set(null)"
+    >
+      All <span class="count">{{ kindTotal() }}</span>
+    </button>
+    @for (group of kindChips(); track group.kind) {
+      <button
+        type="button"
+        class="kind-chip"
+        [class.active]="kind() === group.kind"
+        [attr.aria-pressed]="kind() === group.kind"
+        (click)="kind.set(kind() === group.kind ? null : group.kind)"
+      >
+        <span class="dot" aria-hidden="true" [style.background]="kindColor(group.kind)"></span>
+        <span class="chip-text">{{ group.kind }}</span>
+        <span class="count">{{ group.count }}</span>
+      </button>
+    }
+  </div>
+}
+
+@if (!graph() && !sourceLoaded()) {
+  <div class="empty" role="status">
+    <span class="spinner" aria-hidden="true"></span>
+    <p class="empty-title">Scanning source for signals…</p>
+  </div>
+}
+
+@if (!graph() && sourceLoaded() && loadFailed()) {
+  <div class="empty" [class.compact]="sourceSignals().length > 0" role="alert">
+    <p class="empty-title">Couldn't load signals</p>
+    <p class="hint">
+      The devtools server did not answer. Check that it is still running, then retry.
+    </p>
+    <button type="button" class="reset" [attr.aria-disabled]="retrying() || null" (click)="retry()">
+      {{ retrying() ? 'Retrying…' : 'Retry' }}
+    </button>
+  </div>
+} @else if (!graph() && sourceLoaded() && sourceSignals().length === 0) {
+  <div class="empty">
+    <p class="empty-title">No signals found.</p>
+    <p class="hint">
+      No <code>signal()</code>, <code>computed()</code> or <code>effect()</code> calls were found in
+      your source. To see the live graph, run Angular 20.1 or later with the overlay connected and
+      select a component.
+    </p>
+  </div>
+}
+
+@if (!graph() && sourceSignals().length > 0) {
+  <p class="source-label">Signals from the source scan:</p>
+  <div class="nodes" appSourceSignals></div>
+}
+
+@if (graph() && (visibleNodes().length || frameworkCount())) {
+  <section
+    appSignalGraphSection
+    class="graph-section"
+    aria-labelledby="signal-graph-heading"
+  ></section>
+}
+
+@if (watchedNodes().length || watchedElsewhere()) {
+  <section appWatchedSignals class="watched" aria-labelledby="signal-watched-heading"></section>
+}
+
+<p class="jump-note" role="status">{{ jumpNote() }}</p>
+
+@if (graph() && filteredResources().length) {
+  <h2 class="list-heading">Resources</h2>
+  <ul class="nodes resources" role="list" appResourceList></ul>
+}
+
+@if (graph() && (visibleNodes().length || !filteredResources().length)) {
+  <h2 class="list-heading">Signals</h2>
+  <ul class="nodes" role="list" appRovingList="button.node-card" appSignalList></ul>
+}

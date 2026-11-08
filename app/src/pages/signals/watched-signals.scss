@@ -1,0 +1,54 @@
+@use 'mixins' as m;
+@use 'signals' as sig;
+
+@include sig.states;
+@include sig.pre;
+@include sig.changed-badge;
+@include sig.scroll-box;
+@include sig.list-heading;
+@include sig.rel-label;
+@include sig.history;
+:host(.watched) {
+  margin-bottom: 16px;
+}
+@include sig.link-button;
+.watched-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.watched-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+}
+.watched-value {
+  @include m.truncate;
+  flex: 1 1 120px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sub-heading {
+  @include m.label;
+  margin: 12px 0 8px;
+}
+.watch-log {
+  max-height: 320px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+}
+.watch-log .history {
+  max-height: none;
+  overflow: visible;
+}
+@include sig.stack;

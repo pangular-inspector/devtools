@@ -1,0 +1,64 @@
+<div class="section-head">
+  <h2 id="signal-graph-heading" class="list-heading">Graph</h2>
+  <div class="section-actions">
+    @if (frameworkCount(); as hidden) {
+      <button
+        type="button"
+        class="toggle"
+        [attr.aria-pressed]="showFramework()"
+        (click)="showFramework.set(!showFramework())"
+      >
+        Show framework signals
+        <span class="count">{{ hidden }} {{ showFramework() ? 'shown' : 'hidden' }}</span>
+      </button>
+    }
+    <button type="button" class="toggle" [attr.aria-pressed]="stacksOn()" (click)="toggleStacks()">
+      Record write stacks
+    </button>
+    <button
+      type="button"
+      class="toggle"
+      aria-controls="signal-graph-body"
+      [attr.aria-expanded]="showGraph()"
+      (click)="showGraph.set(!showGraph())"
+    >
+      {{ showGraph() ? 'Hide graph' : 'Show graph' }}
+    </button>
+  </div>
+</div>
+@if (stacksOn()) {
+  <p class="hint graph-hint">
+    Write stacks are on for this page. Each set of a named signal keeps the first 3 app frames of
+    the code that wrote it, shown in its value history. Taking a stack slows every write, so turn it
+    off when you are done.
+  </p>
+}
+@if (showGraph()) {
+  <div id="signal-graph-body">
+    @if (graphNodes().length) {
+      <app-signal-graph-view
+        [nodes]="graphNodes()"
+        [links]="graphLinks()"
+        [selectedId]="selectedId()"
+        [watched]="watchedIds()"
+        [kindColor]="kindColorOf"
+        (selected)="selectFromGraph($event)"
+      />
+    } @else {
+      <p class="hint graph-hint">
+        Every signal in this graph was created by Angular. Show framework signals to see them.
+      </p>
+    }
+    @if (selectedNode(); as node) {
+      <p class="graph-selection">
+        <span>Selected</span>
+        <span class="rel-label">{{ node.label ?? '(unnamed)' }}</span>
+        <span class="sep" aria-hidden="true">·</span>
+        <span>{{ plural(getDependencies(node).length, 'producer') }}</span>
+        <span class="sep" aria-hidden="true">·</span>
+        <span>{{ plural(getConsumers(node).length, 'consumer') }}</span>
+        <button type="button" class="link-button" (click)="jumpTo(node)">Show details</button>
+      </p>
+    }
+  </div>
+}

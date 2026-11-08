@@ -231,6 +231,15 @@ const TOKEN_ONLY_PAGES = [
   'route-timeline.ts',
   'signal-graph-view.ts',
   'signal-inspector.ts',
+  'signals/resource-list.ts',
+  'signals/signal-detail-state.ts',
+  'signals/signal-detail.ts',
+  'signals/signal-graph-section.ts',
+  'signals/signal-list.ts',
+  'signals/signal-model.ts',
+  'signals/signal-state.ts',
+  'signals/source-signals.ts',
+  'signals/watched-signals.ts',
 ];
 
 describe('pages that use theme tokens only', () => {
