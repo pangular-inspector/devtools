@@ -201,8 +201,7 @@ export class PipesState {
       // Start on this panel's page (or the latest page); stop every page that records.
       const request = on ? { pageId: this.livePageId() ?? undefined, on } : { on };
       result = (await client.scope('pangular').rpc.call('request-instrument-pipes', request)) as
-        | { pages?: number }
-        | undefined;
+        { pages?: number } | undefined;
     } catch {
       this.settleRecord("Couldn't reach the devtools server. Try again.");
       return;
