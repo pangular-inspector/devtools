@@ -137,6 +137,19 @@ describe('the network live controls', () => {
     );
   });
 
+  it('shows the cleared timeline when Clear timeline runs while paused', async () => {
+    const inspector = await mount();
+    pause().click();
+    await settle();
+    expect(order()).toEqual(['a', 'b', 'c']);
+
+    inspector.serverCalls.set([]);
+    await inspector.clearCalls();
+    await settle();
+    expect(order()).toEqual([]);
+    expect(pause().getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('keeps the newest call in view while Follow newest is on, and remembers the choice', async () => {
     const inspector = await mount();
     const wrap = host().querySelector<HTMLElement>('.table-wrap')!;

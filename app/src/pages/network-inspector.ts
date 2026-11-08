@@ -2892,6 +2892,8 @@ export class NetworkInspector {
   async clearCalls() {
     try {
       await call(this.rpc(), 'clear-http-calls');
+      // A paused feed holds the old calls, so show the cleared list.
+      this.callFeed.resume();
       this.selectedCallId.set(null);
       this.message.set('Timeline cleared.');
     } catch {
