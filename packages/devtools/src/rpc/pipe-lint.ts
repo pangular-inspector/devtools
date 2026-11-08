@@ -62,7 +62,8 @@ export function lintPipes(
         declared.push([scope.pipeName, !/\bpure\s*:\s*false\b/.test(scope.decoratorArgs ?? '')]);
       }
     }
-    const templates = templatesIn(file.content, file.relPath, file.full, cwd);
+    const missing: string[] = [];
+    const templates = templatesIn(file.content, file.relPath, file.full, cwd, missing);
     const signals = templates.length ? fieldsMatching(SIGNAL_FIELD, code) : new Set<string>();
     const own: PipeLintFinding[] = [];
     for (const template of templates) {
@@ -72,7 +73,7 @@ export function lintPipes(
     own.push(...signalInPurePipeFindings(file.content, file.relPath));
     return {
       value: { declared, templates, own },
-      deps: templateDeps(templates, file.relPath, cwd),
+      deps: templateDeps(templates, file.relPath, cwd, missing),
     };
   });
 

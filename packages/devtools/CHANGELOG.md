@@ -314,6 +314,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `record-change-detection` with `record: "start"` passes on why a page that answered could not record, from its capability report: the Angular version it runs, or a profiler hook the recording could not attach to yet. It no longer waits out the 3 seconds and blames the Angular version (#366).
 - `explain-ssr-request` names a hydration mismatch as a component only when the page read its class, and as an element (`<app-card>`) or text node (`#text`) otherwise (#366).
 - Redaction leaks found by a corpus of fake secrets run through every redaction path are closed: a secret pair after another word and a colon (`Error: password: "…"`), the key after `Authorization: ApiKey` in an Analog server body that is not JSON, secret pairs in the fragment or matrix params of an Analog server message, headers with a camelCase secret name such as `newPassword`, and tokens used as NgRx state keys.
+- The `pipe-usages` resource lists the connected page id in its size summary when only one page reports.
+- The pipe scan and the pipe lint run again when a missing `templateUrl` file appears, and when a template outside the folders the Vite watcher covers changes.
 
 ### Docs
 

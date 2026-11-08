@@ -2670,6 +2670,7 @@ const pangular = defineDevframe({
           text: liveResourceText(
             { source: scanPipes(ctx.cwd), ...live },
             'pangular:scan-pipes and pangular:explain-pipe',
+            [...pipePages.keys()],
           ),
         };
       },

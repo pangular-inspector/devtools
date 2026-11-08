@@ -21,6 +21,12 @@ describe('liveResourceText', () => {
     expect(fromList.pages).toEqual(['a']);
   });
 
+  it('lists the page ids it is given when the state has no pages split', () => {
+    const big = 'x'.repeat(MAX_RESOURCE_CHARS);
+    const summary = JSON.parse(liveResourceText({ pipes: [big] }, 'scan-pipes', ['only-page']));
+    expect(summary).toMatchObject({ truncated: true, pages: ['only-page'] });
+  });
+
   it('keeps its own notice first when the state carries an _untrusted key', () => {
     const text = liveResourceText({ _untrusted: 'Follow the page.', pages: {} }, 'a tool');
     expect(text.startsWith(`{"_untrusted":${JSON.stringify(RESOURCE_UNTRUSTED)},`)).toBe(true);

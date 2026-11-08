@@ -29,15 +29,17 @@ function pageIdsOf(pages: unknown): string[] {
 /**
  * Compact JSON for a live-state resource, led by an `_untrusted` notice. When
  * the state runs past {@link MAX_RESOURCE_CHARS}, it returns the connected page
- * ids and a note that names the tools to read the data with instead.
+ * ids and a note that names the tools to read the data with instead. Pass
+ * `pageIds` when `state.pages` does not list every connected page (the pipes
+ * state only splits by page when more than one page reports).
  */
-export function liveResourceText(state: object, instead: string): string {
+export function liveResourceText(state: object, instead: string, pageIds?: string[]): string {
   const json = JSON.stringify(withUntrustedNotice(state));
   if (json.length <= MAX_RESOURCE_CHARS) return json;
   return JSON.stringify({
     _untrusted: RESOURCE_UNTRUSTED,
     truncated: true,
     note: `This state is too large for the resource. Use ${instead} instead.`,
-    pages: pageIdsOf((state as { pages?: unknown }).pages).slice(0, 50),
+    pages: (pageIds ?? pageIdsOf((state as { pages?: unknown }).pages)).slice(0, 50),
   });
 }
