@@ -79,6 +79,7 @@ import {
   inPopup,
   isMacPlatform,
   popoutOpener,
+  postToOpener,
   returnFromPopout,
   storePassive,
   storePill,
@@ -1276,7 +1277,7 @@ export class App implements OnInit, OnDestroy {
     // The popup only hears the pill choice from the panel, so the restored one goes out on connect.
     effect(() => {
       if (!this.connected()) return;
-      untracked(() => this.postToPopup({ type: 'pangular:popup-pill', pill: this.pill() }));
+      untracked(() => this.sendPill(this.pill()));
     });
     // Opening a dock clears the count of unseen messages on it.
     effect(() => {
@@ -1667,7 +1668,14 @@ export class App implements OnInit, OnDestroy {
   setPill(pill: boolean) {
     this.pill.set(pill);
     storePill(pill);
-    this.postToPopup({ type: 'pangular:popup-pill', pill });
+    this.sendPill(pill);
+  }
+
+  /** Sends the counts launcher setting to the popup, in the page around the panel or, from a popped-out panel, in the page that opened it. */
+  private sendPill(pill: boolean) {
+    const message = { type: 'pangular:popup-pill', pill };
+    this.postToPopup(message);
+    postToOpener(message);
   }
 
   /** Sends a message to the popup on the app's page, which checks it came from its panel. */

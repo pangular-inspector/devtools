@@ -962,6 +962,32 @@ describe.sequential('devtools popup', () => {
       expect(win.close).toHaveBeenCalled();
     });
 
+    it('takes the counts launcher setting from that window only', async () => {
+      const win = fakeWindow();
+      vi.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+      await loadPopup(true);
+      await openedSrc();
+      popoutButton().click();
+      const { panel, fab } = parts();
+      await vi.waitFor(() => expect(panel.classList.contains('open')).toBe(false));
+      const send = (source: unknown, origin = location.origin) =>
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { type: 'pangular:popup-pill', pill: true },
+            source: source as Window,
+            origin,
+          }),
+        );
+      send(win, 'https://evil.test');
+      send(fakeWindow());
+      expect(fab.classList.contains('pill')).toBe(false);
+      send(win);
+      expect(fab.classList.contains('pill')).toBe(true);
+      expect(stored().pill).toBe(true);
+      // The window keeps the panel; only the setting changed.
+      expect(panel.classList.contains('open')).toBe(false);
+    });
+
     it('notices the window was closed by hand', async () => {
       vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
       try {

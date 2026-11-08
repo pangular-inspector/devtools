@@ -326,6 +326,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - A component report whose `detail.selector` is not text no longer passes it on to the agent tools; the server leaves it out.
 - `load-defer-block` quotes the error when change detection throws while the loaded block renders, instead of reporting a clean load.
 - A Nitro task run that fails on the **Analog** tab keeps its confirm panel and payload open, so it can be fixed and run again.
+- Turning **Counts launcher** on or off in a popped-out panel changes the launcher on the app page that opened it. The popup takes the change only from the window it popped the panel out into.
 
 ### Docs
 

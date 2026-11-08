@@ -1454,7 +1454,16 @@ export function createDevtoolsPopup(options: { src?: string; hotkey?: string | f
     return null;
   };
   const onOutsideMessage = (e: MessageEvent) => {
-    const type = (e.data as { type?: unknown } | null)?.type;
+    const msg = e.data as { type?: unknown; pill?: unknown } | null;
+    const type = msg?.type;
+    if (type === 'pangular:popup-pill') {
+      // The counts launcher setting, changed in the panel's own window.
+      if (typeof msg?.pill !== 'boolean' || !fromOutside(e)) return;
+      state.pill = msg.pill || undefined;
+      saveState(state);
+      applyPill();
+      return;
+    }
     if (type !== 'pangular:popup-return') return;
     const win = fromOutside(e);
     if (!win) return;
