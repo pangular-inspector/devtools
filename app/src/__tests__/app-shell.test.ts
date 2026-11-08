@@ -404,6 +404,22 @@ describe('App scroll memory while content loads', () => {
   });
 });
 
+describe('App connection error', () => {
+  it('links to the troubleshooting docs when it cannot reach the server', async () => {
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+    fixture.componentInstance.connectionFailed.set(true);
+    await settle(fixture);
+    const link = host(fixture).querySelector<HTMLAnchorElement>('.connection-error a')!;
+    expect(link.getAttribute('href')).toBe(
+      'https://pangular-inspector.dev/getting-started/troubleshooting/#the-panel-says-disconnected',
+    );
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    fixture.destroy();
+  });
+});
+
 describe('App counts launcher setting', () => {
   it('sends the stored counts launcher to the popup once the panel connects', async () => {
     localStorage.setItem('pangular-pref:pill', 'true');

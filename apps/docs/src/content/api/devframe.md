@@ -11,6 +11,8 @@ description: 'Every symbol the @pangular-inspector/devtools/devframe entry point
 
 Import from `@pangular-inspector/devtools/devframe`. This page is generated from [`packages/devtools/src/entries/devframe.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/entries/devframe.ts) and the files it re-exports. Run `pnpm docs:api` after you change the public API.
 
+`@pangular-inspector/devtools` loads the same file and exports the same symbols.
+
 ## createPangular
 
 Function. Source: [`packages/devtools/src/devframe.ts`](https://github.com/pangular-inspector/devtools/blob/main/packages/devtools/src/devframe.ts).

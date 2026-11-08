@@ -99,8 +99,11 @@ function guardDependencies(value: unknown): DependencyInfo[] {
 export function guardComponentDetail(value: unknown): ComponentDetail | null {
   if (!isRecord(value)) return null;
   if (!str(value['id']) || !str(value['name']) || !str(value['tag'])) return null;
+  const { selector, ...rest } = value;
   return {
-    ...value,
+    ...rest,
+    // The agent tools match and print it as text; anything else is left out.
+    ...(str(selector) ? { selector } : {}),
     id: value['id'],
     name: value['name'],
     tag: value['tag'],

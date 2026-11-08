@@ -110,3 +110,31 @@ describe('pages use the shared state component', () => {
     for (const { file, tag } of states) expect(tag, file).toMatch(/\(clear\)=/);
   });
 });
+
+describe('pages with a keyboard list use the shared roving list', () => {
+  it('has no hand-written arrow key list handler left in a page', async () => {
+    // Trees, charts and the graph move in two dimensions and keep their own keys.
+    const handWritten = [...(await pageSources())]
+      .filter(([, source]) => /\['ArrowDown',\s*'ArrowUp',\s*'Home',\s*'End'\]/.test(source))
+      .map(([file]) => file);
+    expect(handWritten).toEqual([]);
+  });
+
+  it('puts appRovingList on the lists that moved to it', async () => {
+    const sources = await pageSources();
+    const lists = {
+      'capacitor-inspector.ts': '[data-cap-call]',
+      'pipes-inspector.ts': '[data-pipe-row]',
+      'network-inspector.ts': '',
+      'query-inspector.ts': '',
+      'signal-inspector.ts': '',
+      'store-inspector.ts': '',
+      'timeline.ts': '',
+    };
+    for (const [file, selector] of Object.entries(lists)) {
+      const source = sources.get(file) ?? '';
+      expect(source, file).toContain('appRovingList="');
+      if (selector) expect(source, file).toContain(`appRovingList="${selector}"`);
+    }
+  });
+});

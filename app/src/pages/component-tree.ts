@@ -833,7 +833,7 @@ function storedDirectiveHosts(): boolean {
                   [pageId]="page()?.pageId"
                   [component]="bareName(sel.name)"
                   [canShowPipes]="!staticReport()"
-                  (showPipe)="showPipe.emit($event)"
+                  (showPipe)="showPipe.emit({ name: $event, pageId: page()?.pageId })"
                 />
               }
             } @else {
@@ -1884,8 +1884,8 @@ export class ComponentTree {
   readonly canShowInjector = input(false);
   /** Whether the Pipes inspector is on, so the detail lists the template's pipes. */
   readonly canShowPipes = input(false);
-  /** Opens the Pipes tab on the pipe with this name. */
-  readonly showPipe = output<string>();
+  /** Opens the Pipes tab on the pipe with this name, for the page the tree shows. */
+  readonly showPipe = output<{ name: string; pageId?: string }>();
   readonly showInjector = output<InjectorFocus>();
   /** Whether the Signals tab is on, so "Show in Signals" can open it. */
   readonly canShowSignals = input(false);
@@ -2687,7 +2687,7 @@ export class ComponentTree {
 
   private say(message: string) {
     this.pickMessage.set(message);
-    this.announcement.set(message);
+    this.announce(message);
   }
 
   private sendSelection(id: string | null) {

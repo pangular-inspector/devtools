@@ -276,7 +276,7 @@ Makes one `@defer` block fetch its dependencies and show its main content now, a
 | `block`  | Yes      | A block id from [`defer-blocks`](#defer-blocks), such as `d3`.             |
 | `page`   | No       | The page id. Required when more than one tab reports a block with that id. |
 
-The page loads the block the way `DeferBlockFixture.render` does in Angular's testing package, then runs change detection with `ng.applyChanges`. When the dependencies fail to load, the block shows its `@error` block and the answer says so. A block without an `@error` block is left on its placeholder. The block's own triggers do not fire, so a load does not prove they work.
+The page loads the block the way `DeferBlockFixture.render` does in Angular's testing package, then runs change detection with `ng.applyChanges`. If change detection throws while the block renders, the answer quotes the error. When the dependencies fail to load, the block shows its `@error` block and the answer says so. A block without an `@error` block is left on its placeholder. The block's own triggers do not fire, so a load does not prove they work.
 
 It refuses, and loads nothing, when:
 
@@ -468,15 +468,15 @@ An [Angular Native](../getting-started/angular-native.md) or [NativeScript](../g
 
 The signal graph the page reported: nodes (`signal`, `computed`, `linkedSignal`, `effect`), dependency edges (`{ consumer, producer }`, where `consumer` reads `producer`, both node ids), the component or injector they belong to, and recent value history per node. Reads: page.
 
-| Argument    | Required | Value                                                                                                                                                                                                                                                                                                      |
-| ----------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `component` | one of   | Host tag, class name or instance id of the component, like `app-root`. Also accepts `root`, a route path like `/admin` or `Route: admin`, an element injector id like `inj-12` from `inspect-providers`, or a directive class name. A host that has directives but no component reads as a directive host. |
-| `selector`  | one of   | A CSS selector for a component host, like `app-card.featured`. The first match is read. At most 500 characters.                                                                                                                                                                                            |
-| `node`      | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history.                                                                                                                                               |
-| `history`   | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                                                                                                                                                                  |
-| `framework` | no       | `false` leaves out the nodes Angular itself created (`framework: true`). Defaults to `true`.                                                                                                                                                                                                               |
+| Argument    | Required | Value                                                                                                                                                                                                                                                                   |
+| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `component` | one of   | Host tag, class name or instance id of the component, like `app-root`. Also accepts `root`, a route path like `/admin` or `Route: admin`, an element injector id like `inj-12` from `inspect-providers`, or the instance id of a directive host from `list-components`. |
+| `selector`  | one of   | A CSS selector for a component host, like `app-card.featured`. The first match is read. At most 500 characters.                                                                                                                                                         |
+| `node`      | no       | A node id or label. The answer holds only that node, or every node with that label, with its direct producers and consumers and their resources and history.                                                                                                            |
+| `history`   | no       | `false` leaves out the value history. Defaults to `true`.                                                                                                                                                                                                               |
+| `framework` | no       | `false` leaves out the nodes Angular itself created (`framework: true`). Defaults to `true`.                                                                                                                                                                            |
 
-Pass `component` or `selector`, not both. When the graph the page last reported belongs to another component or injector, the tool asks the page for the one you named, once, and the Signals page keeps showing what it showed. A `component` the component tree knows is read by its first instance. A `component` it doesn't know answers with the graph the page reported and says what that graph covers. A `selector` that matches no component host is refused.
+Pass `component` or `selector`, not both. A directive class name matches only the directive host the page already reports a graph for. For another directive host, pass its id or its element injector id. A host that has directives but no component reads as a directive host. When the graph the page last reported belongs to another component or injector, the tool asks the page for the one you named, once, and the Signals page keeps showing what it showed. A `component` the component tree knows is read by its first instance. A `component` it doesn't know answers with the graph the page reported and says what that graph covers. A `selector` that matches no component host is refused.
 
 The answer also holds:
 
@@ -649,7 +649,7 @@ Why a state value changed. With `path`, the newest entries in the kept log (up t
 | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `path`   | without seq  | A state path as the diff writes it, from the state root (`cart.items`, `items[0].done`) or a signal store field (`filter`). **Copy path** in the state tree copies one. |
 | `seq`    | without path | An entry number, to explain that entry instead.                                                                                                                         |
-| `store`  | no           | Only entries of that store, by id or name. `store` is the `@ngrx/store` Store.                                                                                          |
+| `store`  | no           | Only entries of that store, by id or name. `store` is the `@ngrx/store` Store. With `seq`, an entry of another store is not explained, and the answer names its store.  |
 | `page`   | no           | The tab to read. Defaults to the newest page that reports NgRx.                                                                                                         |
 
 ### redux-inspect-stores
@@ -877,7 +877,7 @@ When a write goes through a native `<select>` (`mode: user`, the default for `fi
 `snapshot` keeps a copy of the form value, so it refuses a form whose value cannot be cloned, such as a control that holds a function. `inspect-forms` with `includeValues: false` also leaves out uncommitted input, model drift and metadata.
 
 <ngmd-callout type="warning" title="Some actions need confirm">
-  <code>reset</code>, <code>submit</code> and <code>restore</code> need <code>confirm: true</code>, and so does <code>fill-form</code> with <code>submit</code>. Disabled reactive fields need <code>force</code>.
+  <code>reset</code>, <code>submit</code> and <code>restore</code> need <code>confirm: true</code>, and so do <code>fill-form</code> with <code>submit</code> and <code>try-webmcp</code>. Disabled reactive fields need <code>force</code>.
 </ngmd-callout>
 
 ## Pipes

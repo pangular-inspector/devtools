@@ -145,16 +145,16 @@ Form bugs and model-aware accessibility checks, each with a fix. For generic acc
 
 The accessibility checks compare the form model with the element each field binds:
 
-| Rule                            | Severity | What it finds                                                                                                         |
-| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
-| `missing-label`                 | warning  | An input with no accessible name.                                                                                     |
-| `aria-invalid-desync`           | warning  | `aria-invalid` that disagrees with the field state.                                                                   |
-| `required-not-exposed`          | warning  | A field the model requires whose element has no `required` or `aria-required`.                                        |
-| `error-not-shown`               | info     | An invalid, touched field with no visible error text near it.                                                         |
-| `error-not-described`           | info     | Visible error text that `aria-describedby` or `aria-errormessage` does not link to the input.                         |
-| `missing-autocomplete`          | info     | An input whose type or name says it collects personal data, such as `email` or `postal-code`, with no `autocomplete`. |
-| `submit-disabled-while-invalid` | info     | Every submit button disabled while the form is invalid.                                                               |
-| `no-focus-on-invalid-submit`    | info     | Focus that stayed put after an invalid submit.                                                                        |
+| Rule                            | Severity | What it finds                                                                                                                                                                                                                   |
+| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `missing-label`                 | warning  | An input with no accessible name.                                                                                                                                                                                               |
+| `aria-invalid-desync`           | warning  | `aria-invalid` that disagrees with the field state.                                                                                                                                                                             |
+| `required-not-exposed`          | warning  | A field the model requires whose element has no `required` or `aria-required`.                                                                                                                                                  |
+| `error-not-shown`               | info     | An invalid, touched field with no visible error text near it.                                                                                                                                                                   |
+| `error-not-described`           | info     | Visible error text that `aria-describedby` or `aria-errormessage` does not link to the input.                                                                                                                                   |
+| `missing-autocomplete`          | info     | An input whose type or name says it collects personal data, such as `email` or `postal-code`, with no `autocomplete`. `autocomplete="off"` suppresses the finding. Use it on a field that does not collect the user's own data. |
+| `submit-disabled-while-invalid` | info     | Every submit button disabled while the form is invalid.                                                                                                                                                                         |
+| `no-focus-on-invalid-submit`    | info     | Focus that stayed put after an invalid submit.                                                                                                                                                                                  |
 
 Turn a rule off with [`lint.rules`](../getting-started/configuration.md#lint-rules), such as `lint: { rules: { 'missing-autocomplete': false } }`.
 

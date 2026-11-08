@@ -47,7 +47,7 @@ Every template that uses the pipe, with file and line, for your own pipes and th
 
 The number of instances and the components that use them. Click, hover or focus a component chip to highlight it. With recording on, this block adds the call count, the time spent in `transform` (total, average and slowest call), the errors it threw with the last message, the last input and output, and the last caller. When several instances were called, **Per instance** lists each one with its component, values, call count, time and caller. Click a component there to highlight it. The list is capped and says how many instances there are when it has more. A churning pipe gets a note above the block that says what to change.
 
-When several tabs report pipes, the panel of a tab shows that tab's pipes and `| async` rows only. Without a tab of its own, the panel shows every tab together.
+When several tabs report pipes, the panel of a tab shows that tab's pipes and `| async` rows only. When the panel has no tab of its own, it shows the pipes from every tab together. A pipe opened from the **Components** tab shows the page that tab had selected.
 
 ### Churning pipes
 
@@ -103,7 +103,11 @@ Live discovery walks the rendered views with `ng.getComponent` and related debug
 
 ### Recording
 
-Click **Record calls** to count and time calls, count the calls that throw, and keep the last input and output of each pipe. A `transform` that throws still throws in your app. Recording patches each pipe's `transform` in one tab: the page the panel belongs to, or the page that reported last when the panel runs on its own. Other open tabs stay unpatched. It covers the pipes found on the page, and every pipe class the rendered templates can use, so a pipe in an `@if` branch that renders later is counted from its first call. A pipe class that only a newly added view brings, such as one in a lazy route you open, is patched as soon as the page sees the view, so only the calls made while that view first renders can be missed. **Stop recording** stops every tab that records. Click **Stop recording** when you are done.
+Click **Record calls** to count and time calls, count the calls that throw, and keep the last input and output of each pipe. A `transform` that throws still throws in your app. Recording patches each pipe's `transform` in one tab: the page the **Pipes** tab shows, the page the panel belongs to, or the page that reported last when the panel runs on its own. Other open tabs stay unpatched.
+
+Recording covers the pipes found on the page, and every pipe class the rendered templates can use, so a pipe in an `@if` branch that renders later is counted from its first call. A pipe class that only a newly added view brings, such as one in a lazy route you open, is patched as soon as the page sees the view, so only the calls made while that view first renders can be missed.
+
+Click **Stop recording** when you are done. It stops every tab that records.
 
 Each recording starts from zero, so a second recording measures one interaction on its own. The button switches to **Stop recording** once a page confirms that it is recording. If no page is connected, the tab says so and stays on **Record calls**.
 

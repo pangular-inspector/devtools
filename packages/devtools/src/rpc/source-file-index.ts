@@ -61,6 +61,14 @@ function watcherCovers(roots: readonly string[]): boolean {
   });
 }
 
+/** Whether every file the kept results were read from besides their own still has the same stats. */
+function depsUnchanged(scan: Scan<unknown>): boolean {
+  for (const entry of scan.files.values()) {
+    if (!entry.deps.every((dep) => statKey(dep.path) === dep.key)) return false;
+  }
+  return true;
+}
+
 /**
  * Every `.ts` source file (not `.spec.ts`) under the workspace's source roots,
  * parsed by `parse`, in walk order. `kind` names the parse, so two scans with
@@ -81,7 +89,10 @@ export function scanSourceFiles<T>(
   const roots = sourceRoots(cwd);
   const shared = viteWatchVersion();
   const covered = watcherCovers(roots);
-  if (covered && scan.last && scan.version === shared.version) return scan.last;
+  // A template can sit outside what the watcher sees, so its deps are still checked.
+  if (covered && scan.last && scan.version === shared.version && depsUnchanged(scan)) {
+    return scan.last;
+  }
   const version = shared.version;
 
   const out: T[] = [];

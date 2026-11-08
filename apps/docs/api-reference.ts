@@ -1,6 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {join, posix} from 'node:path';
 import {Node, Project, ts, type JSDoc} from 'ts-morph';
+import {DEBUG_API_PAGE, renderDebugApiCompat} from './debug-api-compat.ts';
 
 /**
  * Builds the API reference pages in `src/content/api/` from the public entry
@@ -47,6 +48,8 @@ export interface ApiEntry {
   slug: string;
   source: string;
   symbols: ApiSymbol[];
+  /** Other import paths that load the same file, such as the package root. */
+  aliases?: string[];
 }
 
 function kindOf(node: Node): Kind | null {
@@ -111,10 +114,13 @@ export function readApiEntries(repoRoot: string): ApiEntry[] {
     skipAddingFilesFromTsConfig: true,
   });
   const entries: ApiEntry[] = [];
+  const targetOf = (target: string | {default?: string; import?: string}) =>
+    typeof target === 'string' ? target : (target.import ?? target.default);
+  const root = pkg.exports['.'];
   for (const [key, target] of Object.entries(pkg.exports)) {
     // `./internal/*` entries serve the panel and the extension, not apps.
     if (SKIPPED_EXPORTS.has(key) || key.startsWith('./internal/')) continue;
-    const rel = typeof target === 'string' ? target : (target.import ?? target.default);
+    const rel = targetOf(target);
     if (!rel?.endsWith('.ts')) continue;
     const sourceFile = project.addSourceFileAtPath(join(pkgDir, rel));
     const symbols: ApiSymbol[] = [];
@@ -148,6 +154,7 @@ export function readApiEntries(repoRoot: string): ApiEntry[] {
       slug,
       source: posix.join('packages/devtools', rel.replace(/^\.\//, '')),
       symbols,
+      ...(root && targetOf(root) === rel ? {aliases: [pkg.name]} : {}),
     });
   }
   return entries;
@@ -185,6 +192,12 @@ export function renderApiPage(entry: ApiEntry, githubUrl: string): string {
     '',
     `Import from \`${entry.specifier}\`. This page is generated from [\`${entry.source}\`](${githubUrl}/blob/main/${entry.source}) and the files it re-exports. Run \`pnpm docs:api\` after you change the public API.`,
     '',
+    ...(entry.aliases?.length
+      ? [
+          `${entry.aliases.map((alias) => `\`${alias}\``).join(', ')} loads the same file and exports the same symbols.`,
+          '',
+        ]
+      : []),
   ];
   if (!entry.symbols.length) {
     out.push('This entry point exports no symbols. Importing it runs its side effect.', '');
@@ -217,7 +230,7 @@ function escapeEnv(text: string): string {
 export function renderApiIndex(entries: ApiEntry[]): string {
   const rows = entries.map(
     (entry) =>
-      `| [\`${entry.specifier}\`](./${entry.slug}.md) | ${entry.symbols.length ? entry.symbols.map((s) => `\`${s.name}\``).join(', ') : 'None, it runs on import'} |`,
+      `| [\`${entry.specifier}\`](./${entry.slug}.md)${entry.aliases?.length ? ` (also ${entry.aliases.map((alias) => `\`${alias}\``).join(', ')})` : ''} | ${entry.symbols.length ? entry.symbols.map((s) => `\`${s.name}\``).join(', ') : 'None, it runs on import'} |`,
   );
   return [
     '---',
@@ -231,7 +244,7 @@ export function renderApiIndex(entries: ApiEntry[]): string {
     '',
     '# API reference',
     '',
-    'Each entry point of `@pangular-inspector/devtools` has a page with every symbol it exports, its declaration and its JSDoc. The pages are generated from the package source, so names and types match the published code. [Installation](../getting-started/installation.md#entry-points) says what each entry point is for, and [Configuration](../getting-started/configuration.md) explains the options.',
+    'Each entry point of `@pangular-inspector/devtools` has a page with every symbol it exports, its declaration and its JSDoc. The pages are generated from the package source, so names and types match the published code. [Installation](../getting-started/installation.md#entry-points) says what each entry point is for, and [Configuration](../getting-started/configuration.md) explains the options. [Angular debug API](./angular-debug-api.md) lists the `window.ng` functions the overlay reads and the Angular version each one needs.',
     '',
     '| Entry point | Exports |',
     '| ----------- | ------- |',
@@ -245,5 +258,6 @@ export function renderApiReference(repoRoot: string, githubUrl: string): Map<str
   const entries = readApiEntries(repoRoot);
   const pages = new Map<string, string>([['index.md', renderApiIndex(entries)]]);
   for (const entry of entries) pages.set(`${entry.slug}.md`, renderApiPage(entry, githubUrl));
+  pages.set(DEBUG_API_PAGE, renderDebugApiCompat(repoRoot, githubUrl));
   return pages;
 }

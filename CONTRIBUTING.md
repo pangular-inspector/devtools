@@ -29,7 +29,7 @@ By taking part you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). Report 
 - **A new tab, RPC function or agent tool:** follow the steps in [Development setup](./apps/docs/src/content/contributing/development.md). Describe what an agent tool returns and when it is empty, and add tests.
 - **UI changes:** follow the [UI guidelines](docs/contributing/ui-guidelines.md). Use the theme variables, the SCSS mixins and the shared dropdown.
 - **Docs changes:** follow the [writing guide](./apps/docs/src/content/contributing/writing-docs.md). Run the docs site with `pnpm docs:dev`.
-- **Keep the docs in step with the code:** when a pull request changes behaviour, an option, a UI label or an agent tool, update the matching page in `apps/docs` in the same pull request. If no docs change is needed, add the `no-docs` label and say why in the description. The Docs check workflow warns when code changes without docs.
+- **Keep the docs in step with the code:** when a pull request changes behaviour, an option, a UI label or an agent tool, update the matching page in `apps/docs` in the same pull request. If no docs change is needed, add the `no-docs` label and say why in the description. The Docs check workflow fails when code changes without docs.
 
 ## Open an issue
 

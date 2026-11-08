@@ -12,7 +12,7 @@
     "eslint(no-setter-return)": 1
   },
   "app/src/app.ts": {
-    "pangular(max-lines)": 1999
+    "pangular(max-lines)": 1980
   },
   "app/src/pages/analog-inspector.ts": {
     "pangular(max-lines)": 2743
@@ -24,10 +24,10 @@
     "pangular(max-lines)": 2742
   },
   "app/src/pages/pipes-inspector.ts": {
-    "pangular(max-lines)": 1612
+    "pangular(max-lines)": 1606
   },
   "app/src/pages/signal-inspector.ts": {
-    "pangular(max-lines)": 2547
+    "pangular(max-lines)": 2514
   },
   "app/src/pages/store-inspector.ts": {
     "pangular(max-lines)": 2870
@@ -232,7 +232,7 @@
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/devframe.ts": {
-    "pangular(max-lines)": 3238,
+    "pangular(max-lines)": 3236,
     "unicorn(no-useless-spread)": 1
   },
   "packages/devtools/src/dom-diff.ts": {
@@ -280,7 +280,7 @@
     "unicorn(no-useless-spread)": 2
   },
   "packages/devtools/src/ngrx-collector.ts": {
-    "pangular(max-lines)": 1958,
+    "pangular(max-lines)": 1954,
     "typescript(no-explicit-any)": 1,
     "unicorn(no-useless-fallback-in-spread)": 1,
     "unicorn(no-useless-spread)": 3

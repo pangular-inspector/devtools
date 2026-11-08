@@ -10,8 +10,9 @@ const SELECTED =
 /**
  * Makes a long list one Tab stop. Only the current item is in the Tab order,
  * and ArrowUp, ArrowDown, Home and End move focus between the items that
- * `appRovingList` selects. The current item is the one last focused, or else
- * the selected one, or else the first.
+ * `appRovingList` selects. The current item is the one last focused or
+ * selected, or else the first. A click selects without focusing in some
+ * browsers (Safari), so an item that becomes selected becomes current too.
  */
 @Directive({
   selector: '[appRovingList]',
@@ -35,15 +36,36 @@ export class RovingList {
   private current: HTMLElement | null = null;
   /** Whether focus is in the list, kept when the focused item is removed rather than left. */
   private focusInside = false;
+  /** The items that were selected when the list last synced, to tell a newly selected one. */
+  private readonly wasSelected = new WeakSet<HTMLElement>();
 
   constructor() {
     const destroyRef = inject(DestroyRef);
     afterNextRender(() => {
       this.sync();
       if (typeof MutationObserver === 'undefined') return;
-      // Rows come and go as data arrives; only added or removed nodes matter.
-      const observer = new MutationObserver(() => this.sync());
-      observer.observe(this.host, { childList: true, subtree: true });
+      // Rows come and go as data arrives, and the selection moves between them.
+      const observer = new MutationObserver((records) => {
+        for (const record of records) {
+          const target = record.target as HTMLElement;
+          // Only a row that becomes selected takes the stop; another class change on it doesn't.
+          if (
+            record.type === 'attributes' &&
+            this.isItem(target) &&
+            target.matches(SELECTED) &&
+            !this.wasSelected.has(target)
+          ) {
+            this.current = target;
+          }
+        }
+        this.sync();
+      });
+      observer.observe(this.host, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['aria-pressed', 'aria-expanded', 'aria-current', 'class'],
+      });
       destroyRef.onDestroy(() => observer.disconnect());
     });
   }
@@ -73,6 +95,8 @@ export class RovingList {
       this.current = items.find((item) => item.matches(SELECTED)) ?? items[0] ?? null;
     }
     for (const item of items) {
+      if (item.matches(SELECTED)) this.wasSelected.add(item);
+      else this.wasSelected.delete(item);
       const tabIndex = item === this.current ? '0' : '-1';
       if (item.getAttribute('tabindex') !== tabIndex) item.setAttribute('tabindex', tabIndex);
     }

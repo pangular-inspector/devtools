@@ -27,6 +27,7 @@ import { PipesInspector } from './pages/pipes-inspector';
 import type { Tab, Tabs } from './types/tab.types';
 import type { ComponentFocus } from './types/component-focus.types';
 import type { InjectorFocus } from './types/injector-focus.types';
+import type { PipeFocus } from './types/pipe-focus.types';
 import type { SignalFocus } from './types/signal-focus.types';
 import { AnalogInspector } from './pages/analog-inspector';
 import { NetworkInspector } from './pages/network-inspector';
@@ -51,6 +52,7 @@ import { initialTab, storeTab, storedTab } from './tab-memory';
 import { detectBaseURL } from './base-url';
 import { panelAuth } from './auth-token';
 import { AuthCode } from './ui/auth-code';
+import { ConnectionError } from './ui/connection-error';
 import { clearHighlightsOnHide, forgetDevframeConnection, panelCacheOptions, rpcTry } from './rpc';
 import { EditorOpener } from './ui/source-link';
 import { ViewMemory, restoreScroll } from './view-memory';
@@ -78,6 +80,7 @@ import {
   inPopup,
   isMacPlatform,
   popoutOpener,
+  postToOpener,
   returnFromPopout,
   storePassive,
   storePill,
@@ -234,6 +237,7 @@ function readView(): View | null {
     Settings,
     CommandPalette,
     AuthCode,
+    ConnectionError,
   ],
   template: `
     <header>
@@ -509,13 +513,7 @@ function readView(): View | null {
       } @else if (pairing(); as client) {
         <app-auth-code [client]="client" />
       } @else if (connectionFailed()) {
-        <div class="connection-error" role="alert">
-          <p>
-            Can't reach the devtools server. Check that the dev server is running. The panel keeps
-            trying to connect.
-          </p>
-          <button type="button" (click)="retryConnection()">Retry now</button>
-        </div>
+        <app-connection-error (retry)="retryConnection()" />
       } @else if (!rpc()) {
         <p class="turned-off" role="status">Connecting to the devtools server…</p>
       } @else if (comingSoon(); as info) {
@@ -599,6 +597,7 @@ function readView(): View | null {
               <app-pipes-inspector
                 [rpc]="rpc()"
                 [focus]="pipeFocus()"
+                [pageId]="pipePage()"
                 (focusHandled)="pipeFocus.set(null)"
               />
             }
@@ -1023,38 +1022,6 @@ function readView(): View | null {
     .turned-off code {
       font-family: var(--font-mono);
     }
-    .connection-error {
-      max-width: 60ch;
-      margin: 0;
-      padding: 12px 14px;
-      border: 1px solid color-mix(in srgb, var(--danger) 36%, transparent);
-      border-radius: var(--radius);
-      background: var(--surface);
-      color: var(--text);
-      p {
-        margin: 0 0 10px;
-      }
-      button {
-        display: inline-flex;
-        align-items: center;
-        height: var(--control-h);
-        padding: 0 14px;
-        border: 1px solid var(--control-border);
-        border-radius: var(--radius-sm);
-        background: var(--surface-2);
-        color: var(--text);
-        font: inherit;
-        font-weight: 500;
-        cursor: pointer;
-        &:hover {
-          background: var(--surface-3);
-          border-color: var(--accent-line);
-        }
-        &:focus-visible {
-          @include m.focus-ring;
-        }
-      }
-    }
     @media (max-width: 720px) {
       header {
         flex-wrap: wrap;
@@ -1274,7 +1241,7 @@ export class App implements OnInit, OnDestroy {
     // The popup only hears the pill choice from the panel, so the restored one goes out on connect.
     effect(() => {
       if (!this.connected()) return;
-      untracked(() => this.postToPopup({ type: 'pangular:popup-pill', pill: this.pill() }));
+      untracked(() => this.sendPill(this.pill()));
     });
     // Opening a dock clears the count of unseen messages on it.
     effect(() => {
@@ -1665,7 +1632,14 @@ export class App implements OnInit, OnDestroy {
   setPill(pill: boolean) {
     this.pill.set(pill);
     storePill(pill);
-    this.postToPopup({ type: 'pangular:popup-pill', pill });
+    this.sendPill(pill);
+  }
+
+  /** Sends the counts launcher setting to the popup, in the page around the panel or, from a popped-out panel, in the page that opened it. */
+  private sendPill(pill: boolean) {
+    const message = { type: 'pangular:popup-pill', pill };
+    this.postToPopup(message);
+    postToOpener(message);
   }
 
   /** Sends a message to the popup on the app's page, which checks it came from its panel. */
@@ -1779,11 +1753,18 @@ export class App implements OnInit, OnDestroy {
     computation: () => null,
   });
 
-  showPipe(name: string) {
+  // The page a link into the Pipes tab asked for; kept after the focus is handled.
+  readonly pipePage = linkedSignal<Tab, string | null>({
+    source: this.tab,
+    computation: () => null,
+  });
+
+  showPipe(focus: PipeFocus) {
     if (!this.config().inspectors.pipes) return;
     // Switch first: the focus belongs to the tab, so the switch would clear it.
     this.switchTab('pipes');
-    this.pipeFocus.set(name);
+    this.pipeFocus.set(focus.name);
+    this.pipePage.set(focus.pageId ?? null);
   }
 
   showForm(formId: string) {

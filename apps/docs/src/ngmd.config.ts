@@ -271,6 +271,7 @@ const config: NgmdConfig = {
       label: 'API reference',
       items: [
         {label: 'API reference', href: '/api', status: 'new', until: '1.2.0'},
+        {label: 'Angular debug API', href: '/api/angular-debug-api'},
         {label: 'devframe', href: '/api/devframe'},
         {label: 'config', href: '/api/config'},
         {label: 'cd-data', href: '/api/cd-data'},

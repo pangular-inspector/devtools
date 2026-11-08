@@ -3,8 +3,8 @@ import type { DevframeRpcClient } from 'devframe/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SignalInspector } from '../pages/signal-inspector';
 
-const graphOf = (componentId: string) => ({
-  pageId: 'p1',
+const graphOf = (componentId: string, pageId = 'p1') => ({
+  pageId,
   component: { id: componentId, name: 'Cart', tag: 'app-cart', path: 'app-cart' },
   nodes: [
     {
@@ -77,5 +77,37 @@ describe('SignalInspector focus', () => {
     push({ graph: graphOf('c1'), pages: { p1: graphOf('c1') } });
     await settle(fixture);
     expect(fixture.componentInstance.selectedId()).toBe('1');
+  });
+
+  it('forgets the focused signal when another component is picked', async () => {
+    const fixture = TestBed.createComponent(SignalInspector);
+    const { client, push } = fakeClient();
+    fixture.componentRef.setInput('rpc', client);
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+
+    fixture.componentRef.setInput('focus', { componentId: 'c1', pageId: 'p1', key: 'count' });
+    await settle(fixture);
+    fixture.componentInstance.pickComponent('c2');
+    push({ graph: graphOf('c1'), pages: { p1: graphOf('c1') } });
+    await settle(fixture);
+    expect(fixture.componentInstance.selectedId()).toBeNull();
+  });
+
+  it('shows the page a focus names once that page reports its graph', async () => {
+    const fixture = TestBed.createComponent(SignalInspector);
+    const { client, push } = fakeClient();
+    fixture.componentRef.setInput('rpc', client);
+    document.body.append(fixture.nativeElement);
+    await settle(fixture);
+
+    fixture.componentRef.setInput('focus', { componentId: 'c5', pageId: 'p2' });
+    await settle(fixture);
+    expect(fixture.componentInstance.shownPageId()).toBe('p1');
+
+    // p1 reports last, but the focus asked for p2.
+    push({ graph: graphOf('c0'), pages: { p1: graphOf('c0'), p2: graphOf('c5', 'p2') } });
+    await settle(fixture);
+    expect(fixture.componentInstance.shownPageId()).toBe('p2');
   });
 });

@@ -76,7 +76,8 @@ export function stateRows(
   const changed = options.changed ?? [];
   const rows: StateRow[] = [];
   let matches = 0;
-  const walk = (val: unknown, path: string, key: string, depth: number): StateRow[] => {
+  // Pushes the row and its shown children into `rows`; a closed node's children are not walked.
+  const walk = (val: unknown, path: string, key: string, depth: number): void => {
     const node = isNode(val);
     const isChanged = changed.some((c) => c === path || inside(c, path));
     const holdsChange = changed.some((c) => inside(path, c));
@@ -85,23 +86,23 @@ export function stateRows(
       !!query &&
       (key.toLowerCase().includes(query) || (!node && text.toLowerCase().includes(query)));
     if (own) matches++;
-    const children: StateRow[] = [];
-    if (node)
-      for (const [k, v] of entriesOf(val))
-        children.push(...walk(v, childPath(path, k), String(k), depth + 1));
-    if (query && !own && !children.length) return [];
     const open = node
       ? query
         ? true
         : !options.closed?.has(path) && (depth < 1 || holdsChange || !!options.opened?.has(path))
       : false;
-    const row: StateRow = { path, key, depth, node, open, text, changed: isChanged, holdsChange };
-    return [row, ...(open ? children : [])];
+    const at = rows.length;
+    rows.push({ path, key, depth, node, open, text, changed: isChanged, holdsChange });
+    if (open && node) {
+      for (const [k, v] of entriesOf(val)) walk(v, childPath(path, k), String(k), depth + 1);
+    }
+    // With a query, a row shows only when it or a row inside it matches.
+    if (query && !own && rows.length === at + 1) rows.length = at;
   };
   if (isNode(value)) {
-    for (const [k, v] of entriesOf(value)) rows.push(...walk(v, childPath('', k), String(k), 0));
+    for (const [k, v] of entriesOf(value)) walk(v, childPath('', k), String(k), 0);
   } else if (value !== undefined) {
-    rows.push(...walk(value, '(root)', '(root)', 0));
+    walk(value, '(root)', '(root)', 0);
   }
   return { rows, matches };
 }

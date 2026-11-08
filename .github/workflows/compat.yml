@@ -102,3 +102,31 @@ jobs:
 
       - name: Test the page side
         run: pnpm exec vitest run --root packages/devtools --config vitest.compat.config.ts
+
+  vite:
+    name: Vite ${{ matrix.vite }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The `vite` peer range is `>=6`; the workspace installs the newest major.
+        vite: ['6', '7']
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Install Vite ${{ matrix.vite }}
+        env:
+          VITE_MAJOR: ${{ matrix.vite }}
+        # Only this job's copy of the workspace changes; the committed lockfile stays as it is.
+        run: |
+          printf "\noverrides:\n  vite: '^%s.0.0'\n" "$VITE_MAJOR" >> pnpm-workspace.yaml
+          pnpm install --no-frozen-lockfile
+          echo "- vite $(node -p "require('vite/package.json').version")" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Test the Vite plugin
+        run: pnpm exec vitest run --root packages/devtools src/__tests__/vite- src/__tests__/lan-address.test.ts

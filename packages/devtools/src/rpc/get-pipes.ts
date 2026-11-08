@@ -93,11 +93,12 @@ export function scanPipes(cwd: string): PipeInfo[] {
   const major = angularMajor(cwd);
   const files = scanSourceFiles(cwd, `pipes:${major ?? '?'}`, (file) => {
     const usages = new Map<string, UsageSite[]>();
-    const templates = templatesIn(file.content, file.relPath, file.full, cwd);
+    const missing: string[] = [];
+    const templates = templatesIn(file.content, file.relPath, file.full, cwd, missing);
     for (const t of templates) recordUsages(t.text, t.file, t.lineAt, t.baseOffset, usages);
     return {
       value: { pipes: pipesIn(file.content, file.relPath, major), usages: [...usages] },
-      deps: templateDeps(templates, file.relPath, cwd),
+      deps: templateDeps(templates, file.relPath, cwd, missing),
     };
   });
   // The kept results are shared between calls, so the answer is built from copies.
@@ -156,17 +157,22 @@ function pipesIn(content: string, relPath: string, major: number | undefined): P
   return pipes;
 }
 
-/** The `templateUrl` files among `templates`, by absolute path, so a kept scan of
- * their component file is redone when one of them changes. */
+/** The `templateUrl` files among `templates`, by absolute path, plus the
+ * `missing` ones `templatesIn` could not read, so a kept scan of their
+ * component file is redone when one of them changes or appears. */
 export function templateDeps(
   templates: readonly TemplateSource[],
   relPath: string,
   cwd: string,
+  missing: readonly string[] = [],
 ): string[] {
   const root = realPath(cwd);
-  return templates
-    .filter((template) => template.baseOffset === 0 && template.file !== relPath)
-    .map((template) => join(root, template.file));
+  return [
+    ...templates
+      .filter((template) => template.baseOffset === 0 && template.file !== relPath)
+      .map((template) => join(root, template.file)),
+    ...missing,
+  ];
 }
 
 const TEMPLATE_KEY = /\btemplate\s*:\s*/;
@@ -185,13 +191,16 @@ export interface TemplateSource {
  * Finds every `@Component(...)` in `content` and its template — inline, or
  * read from `templateUrl` relative to `fullPath` — for any scanner that needs
  * the template's text alongside a way to turn an offset into it back into a
- * line number. Shared by the pipe usage scan and the pipe linter.
+ * line number. Shared by the pipe usage scan and the pipe linter. A
+ * `templateUrl` inside the workspace that cannot be read is added to
+ * `missing` by absolute path, for `templateDeps`.
  */
 export function templatesIn(
   content: string,
   relPath: string,
   fullPath: string,
   cwd: string,
+  missing?: string[],
 ): TemplateSource[] {
   const source = stripComments(content);
   const code = maskStrings(source);
@@ -210,7 +219,7 @@ export function templatesIn(
       out.push({ text: inline.value, file: relPath, lineAt, baseOffset: inline.offset });
     } else {
       const url = valueOf(args, source, open, TEMPLATE_URL_KEY);
-      const external = url && templateFromUrl(url.value, fullPath, cwd);
+      const external = url && templateFromUrl(url.value, fullPath, cwd, missing);
       if (external) out.push(external);
     }
     decorator.lastIndex = close;
@@ -246,13 +255,18 @@ function valueOf(
  * otherwise) is refused rather than read, the same containment rule
  * `sourceRoots` applies to every scanned directory.
  */
-function templateFromUrl(url: string, fullPath: string, cwd: string): TemplateSource | null {
+function templateFromUrl(
+  url: string,
+  fullPath: string,
+  cwd: string,
+  missing?: string[],
+): TemplateSource | null {
+  const templatePath = resolve(dirname(fullPath), url);
+  const root = realPath(cwd);
+  const real = realPath(templatePath);
+  const inside = relative(root, real);
+  if (escapes(inside) || isAbsolute(inside)) return null;
   try {
-    const templatePath = resolve(dirname(fullPath), url);
-    const root = realPath(cwd);
-    const real = realPath(templatePath);
-    const inside = relative(root, real);
-    if (escapes(inside) || isAbsolute(inside)) return null;
     const text = readFileSync(real, 'utf-8');
     // `inside` is already relative(root, real): both real, so it matches
     // `cwd`-relative paths reported elsewhere without a second `relative()`
@@ -261,7 +275,8 @@ function templateFromUrl(url: string, fullPath: string, cwd: string): TemplateSo
     // (e.g. macOS's /var -> /private/var).
     return { text, file: toPosixPath(inside), lineAt: lineCounter(text), baseOffset: 0 };
   } catch {
-    // templateUrl does not resolve to a readable file
+    // templateUrl does not resolve to a readable file yet: watch for it.
+    missing?.push(real);
     return null;
   }
 }
