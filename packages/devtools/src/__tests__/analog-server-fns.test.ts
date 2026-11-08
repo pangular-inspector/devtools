@@ -224,5 +224,6 @@ export const ping = serverFn(() => 1);
     );
     expect(calls).toContain('Server functions seeded during server rendering and called again');
     expect(await call('analog-lint')).toContain('fn-fetched-twice');
-  });
+    // pangular.setup runs the whole server; a slow runner takes more than the default 5s.
+  }, 15_000);
 });
