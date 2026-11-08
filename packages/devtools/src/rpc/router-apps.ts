@@ -33,10 +33,10 @@ export function findRouterApp(page: RouterPage, app: string): RouterAppReport | 
 }
 
 /**
- * The page as one of its apps sees it: that app's route, navigations, config
- * and setup in place of the first app's, with the page-wide parts the
- * overlay reads for the first app only (outlets, links, preloads, guard
- * recording) left out. The first app's own entry gives the page unchanged.
+ * The page as one of its apps sees it: that app's route, navigations, config,
+ * setup, outlets, links and preloads in place of the first app's. Guard
+ * recording is one switch for the whole page. The first app's own entry
+ * gives the page unchanged.
  */
 export function routerAppPage(page: RouterPage, app: RouterAppReport): RouterPage {
   if (app.primary) return { ...page, appId: app.id };
@@ -56,6 +56,12 @@ export function routerAppPage(page: RouterPage, app: RouterAppReport): RouterPag
   if (app.configTruncated) view.configTruncated = app.configTruncated;
   if (app.activeIds) view.activeIds = app.activeIds;
   if (app.setup) view.setup = app.setup;
+  if (app.outlets) view.outlets = app.outlets;
+  if (app.links) view.links = app.links;
+  if (app.linksTruncated) view.linksTruncated = app.linksTruncated;
+  if (app.linksUnchecked) view.linksUnchecked = app.linksUnchecked;
+  if (app.preloads) view.preloads = app.preloads;
+  if (page.instrumented !== undefined) view.instrumented = page.instrumented;
   view.loops = detectLoops(navigations, app.config);
   return view;
 }

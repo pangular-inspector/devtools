@@ -414,7 +414,12 @@ function isRouterApp(value: unknown, maxNavigations: number): boolean {
     ) &&
     optional(app.configTruncated, isNumber) &&
     optional(app.activeIds, (v) => isNames(v, MAX_ROUTES)) &&
-    optional(app.setup, (v) => isRecord(v) && isPlain(v, { n: 500 }))
+    optional(app.setup, (v) => isRecord(v) && isPlain(v, { n: 500 })) &&
+    optional(app.outlets, (v) => Array.isArray(v) && isPlain(v, { n: 3_000 })) &&
+    optional(app.links, (v) => Array.isArray(v) && v.length <= 100 && isPlain(v, { n: 3_000 })) &&
+    optional(app.linksTruncated, isNumber) &&
+    optional(app.linksUnchecked, isNumber) &&
+    optional(app.preloads, (v) => Array.isArray(v) && v.length <= 50 && isPlain(v, { n: 500 }))
   );
 }
 

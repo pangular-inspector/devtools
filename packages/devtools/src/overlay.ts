@@ -50,7 +50,7 @@ import {
 } from './router.ts';
 import { ConfigTracker, activeIds, walkConfig, type RouteNode } from './router-config.ts';
 import { detectSetup, preloaderOf, type RouterSetup } from './router-setup.ts';
-import { linksOf, outletsOf } from './router-links.ts';
+import { outletsOf } from './router-links.ts';
 import {
   captureCallers,
   captureDiagnostics,
@@ -660,13 +660,13 @@ async function startOverlay(
   let sentGeneration = -1;
   const routerScan = createScanBackoff();
   // The other Angular apps on the page that have a Router (`router-apps.ts`).
-  const routerApps = new RouterApps(onRouterChange);
+  const routerApps = new RouterApps(onRouterChange, instrumented);
   let lastRouterPayload = '';
   let lastRouterPushAt = 0;
   let routerPushTimer: ReturnType<typeof setTimeout> | undefined;
   let routerDomDirty = true;
   let outlets: ReturnType<typeof outletsOf> = [];
-  let links: ReturnType<typeof linksOf> = [];
+  let links: ReturnType<RouterApps['links']> = [];
   let linksTruncated = 0;
   let linksUnchecked = 0;
   const routerDomObserver =
@@ -702,6 +702,7 @@ async function startOverlay(
     instrumented = on;
     storeInstrumented(on);
     if (on && router) stopInstrument = instrument(router, navigations);
+    routerApps.setInstrumented(on);
     lastRouterPayload = '';
     scheduleRouterPush();
   }
@@ -794,16 +795,17 @@ async function startOverlay(
         if (routerDomDirty) {
           routerApps.scan(ng, Array.from(document.querySelectorAll('[ng-version]')), router, true);
         }
-        const apps = routerApps.report(ng, routerCount);
-        if (apps) report['apps'] = apps;
         if (routerDomDirty) {
           routerDomDirty = false;
           outlets = outletsOf(router);
           const cut = { links: 0, unchecked: 0 };
-          links = linksOf(ng, router, cut);
+          // One pass over the page files each app's links under that app.
+          links = routerApps.links(ng, router, cut);
           linksTruncated = cut.links;
           linksUnchecked = cut.unchecked;
         }
+        const apps = routerApps.report(ng, routerCount);
+        if (apps) report['apps'] = apps;
         report['outlets'] = outlets;
         report['links'] = links;
         if (linksTruncated) report['linksTruncated'] = linksTruncated;
@@ -999,9 +1001,6 @@ async function startOverlay(
       const app = routerApps.target(message.app);
       if (!app && !routerApps.isPrimary(message.app)) {
         return respond({ error: `This page has no app \`${String(message.app).slice(0, 40)}\`.` });
-      }
-      if (app && message.request.action === 'instrument') {
-        return respond({ error: 'Guard recording runs in the first app only.' });
       }
       runAction(
         app?.router ?? router,

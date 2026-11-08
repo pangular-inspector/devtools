@@ -84,7 +84,8 @@ describe('router apps on one page', () => {
     apps.scan(ng, roots, primary);
     expect(apps.count).toBe(2);
     expect(apps.primaryRoot(null)).toBe(shell);
-    expect(cartRouter.listeners.size).toBe(1);
+    // Its navigations, and the guards check that wraps lazily loaded guards.
+    expect(cartRouter.listeners.size).toBe(2);
     expect(shellRouter.listeners.size).toBe(0);
 
     cartRouter.emit({ type: 0, id: 1, url: '/checkout' });
@@ -110,7 +111,7 @@ describe('router apps on one page', () => {
     // The same root keeps its id; a scan with the same roots does not look again.
     apps.scan(ng, roots, primary);
     expect(apps.report(ng, 2)!.map((app) => app.id)).toEqual(['app-root', 'cart-widget']);
-    expect(cartRouter.listeners.size).toBe(1);
+    expect(cartRouter.listeners.size).toBe(2);
     expect(apps.target('cart-widget')?.router).toBe(cartRouter);
     expect(apps.target('app-root')).toBeNull();
     expect(apps.isPrimary('app-root')).toBe(true);
@@ -238,6 +239,9 @@ const appsList: RouterAppReport[] = [
       },
     ],
     activeIds: ['0'],
+    outlets: [{ outlet: 'primary', activated: true, component: 'Checkout' }],
+    links: [{ text: 'Pay', element: 'a', devtoolsId: 'd1', href: '/checkout', active: true }],
+    preloads: [{ path: 'orders', startedAt: 1, ms: 3 }],
   },
 ];
 
@@ -290,6 +294,10 @@ describe('router apps on the server', () => {
     expect(view.config?.[0].component).toBe('Checkout');
     expect(cart.note).toContain('`app-root`');
 
+    expect(view.outlets).toEqual([{ outlet: 'primary', activated: true, component: 'Checkout' }]);
+    expect(view.links?.map((link) => link.text)).toEqual(['Pay']);
+    expect(view.preloads).toEqual([{ path: 'orders', startedAt: 1, ms: 3 }]);
+
     const plain = routerStateForApp(state, { page: 'p2' });
     expect(plain).toEqual({ state, note: '' });
     expect(routerStateForApp(state, { page: 'p2', app: 'x' })).toHaveProperty('error');
@@ -323,6 +331,7 @@ describe('router agent tools with several apps', () => {
     expect(cart).toContain('/checkout');
     expect(cart).toContain('**URL** `/checkout`');
     expect(cart).not.toContain('**URL** `/home`');
+    expect(cart).toContain('Checkout');
     const routes = await call('list-routes', { app: 'cart-widget' });
     expect(routes).toContain('Checkout');
     expect(await call('list-routes', { app: 'nope' })).toContain('has no app');

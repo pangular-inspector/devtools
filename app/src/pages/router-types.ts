@@ -64,8 +64,9 @@ export function routerAppsOf(page: RouterPage | null | undefined): RouterApp[] {
 
 /**
  * The page as one of its apps sees it, as the server builds it for the agent
- * tools: that app's route, navigations, config and setup in place of the first
- * app's. Outlets, links, preloads and guard recording belong to the first app.
+ * tools: that app's route, navigations, config, setup, outlets, links and
+ * preloads in place of the first app's. Guard recording is one switch for the
+ * whole page.
  */
 export function routerAppView(page: RouterPage, appId: string | null): RouterPage {
   const app = routerAppsOf(page).find((a) => a.id === appId);
@@ -83,6 +84,12 @@ export function routerAppView(page: RouterPage, appId: string | null): RouterPag
     configTruncated: app.configTruncated,
     activeIds: app.activeIds,
     setup: app.setup,
+    outlets: app.outlets,
+    links: app.links,
+    linksTruncated: app.linksTruncated,
+    linksUnchecked: app.linksUnchecked,
+    preloads: app.preloads,
+    instrumented: page.instrumented,
     loops: app.loops,
     apps: page.apps,
     appId: app.id,
