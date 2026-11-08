@@ -1,4 +1,5 @@
 import type { NavigationRecord } from '../router.ts';
+import type { RouterReport } from '../router-types.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { capped, MAX_TOOL_CHARS } from './router-tools.ts';
 
@@ -6,6 +7,8 @@ import { capped, MAX_TOOL_CHARS } from './router-tools.ts';
 export interface StreamEntry {
   seq: number;
   pageId: string;
+  /** The app of a page that runs several, for any app but the first. */
+  appId?: string;
   nav: NavigationRecord;
   /** It was in the stream before, with another outcome or target. */
   updated: boolean;
@@ -37,11 +40,28 @@ function signature(nav: NavigationRecord): string {
   ].join('|');
 }
 
+/** The key of one navigation of one app of one page; the page id comes first. */
+function keyOf(pageId: string, appId: string | undefined, nav: NavigationRecord): string {
+  return `${pageId}\u0000${appId ?? ''}\u0000${nav.id}\u0000${nav.startedAt}`;
+}
+
+/**
+ * Which apps a read or a clear covers: `undefined` every app, `null` the
+ * first app only, a string that one app.
+ */
+export type StreamApp = string | null | undefined;
+
+function inApp(entryApp: string | undefined, app: StreamApp): boolean {
+  return app === undefined || (app === null ? entryApp === undefined : entryApp === app);
+}
+
 /**
  * Every navigation the pages report, in the order the server saw them, each
  * with a sequence number. A navigation comes again with a higher number when
  * its outcome, target or end changes, so an agent that reads with the last
- * cursor sees a pending navigation once it ends. Probes are left out.
+ * cursor sees a pending navigation once it ends. Probes are left out. On a
+ * page that runs several Angular apps, each app's navigations carry its id;
+ * the first app's carry none.
  */
 export class NavigationStream {
   private seq = 0;
@@ -50,12 +70,15 @@ export class NavigationStream {
   private waiters = new Set<() => void>();
   private dropped = 0;
 
-  /** Adds the navigations of one report that are new or changed. Returns how many. */
-  record(pageId: string, navigations: readonly NavigationRecord[]): number {
+  /**
+   * Adds the navigations of one report that are new or changed, for the first
+   * app of the page or, with `appId`, another app. Returns how many.
+   */
+  record(pageId: string, navigations: readonly NavigationRecord[], appId?: string): number {
     let added = 0;
     for (const nav of navigations) {
       if (nav.probe) continue;
-      const key = `${pageId}\u0000${nav.id}\u0000${nav.startedAt}`;
+      const key = keyOf(pageId, appId, nav);
       const sig = signature(nav);
       const before = this.signatures.get(key);
       if (before === sig) continue;
@@ -64,11 +87,14 @@ export class NavigationStream {
         (entry) =>
           !(
             entry.pageId === pageId &&
+            entry.appId === appId &&
             entry.nav.id === nav.id &&
             entry.nav.startedAt === nav.startedAt
           ),
       );
-      this.entries.push({ seq: ++this.seq, pageId, nav, updated: before !== undefined });
+      const entry: StreamEntry = { seq: ++this.seq, pageId, nav, updated: before !== undefined };
+      if (appId !== undefined) entry.appId = appId;
+      this.entries.push(entry);
       added++;
     }
     if (this.entries.length > MAX_STREAM_ENTRIES) {
@@ -77,9 +103,7 @@ export class NavigationStream {
       this.entries.splice(0, cut);
     }
     if (this.signatures.size > MAX_STREAM_ENTRIES * 4) {
-      const keep = new Set(
-        this.entries.map((e) => `${e.pageId}\u0000${e.nav.id}\u0000${e.nav.startedAt}`),
-      );
+      const keep = new Set(this.entries.map((e) => keyOf(e.pageId, e.appId, e.nav)));
       for (const key of this.signatures.keys()) if (!keep.has(key)) this.signatures.delete(key);
     }
     // A copy: each waiter removes itself from the set when it wakes.
@@ -88,16 +112,28 @@ export class NavigationStream {
     return added;
   }
 
+  /** Adds a router report's navigations: the first app's, then each other app's under its id. */
+  recordReport(report: RouterReport): number {
+    let added = this.record(report.pageId, report.navigations);
+    for (const app of report.apps ?? []) {
+      if (!app.primary) added += this.record(report.pageId, app.navigations ?? [], app.id);
+    }
+    return added;
+  }
+
   /**
    * Forgets the navigations of one page, or of every page, after they were
-   * cleared or the page went away. The cursor keeps counting, so a cursor an
-   * agent holds stays valid.
+   * cleared or the page went away; with `app`, only those of one app (see
+   * {@link StreamApp}). The cursor keeps counting, so a cursor an agent holds
+   * stays valid.
    */
-  clear(pageId?: string): void {
-    const gone = (id: string) => pageId === undefined || id === pageId;
-    this.entries = this.entries.filter((entry) => !gone(entry.pageId));
+  clear(pageId?: string, app?: StreamApp): void {
+    const gone = (id: string, appId: string | undefined) =>
+      (pageId === undefined || id === pageId) && inApp(appId, app);
+    this.entries = this.entries.filter((entry) => !gone(entry.pageId, entry.appId));
     for (const key of this.signatures.keys()) {
-      if (gone(key.slice(0, key.indexOf('\u0000')))) this.signatures.delete(key);
+      const [id, appId] = key.split('\u0000');
+      if (gone(id, appId || undefined)) this.signatures.delete(key);
     }
   }
 
@@ -116,11 +152,16 @@ export class NavigationStream {
     return this.seq;
   }
 
-  /** The entries after `since`, for one page or every page. */
-  read(since: number, pageId?: string): StreamRead {
+  /**
+   * The entries after `since`, for one page or every page, and for the apps
+   * `app` names (see {@link StreamApp}).
+   */
+  read(since: number, pageId?: string, app?: StreamApp): StreamRead {
     const reset = since > this.seq || since < 0;
     const from = reset ? 0 : since;
-    const entries = this.entries.filter((e) => e.seq > from && (!pageId || e.pageId === pageId));
+    const entries = this.entries.filter(
+      (e) => e.seq > from && (!pageId || e.pageId === pageId) && inApp(e.appId, app),
+    );
     const out: StreamRead = { entries, cursor: this.seq };
     if (reset) out.reset = true;
     if (!reset && this.dropped > from) out.missed = this.dropped - from;
@@ -131,8 +172,8 @@ export class NavigationStream {
    * Like {@link read}, but when nothing came after `since` yet, waits up to
    * `ms` (at most {@link MAX_WAIT_MS}) for the next navigation first.
    */
-  async wait(since: number, ms: number, pageId?: string): Promise<StreamRead> {
-    const first = this.read(since, pageId);
+  async wait(since: number, ms: number, pageId?: string, app?: StreamApp): Promise<StreamRead> {
+    const first = this.read(since, pageId, app);
     const limit = Math.max(0, Math.min(MAX_WAIT_MS, ms));
     if (first.entries.length || first.reset || limit === 0) return first;
     await new Promise<void>((resolve) => {
@@ -142,13 +183,13 @@ export class NavigationStream {
         resolve();
       };
       const check = () => {
-        if (this.read(since, pageId).entries.length) done();
+        if (this.read(since, pageId, app).entries.length) done();
       };
       const timer = setTimeout(done, limit);
       timer.unref?.();
       this.waiters.add(check);
     });
-    return this.read(since, pageId);
+    return this.read(since, pageId, app);
   }
 }
 
@@ -163,7 +204,8 @@ function line(entry: StreamEntry): string {
       ? `: ${code(nav.reason)}`
       : '';
   const took = nav.endedAt !== undefined ? ` in ${nav.endedAt - nav.startedAt}ms` : '';
-  return `- [${entry.seq}] page ${code(entry.pageId)} #${nav.id} ${code(nav.url)}${target}: **${nav.outcome}**${took}${redirect}${reason}${entry.updated ? ' (updated)' : ''}`;
+  const app = entry.appId ? ` app ${code(entry.appId)}` : '';
+  return `- [${entry.seq}] page ${code(entry.pageId)}${app} #${nav.id} ${code(nav.url)}${target}: **${nav.outcome}**${took}${redirect}${reason}${entry.updated ? ' (updated)' : ''}`;
 }
 
 /** The stream read as markdown for the `follow-navigations` tool. */

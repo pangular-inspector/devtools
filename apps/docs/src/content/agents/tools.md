@@ -665,7 +665,7 @@ Stores that report through the Redux DevTools extension API, such as NGXS, Elf a
 
 All router tools read the page, except `scan-render-mode`, which also reads your `*.routes.server.ts` files.
 
-On a page that runs more than one Angular app with a Router, `inspect-route`, `explain-navigation`, `diff-navigations`, `preview-navigation`, `list-routes`, `lint-routes` and `router-config` take an optional `app`: the app's id (the tag of its root, such as `app-root`) or its root component name. Without `app` they answer for the first app, and the answer ends with a line that names the other apps. An unknown `app` is refused with the list of apps. See [Several apps on one page](../inspectors/router.md#several-apps-on-one-page).
+On a page that runs more than one Angular app with a Router, `inspect-route`, `explain-navigation`, `diff-navigations`, `follow-navigations`, `preview-navigation`, `list-routes`, `lint-routes` and `router-config` take an optional `app`: the app's id (the tag of its root, such as `app-root`) or its root component name. Without `app` they answer for the first app, and the answer ends with a line that names the other apps. An unknown `app` is refused with the list of apps. See [Several apps on one page](../inspectors/router.md#several-apps-on-one-page).
 
 ### Read the current route
 
@@ -683,13 +683,14 @@ Use `diff-navigations` for "why did this work last time". Without `b`, it takes 
 
 `follow-navigations` returns the navigations that are new or changed since a cursor, oldest first, across every page. Use it to follow a login and redirect flow step by step without calling `explain-navigation` in a loop. Reads: page.
 
-| Argument | Value                                                                                                                                             |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `since`  | The cursor a previous call returned. Without it, the tool lists the last 5 navigations and the current cursor.                                    |
-| `waitMs` | With `since`: how long to wait, at most 30000 ms, when no navigation came after the cursor yet. The tool answers as soon as one comes. Default 0. |
-| `page`   | Only the navigations of this page.                                                                                                                |
+| Argument | Value                                                                                                                                                              |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `since`  | The cursor a previous call returned. Without it, the tool lists the last 5 navigations and the current cursor.                                                     |
+| `waitMs` | With `since`: how long to wait, at most 30000 ms, when no navigation came after the cursor yet. The tool answers as soon as one comes. Default 0.                  |
+| `page`   | Only the navigations of this page.                                                                                                                                 |
+| `app`    | On a page that runs several Angular apps with a Router, the app to follow: its id or root component name. Without it, the tool follows the first app of each page. |
 
-Each line has the sequence number, the page, the navigation id, the URL, the outcome, the time, a redirect target and the reason it failed. The answer ends with **Next cursor**: pass it as `since` on the next call. A navigation that was still pending comes again with `(updated)` once it ends, is redirected or changes target. Probes are left out. The server keeps the last 500 changes, and says how many a cursor missed. A cursor from before the server started lists everything it kept.
+Each line has the sequence number, the page, the app (for an app other than the first), the navigation id, the URL, the outcome, the time, a redirect target and the reason it failed. The answer ends with **Next cursor**: pass it as `since` on the next call. A navigation that was still pending comes again with `(updated)` once it ends, is redirected or changes target. Probes are left out. The server keeps the last 500 changes, and says how many a cursor missed. A cursor from before the server started lists everything it kept.
 
 ### Read the route config
 

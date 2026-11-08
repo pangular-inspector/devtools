@@ -41,7 +41,7 @@ function fakeRouter(url: string, paths: string[]) {
     listeners,
     navigated,
     url,
-    config: paths.map((path) => ({ path })),
+    config: paths.map((path) => ({ path }) as Record<string, unknown>),
     routerState: {
       snapshot: {
         root: { url: [], params: {}, data: {}, queryParams: {}, fragment: null, children: [] },
@@ -64,12 +64,43 @@ function emit(router: ReturnType<typeof fakeRouter>, event: Record<string, unkno
   for (const listener of router.listeners) listener(event);
 }
 
-function install(routers: Map<string, ReturnType<typeof fakeRouter>>) {
+function install(
+  routers: Map<string, ReturnType<typeof fakeRouter>>,
+  extra: Record<string, unknown> = {},
+) {
   (window as { ng?: unknown }).ng = {
     getComponent: () => ({}),
     getInjector: (el: Element) => ({ tag: el.localName }),
     ɵgetRouterInstance: (injector: { tag: string }) => routers.get(injector.tag) ?? null,
+    ...extra,
   };
+}
+
+/** Angular's preloader class, found by name like the overlay finds it. */
+class RouterPreloader {}
+
+/** Gives a fake Router an activated primary outlet showing `component`, and RouterLink helpers. */
+function withOutlet<T extends ReturnType<typeof fakeRouter>>(router: T, component: string) {
+  class Routed {}
+  Object.defineProperty(Routed, 'name', { value: component });
+  return Object.assign(router, {
+    serializeUrl: (tree: unknown) => String(tree),
+    isActive: () => false,
+    navigationTransitions: {
+      rootContexts: {
+        contexts: new Map([
+          [
+            'primary',
+            {
+              outlet: { isActivated: true, component: new Routed() },
+              route: null,
+              children: null,
+            },
+          ],
+        ]),
+      },
+    },
+  });
 }
 
 describe('overlay router report with several apps', () => {
@@ -152,6 +183,105 @@ describe('overlay router report with several apps', () => {
           result: { error: expect.stringContaining('no app') },
         }),
       );
+    } finally {
+      dispose();
+    }
+  });
+
+  it("files each app's outlets, links, preloads, guard runs and callers under that app", async () => {
+    document.body.innerHTML =
+      '<app-root ng-version="22.0.0"><a id="home">Home</a></app-root>' +
+      '<cart-widget ng-version="22.0.0"><a id="basket">Basket</a></cart-widget>';
+    const shell = withOutlet(fakeRouter('/home', ['home']), 'Shell');
+    const cart = withOutlet(fakeRouter('/cart', ['cart', 'checkout']), 'CartPage');
+    const cartGuard = () => true;
+    cart.config[1]['canActivate'] = [cartGuard];
+    const strategy = (name: string) => ({
+      name,
+      preload: (_route: unknown, load: () => unknown) => load(),
+    });
+    const preloaders = new Map([
+      ['app-root', { preloadingStrategy: strategy('shell') }],
+      ['cart-widget', { preloadingStrategy: strategy('cart') }],
+    ]);
+    const links = new Map<Element, unknown>([
+      [document.getElementById('home')!, { urlTree: '/home', router: shell }],
+      [document.getElementById('basket')!, { urlTree: '/cart', router: cart }],
+    ]);
+    install(
+      new Map([
+        ['app-root', shell],
+        ['cart-widget', cart],
+      ]),
+      {
+        getDirectives: (el: Element) => (links.has(el) ? [links.get(el)] : []),
+        ɵgetInjectorResolutionPath: (injector: unknown) => [injector],
+        ɵgetInjectorProviders: () => [{ token: RouterPreloader }],
+        getInjector: (el: Element) => ({
+          tag: el.localName,
+          get: (token: unknown) =>
+            token === RouterPreloader ? (preloaders.get(el.localName) ?? null) : null,
+        }),
+      },
+    );
+    const { initOverlay } = await import('../overlay.ts');
+    const dispose = await initOverlay();
+    try {
+      await vi.advanceTimersByTimeAsync(2_000);
+      // The cart app's code navigates, its guard runs, and its preloader loads a route.
+      void cart.navigateByUrl('/checkout');
+      emit(cart, { type: 0, id: 1, url: '/checkout' });
+      (cart.config[1]['canActivate'] as (() => boolean)[])[0]();
+      emit(cart, { type: 1, id: 1, url: '/checkout', urlAfterRedirects: '/checkout' });
+      preloaders.get('cart-widget')!.preloadingStrategy.preload({ path: 'orders' }, () => ({}));
+      // A navigation of the first app in the same breath gets no caller of the cart's.
+      emit(shell, { type: 0, id: 1, url: '/home' });
+      emit(shell, { type: 1, id: 1, url: '/home', urlAfterRedirects: '/home' });
+      await vi.advanceTimersByTimeAsync(2_000);
+      const last = reports.at(-1)! as {
+        navigations: { url: string; caller?: string; runs?: unknown[] }[];
+        outlets: { component?: string }[];
+        links: { text: string; href?: string }[];
+        preloads: unknown[];
+        apps: {
+          id: string;
+          navigations?: { url: string; caller?: string; runs?: { guard: string }[] }[];
+          outlets?: { component?: string }[];
+          links?: { text: string; href?: string }[];
+          preloads?: { path: string }[];
+        }[];
+      };
+      expect(last.outlets.map((o) => o.component)).toEqual(['Shell']);
+      expect(last.links.map((l) => l.text)).toEqual(['Home']);
+      expect(last.preloads).toEqual([]);
+      expect(last.navigations.map((n) => [n.url, n.caller, n.runs])).toEqual([
+        ['/home', undefined, undefined],
+      ]);
+      const app = last.apps[1];
+      expect(app.id).toBe('cart-widget');
+      expect(app.outlets?.map((o) => o.component)).toEqual(['CartPage']);
+      expect(app.links?.map((l) => [l.text, l.href])).toEqual([['Basket', '/cart']]);
+      expect(app.preloads?.map((p) => p.path)).toEqual(['orders']);
+      expect(app.navigations).toEqual([
+        expect.objectContaining({
+          url: '/checkout',
+          caller: expect.stringMatching(/^navigateByUrl\(\)/),
+          runs: [expect.objectContaining({ guard: 'cartGuard', route: '/checkout' })],
+        }),
+      ]);
+
+      // Turning guard recording off from the cart app turns it off on the page.
+      routerAction?.({
+        requestId: 'r3',
+        pageId: (last as unknown as { pageId: string }).pageId,
+        app: 'cart-widget',
+        request: { action: 'instrument', on: false },
+      });
+      await vi.advanceTimersByTimeAsync(100);
+      expect(actions).toContainEqual(
+        expect.objectContaining({ requestId: 'r3', result: { instrumented: false } }),
+      );
+      expect((cart.config[1]['canActivate'] as unknown[])[0]).toBe(cartGuard);
     } finally {
       dispose();
     }

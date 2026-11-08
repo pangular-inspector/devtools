@@ -160,19 +160,45 @@ export function linksOf(
   router: AnyRecord,
   cut: { links: number; unchecked?: number } = { links: 0 },
 ): LinkInfo[] {
-  if (typeof document === 'undefined' || !ng.getDirectives) return [];
+  return linksOfRouters(ng, [router], [cut])[0];
+}
+
+/** The Router a RouterLink or RouterLinkActive directive was created with, if it says. */
+function ownerOf(link: AnyRecord | undefined, active: AnyRecord | undefined): unknown {
+  return (
+    read(() => link?.['router'] as unknown, undefined) ??
+    read(() => active?.['router'] as unknown, undefined)
+  );
+}
+
+/**
+ * {@link linksOf} for several apps' Routers in one pass over the page: each
+ * link goes to the list of the Router its directive holds, and a link whose
+ * Router is not listed goes to the first. `cuts[i]` counts the links of
+ * `routers[i]` that did not fit; each gets the page's unchecked count.
+ */
+export function linksOfRouters(
+  ng: RouterDebugApi,
+  routers: AnyRecord[],
+  cuts: { links: number; unchecked?: number }[],
+): LinkInfo[][] {
+  const lists: LinkInfo[][] = routers.map(() => []);
+  if (typeof document === 'undefined' || !ng.getDirectives || !routers.length) return lists;
   const candidates = document.querySelectorAll(LINK_CANDIDATES);
   const checked = Math.min(candidates.length, MAX_LINK_CANDIDATES);
-  cut.unchecked = candidates.length - checked;
-  const out: LinkInfo[] = [];
+  for (const cut of cuts) cut.unchecked = candidates.length - checked;
   for (let i = 0; i < checked; i++) {
     const element = candidates[i];
     const directives = read(() => ng.getDirectives?.(element) ?? [], []);
     const link = directives.find(isRouterLink);
     const active = directives.find(isLinkActive);
     if (!link && !active) continue;
+    const index =
+      routers.length > 1 ? Math.max(0, routers.indexOf(ownerOf(link, active) as AnyRecord)) : 0;
+    const router = routers[index];
+    const out = lists[index];
     if (out.length >= MAX_LINKS) {
-      cut.links++;
+      if (cuts[index]) cuts[index].links++;
       continue;
     }
     const info: LinkInfo = {
@@ -200,5 +226,5 @@ export function linksOf(
     }
     out.push(info);
   }
-  return out;
+  return lists;
 }
