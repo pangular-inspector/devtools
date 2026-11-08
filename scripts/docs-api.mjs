@@ -6,9 +6,9 @@
  *
  * Usage: node scripts/docs-api.mjs
  */
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import * as prettier from 'prettier';
 import { API_DIR, renderApiReference } from '../apps/docs/api-reference.ts';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
@@ -18,6 +18,10 @@ mkdirSync(dir, { recursive: true });
 for (const file of readdirSync(dir)) {
   if (file.endsWith('.md') && !pages.has(file)) rmSync(path.join(dir, file));
 }
-for (const [file, markdown] of pages) writeFileSync(path.join(dir, file), markdown);
-execFileSync('pnpm', ['exec', 'prettier', '--write', dir], { cwd: repoRoot, stdio: 'inherit' });
+// Formatted the way the docs test formats them, so the two compare equal.
+for (const [file, markdown] of pages) {
+  const filepath = path.join(dir, file);
+  const options = (await prettier.resolveConfig(filepath)) ?? {};
+  writeFileSync(filepath, await prettier.format(markdown, { ...options, filepath }));
+}
 console.log(`Wrote ${pages.size} pages to ${path.relative(process.cwd(), dir)}`);

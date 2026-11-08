@@ -6,9 +6,9 @@
  *
  * Usage: node scripts/docs-agent-tools.mjs
  */
-import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
+import * as prettier from 'prettier';
 import { renderToolIndex, TOOL_INDEX_PATH } from '../apps/docs/agent-tool-index.ts';
 
 const docsRoot = path.resolve(import.meta.dirname, '../apps/docs');
@@ -19,9 +19,7 @@ if (problems.length > 0) {
   process.exit(1);
 }
 const file = path.join(docsRoot, TOOL_INDEX_PATH);
-writeFileSync(file, markdown);
-execFileSync('pnpm', ['exec', 'prettier', '--write', file], {
-  cwd: path.resolve(import.meta.dirname, '..'),
-  stdio: 'inherit',
-});
+// Formatted the way the docs test formats it, so the two compare equal.
+const options = (await prettier.resolveConfig(file)) ?? {};
+writeFileSync(file, await prettier.format(markdown, { ...options, filepath: file }));
 console.log(`Wrote ${path.relative(process.cwd(), file)}`);

@@ -97,6 +97,15 @@ describe('load-defer-block', () => {
     expect(await call('load-defer-block', { block: 'd1' })).toContain('shows its @error block');
   });
 
+  it('names what change detection threw while the block rendered', async () => {
+    const { ctx, push, call } = await boot();
+    await push('push-component-tree', tree('p1'));
+    answerLoads(ctx, push, () => ({ ok: true, state: 'complete', renderError: 'NG0100' }));
+    expect(await call('load-defer-block', { block: 'd1' })).toContain(
+      'Change detection threw while it rendered: NG0100.',
+    );
+  });
+
   it('asks for a page when several tabs have the same block id, and refuses unknown ids', async () => {
     const { ctx, push, call } = await boot();
     await push('push-component-tree', tree('p1'));

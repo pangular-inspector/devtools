@@ -448,7 +448,6 @@ export class AnalogRuntime {
         return;
       }
     }
-    this.taskConfirm.set(null);
     this.runningTask.set(name);
     try {
       const result = await call<TaskResult>(this.rpc(), 'analog-run-nitro-task', {
@@ -460,6 +459,8 @@ export class AnalogRuntime {
         ...all,
         [name]: result ?? { ok: false, name, error: 'No answer from the devtools server.' },
       }));
+      // A failed run keeps the panel and its payload, so it can be fixed and run again.
+      if (result?.ok && this.taskConfirm() === name) this.taskConfirm.set(null);
     } finally {
       this.runningTask.set(null);
     }

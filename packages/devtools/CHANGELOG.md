@@ -316,6 +316,21 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - `record-change-detection` with `record: "start"` passes on why a page that answered could not record, from its capability report: the Angular version it runs, or a profiler hook the recording could not attach to yet. It no longer waits out the 3 seconds and blames the Angular version (#366).
 - `explain-ssr-request` names a hydration mismatch as a component only when the page read its class, and as an element (`<app-card>`) or text node (`#text`) otherwise (#366).
 - Redaction leaks found by a corpus of fake secrets run through every redaction path are closed: a secret pair after another word and a colon (`Error: password: "…"`), the key after `Authorization: ApiKey` in an Analog server body that is not JSON, secret pairs in the fragment or matrix params of an Analog server message, headers with a camelCase secret name such as `newPassword`, and tokens used as NgRx state keys.
+- The `pipe-usages` resource lists the connected page id in its size summary when only one page reports.
+- The pipe scan and the pipe lint run again when a missing `templateUrl` file appears, and when a template outside the folders the Vite watcher covers changes.
+- A pipe opened from the **Components** tab shows the live data, and records calls, on the page **Components** had selected, not only the page the panel belongs to.
+- `preview-navigation` fills a `:name` value in the query of a `redirectTo` from the URL's query parameter, as Angular does (every value of a repeated parameter, and `undefined` for a missing one), and keeps the fragment of a redirect that has both a query and a fragment.
+- `ngrx-explain-change` keeps its `store` filter when it explains one entry by `seq`, answers a refusal with `isError`, and puts a single untrusted notice on an unknown page answer.
+- During a keyboard pick on the **Components** tab, a message that repeats, such as the same component again, is read out again.
+- **Show in Signals** for a page that has not reported its graph yet shows that page once it reports, and picking another component drops a signal still waiting to be selected.
+- A signal store change to a key that needs quotes, such as `profile["first name"]`, is logged with the path the **NgRx Store** state tree uses, so the tree marks it and **Copy path** matches `ngrx-explain-change`.
+- The forms collector reads a control inside a disabled `<fieldset>` as disabled on the page, and counts a submit button there as disabled, so `submit-disabled-while-invalid` finds a submit a disabled fieldset blocks.
+- A component report whose `detail.selector` is not text no longer passes it on to the agent tools; the server leaves it out.
+- `load-defer-block` quotes the error when change detection throws while the loaded block renders, instead of reporting a clean load.
+- A Nitro task run that fails on the **Analog** tab keeps its confirm panel and payload open, so it can be fixed and run again.
+- Turning **Counts launcher** on or off in a popped-out panel changes the launcher on the app page that opened it. The popup takes the change only from the window it popped the panel out into.
+- The **Pipes** list is one Tab stop with arrow keys, Home and End, like the other lists in the panel, and in every list the Tab stop follows a row selected with a click that does not focus it, as in Safari (#370).
+- The popup's **No devtools server found** state and the panel's **Can't reach the devtools server** message link to the troubleshooting docs (#373).
 
 ### Docs
 
@@ -327,6 +342,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The Express and other servers pages say which port the WebSocket side-car uses (the first free one from 9777), how to pin it with `ws: {port}`, and how to serve the socket on the app's own server with `attach(server)` (#426).
 - A **Renamed tools** table in the agent tools page, and the public API and the supported versions in the publishing guide.
 - Corrected guides and samples from the readiness review: the Vite auth default in the Analog guide and the glossary, JSON samples without a path comment, no separate devframe install in the package README, and `ws: false` for a panel-only devframe host.
+- The API reference has an **Angular debug API** page: each `window.ng` function the overlay reads and the first Angular version that publishes it, generated from the `@since` tags in `debug-api.ts` by `pnpm docs:api` (#373).
 
 ### Release and CI
 
@@ -337,6 +353,8 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - A CI job installs the packed package on Node.js 22.12.0, the `engines.node` floor, and loads its CLI and its `cli`, `hub`, `ssr` and `vite` entry points there (#373).
 - `pnpm extension:build:firefox` builds a Firefox copy of the extension into `dist/extension-firefox`, with the add-on ID and version floor under `browser_specific_settings` and without the Chrome-only manifest keys. It is not published (#342).
 - The `Commit message` check fails on a commit message that breaks the format, not only on a bad pull request title (#373).
+- The compatibility workflow runs the Vite plugin tests on Vite 6 and Vite 7, the majors the `vite` peer range allows below the installed one (#373).
+- The `Docs check` fails, instead of warning, when a pull request changes code but no docs page and has no `no-docs` label (#373).
 - The packed `package.json` leaves out `devDependencies`, `scripts` and the `nx` block, and declares `sideEffects`.
 - Dependencies: devframe and `@devframes/*` 1.2.6 (was 1.2.0). `@devframes/plugin-messages`, `@devframes/plugin-terminals` and `axe-core` are added. `h3` is no longer a dependency.
 

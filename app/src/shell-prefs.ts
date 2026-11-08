@@ -214,6 +214,15 @@ export function popoutOpener(win: Window = window): Window | null {
 
 /** Asks the popup on the app's page to take the panel back from its own window. */
 export function returnFromPopout(win: Window = window): boolean {
+  return postToOpener({ type: 'pangular:popup-return' }, win);
+}
+
+/**
+ * Sends `message` to the popup on the app's page when the panel runs in the
+ * window the popup popped it out into, on the app page's origin. The popup
+ * accepts it only from that window. Returns whether it was sent.
+ */
+export function postToOpener(message: Record<string, unknown>, win: Window = window): boolean {
   const opener = popoutOpener(win);
   if (!opener) return false;
   let origin: string | undefined;
@@ -228,7 +237,7 @@ export function returnFromPopout(win: Window = window): boolean {
   }
   if (!origin || origin === 'null') return false;
   try {
-    opener.postMessage({ type: 'pangular:popup-return' }, origin);
+    opener.postMessage(message, origin);
     return true;
   } catch {
     return false;

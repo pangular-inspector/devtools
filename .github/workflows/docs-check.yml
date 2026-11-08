@@ -37,6 +37,7 @@ jobs:
           elif [ "$NO_DOCS" = "true" ]; then
             echo "Code changed without docs, marked no-docs."
           else
-            echo "::warning title=Docs not updated::This pull request changes code but no page in apps/docs/src/content. Update the docs in this pull request, or add the no-docs label and say why in the description."
+            echo "::error title=Docs not updated::This pull request changes code but no page in apps/docs/src/content. Update the docs in this pull request, or add the no-docs label and say why in the description."
             printf '%s\n' "$code"
+            exit 1
           fi

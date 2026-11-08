@@ -140,9 +140,9 @@ The schema is a JSON Schema file inside the project. The check reads `type`, `re
 
 Secret names, tokens and the names in `redaction.secretNames` are masked. Values `vite.config` computes show as **code**.
 
-Click **Run** on a task, optionally give a JSON payload, then **Run task** to run it on the dev server through Nitro's task route, which needs `nitro.experimental.tasks`. The task's answer shows below it, masked, and the run stops waiting after 30 seconds.
+Click **Run** on a task, optionally give a JSON payload, then **Run task** to run it on the dev server through Nitro's task route, which needs `nitro.experimental.tasks`. The task's answer shows below it, masked, and the run stops waiting after 30 seconds. If the run fails, the payload stays open so you can change it and run the task again.
 
-Click **Purge** on a cache entry, or **Purge all**, then **Delete**, to delete cache entry files so the next request renders the route again. Running tasks and purging need `actions.analog`. Only `fs` cache storage is on disk: the tab looks in `.nitro/cache`, `node_modules/.nitro/cache`, `node_modules/.cache/nitro`, `dist/.nitro/cache`, `.data/cache` and the `base` of a `cache` mount with the `fs` or `fs-lite` driver.
+Click **Purge** on a cache entry, or **Purge all**, then **Delete**, to delete cache entry files so the next request renders the route again. Running tasks and purging need `actions.analog`. Only `fs` and `fs-lite` cache storage is on disk: the tab looks in `.nitro/cache`, `node_modules/.nitro/cache`, `node_modules/.cache/nitro`, `dist/.nitro/cache`, `.data/cache` and the `base` of a `cache` mount with the `fs` or `fs-lite` driver.
 
 ### Lint
 

@@ -65,6 +65,13 @@ describe('keyboard pick', () => {
     expect(fixture.componentInstance.announcement()).toBe(
       'App <app-root>. Press Enter to pick it.',
     );
+    // The same component again changes the live text, so a screen reader repeats it.
+    press('ArrowDown');
+    await settle(fixture);
+    expect(fixture.componentInstance.announcement()).toBe(
+      'App <app-root>. Press Enter to pick it.\u00a0',
+    );
+    expect(fixture.componentInstance.pickMessage()).toBe('App <app-root>. Press Enter to pick it.');
     expect(press('Enter').defaultPrevented).toBe(true);
     expect(calls.at(-1)).toEqual({
       name: 'request-component-pick-move',

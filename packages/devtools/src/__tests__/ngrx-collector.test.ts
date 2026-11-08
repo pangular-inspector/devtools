@@ -175,6 +175,23 @@ describe('ngrx collector', () => {
     expect(collector.collect().stores[0].methods.find((m) => m.name === 'isSaved')?.calls).toBe(2);
   });
 
+  it('writes diff paths with keys that need quotes the way the state tree does', async () => {
+    const { store, collector } = setup();
+    const source = (store as unknown as Record<symbol, Record<string, unknown>>)[STATE_SOURCE];
+    source['display name'] = writable('Ada');
+    source.profile = writable({ 'first name': 'Ada', city: 'Rome' });
+    collector.collect();
+    patchState(store, {
+      'display name': 'Grace',
+      profile: { 'first name': 'Grace', city: 'Rome' },
+    });
+    await Promise.resolve();
+    expect(collector.logSince(0)[0].diff.map((row) => row.path)).toEqual([
+      '"display name"',
+      'profile["first name"]',
+    ]);
+  });
+
   it('logs writes made outside a method as patchState', async () => {
     const { store, collector } = setup();
     collector.collect();

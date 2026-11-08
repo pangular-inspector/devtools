@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { NgrxLogEntry, NgrxRequest } from '../../ngrx-shared.ts';
 import { createNgrxDevtoolsTools, explainChangeText, touchesPath } from '../ngrx-devtools-tools.ts';
+import { isRefusal } from '../refusal.ts';
+import { UNTRUSTED } from '../forms-tools.ts';
 import type { NgrxPageRecord, NgrxPages } from '../ngrx-tools.ts';
 
 function entry(seq: number, patch: Partial<NgrxLogEntry>): NgrxLogEntry {
@@ -88,6 +90,29 @@ describe('explainChangeText', () => {
     expect(explainChangeText(pages(log), undefined, undefined, undefined, undefined)).toMatch(
       /Pass `path`/,
     );
+  });
+});
+
+describe('ngrx-explain-change tool', () => {
+  function explain(ngrx: NgrxPages) {
+    const [, tool] = createNgrxDevtoolsTools({ ask: vi.fn(), pages: () => ngrx });
+    return tool;
+  }
+
+  it('keeps the store filter for an entry number', () => {
+    const ngrx = pages([entry(1, { storeId: 'ngrx-1' })]);
+    expect(explainChangeText(ngrx, undefined, 'store', undefined, 1)).toMatch(
+      /#1 belongs to `ngrx-1`, not `Store`/,
+    );
+  });
+
+  it('answers a refusal still marked, with one untrusted notice', async () => {
+    const ngrx = pages([]);
+    const missing = (await explain(ngrx).handler({})).markdown;
+    expect(isRefusal(missing)).toBe(true);
+    const unknown = (await explain(ngrx).handler({ page: 'nope', path: 'x' })).markdown;
+    expect(isRefusal(unknown)).toBe(true);
+    expect(unknown.split(UNTRUSTED)).toHaveLength(2);
   });
 });
 

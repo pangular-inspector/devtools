@@ -59,6 +59,31 @@ describe('RovingList', () => {
     expect(tabStops(fixture)).toEqual(['c']);
   });
 
+  it('moves the Tab stop to a row that becomes selected without focus', async () => {
+    const fixture = mount();
+    await settle(fixture);
+    expect(tabStops(fixture)).toEqual(['a']);
+    // A click in Safari selects a row without focusing it.
+    fixture.componentInstance.selected.set('c');
+    await settle(fixture);
+    expect(tabStops(fixture)).toEqual(['c']);
+  });
+
+  it('keeps the Tab stop when a row that stays selected changes another class', async () => {
+    const fixture = mount();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    fixture.componentInstance.selected.set('c');
+    await settle(fixture);
+    rows(fixture)[0].focus();
+    outside.focus();
+    await settle(fixture);
+    expect(tabStops(fixture)).toEqual(['a']);
+    rows(fixture)[2].classList.add('hovered');
+    await settle(fixture);
+    expect(tabStops(fixture)).toEqual(['a']);
+  });
+
   it('moves focus with the arrow keys, Home and End, and stops at the ends', async () => {
     const fixture = mount();
     await settle(fixture);

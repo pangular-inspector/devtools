@@ -466,19 +466,22 @@ function same(a: unknown, b: unknown): boolean {
   return keys.every((key) => Object.hasOwn(y, key) && same(x[key], y[key]));
 }
 
-function join(path: string, key: string | number): string {
+/** A child path as the change log writes it: `a.b`, `a[0]`, `a["first name"]`. */
+export function joinStatePath(path: string, key: string | number): string {
   if (typeof key === 'number') return `${path}[${key}]`;
   const safe = /^[A-Za-z_$][\w$]*$/.test(key) ? key : JSON.stringify(key);
   if (!path) return safe;
   return safe.startsWith('"') ? `${path}[${safe}]` : `${path}.${safe}`;
 }
 
+/** Changes from `before` to `after`, with paths under `base` (`(root)` when it is empty). */
 export function diff(
   before: unknown,
   after: unknown,
   limit = 50,
   maxDepth = 6,
   overflow?: DiffOverflow,
+  base = '',
 ): NgrxDiffEntry[] {
   const out: NgrxDiffEntry[] = [];
   const full = () => out.length >= limit && (!overflow || overflow.more >= NGRX_DIFF_MORE_CAP);
@@ -498,9 +501,9 @@ export function diff(
       const x = a as unknown[];
       const y = b as unknown[];
       for (let i = 0; i < Math.max(x.length, y.length); i++) {
-        if (i >= x.length) emit({ path: join(path, i), op: 'add', after: y[i] });
-        else if (i >= y.length) emit({ path: join(path, i), op: 'remove', before: x[i] });
-        else walk(x[i], y[i], join(path, i), depth + 1);
+        if (i >= x.length) emit({ path: joinStatePath(path, i), op: 'add', after: y[i] });
+        else if (i >= y.length) emit({ path: joinStatePath(path, i), op: 'remove', before: x[i] });
+        else walk(x[i], y[i], joinStatePath(path, i), depth + 1);
         if (full()) return;
       }
       return;
@@ -508,13 +511,13 @@ export function diff(
     const x = a as Record<string, unknown>;
     const y = b as Record<string, unknown>;
     for (const key of new Set([...Object.keys(x), ...Object.keys(y)])) {
-      if (!(key in y)) emit({ path: join(path, key), op: 'remove', before: x[key] });
-      else if (!(key in x)) emit({ path: join(path, key), op: 'add', after: y[key] });
-      else walk(x[key], y[key], join(path, key), depth + 1);
+      if (!(key in y)) emit({ path: joinStatePath(path, key), op: 'remove', before: x[key] });
+      else if (!(key in x)) emit({ path: joinStatePath(path, key), op: 'add', after: y[key] });
+      else walk(x[key], y[key], joinStatePath(path, key), depth + 1);
       if (full()) return;
     }
   };
-  walk(before, after, '', 0);
+  walk(before, after, base, 0);
   return out;
 }
 
@@ -565,10 +568,10 @@ export function referenceDiff(
       const y = b as unknown[];
       for (let i = 0; i < Math.max(x.length, y.length) && !full(); i++) {
         if (i >= x.length) {
-          emit(() => ({ path: join(at, i), op: 'add', after: show(field(y, i)) }));
+          emit(() => ({ path: joinStatePath(at, i), op: 'add', after: show(field(y, i)) }));
         } else if (i >= y.length) {
-          emit(() => ({ path: join(at, i), op: 'remove', before: show(field(x, i)) }));
-        } else walk(field(x, i), field(y, i), join(at, i), depth + 1);
+          emit(() => ({ path: joinStatePath(at, i), op: 'remove', before: show(field(x, i)) }));
+        } else walk(field(x, i), field(y, i), joinStatePath(at, i), depth + 1);
       }
     } else {
       const x = a as Record<string, unknown>;
@@ -578,21 +581,26 @@ export function referenceDiff(
         const secret = isRedactedKey(key);
         if (!(key in y)) {
           emit(() => ({
-            path: join(at, key),
+            path: joinStatePath(at, key),
             op: 'remove',
             before: secret ? REDACTED : show(field(x, key)),
           }));
         } else if (!(key in x)) {
           emit(() => ({
-            path: join(at, key),
+            path: joinStatePath(at, key),
             op: 'add',
             after: secret ? REDACTED : show(field(y, key)),
           }));
         } else if (secret) {
           if (!Object.is(field(x, key), field(y, key))) {
-            emit(() => ({ path: join(at, key), op: 'change', before: REDACTED, after: REDACTED }));
+            emit(() => ({
+              path: joinStatePath(at, key),
+              op: 'change',
+              before: REDACTED,
+              after: REDACTED,
+            }));
           }
-        } else walk(field(x, key), field(y, key), join(at, key), depth + 1);
+        } else walk(field(x, key), field(y, key), joinStatePath(at, key), depth + 1);
       }
     }
     if (found === start) {

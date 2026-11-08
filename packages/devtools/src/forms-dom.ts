@@ -197,8 +197,10 @@ export function domFacts(
   ];
   if (describedBy.length) facts.describedBy = describedBy.some((d) => !!d.textContent?.trim());
   if (model.hasErrors) facts.errorShown = errorElements(el).some(isShown);
-  const disabled = (el as HTMLInputElement).disabled;
-  if (typeof disabled === 'boolean' && disabled !== !!model.disabled) facts.disabled = disabled;
+  // `:disabled` also covers a control inside a disabled `<fieldset>`, which its own `disabled` misses.
+  const disabled =
+    typeof (el as HTMLInputElement).disabled === 'boolean' ? el.matches(':disabled') : undefined;
+  if (disabled !== undefined && disabled !== !!model.disabled) facts.disabled = disabled;
   const dom = domValue(el);
   const same =
     el instanceof HTMLSelectElement && typeof dom === 'string'
@@ -245,7 +247,8 @@ export function submitDom(el: Element, context: SubmitContext = {}): SubmitDom {
     return owner === el || (owner === undefined && inside.includes(b));
   });
   const submitters = candidates.filter(isSubmitter);
-  const disabledButtons = submitters.filter((b) => (b as HTMLButtonElement).disabled).length;
+  // `:disabled` also counts a button inside a disabled `<fieldset>`.
+  const disabledButtons = submitters.filter((b) => b.matches(':disabled')).length;
   const typed = candidates.filter((b) => b instanceof HTMLButtonElement && !isSubmitter(b));
   if (!submitters.length) {
     reasons.push(

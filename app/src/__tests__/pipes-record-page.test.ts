@@ -166,6 +166,32 @@ describe('pipes live data per page', () => {
     expect(fixture.componentInstance.liveFor('price')?.instanceCount).toBe(2);
   });
 
+  it('shows the page another tab asked for over the page the panel belongs to', async () => {
+    scopeToPage('A');
+    const fixture = TestBed.createComponent(PipesInspector);
+    fixture.componentRef.setInput('pageId', 'B');
+    fixture.componentRef.setInput(
+      'rpc',
+      withPages({
+        pipes: [live(5)],
+        async: [],
+        reportedAt: 0,
+        instrumented: [],
+        pages: [
+          { pageId: 'A', pipes: [live(3)], async: [] },
+          { pageId: 'B', pipes: [live(2)], async: [] },
+        ],
+      }),
+    );
+    for (let i = 0; i < 4; i++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+    }
+    expect(fixture.componentInstance.liveFor('price')?.instanceCount).toBe(2);
+    fixture.componentRef.setInput('pageId', null);
+    expect(fixture.componentInstance.liveFor('price')?.instanceCount).toBe(3);
+  });
+
   it('lists the template usages of a custom pipe', async () => {
     const fixture = await render(
       withPages({ pipes: [], async: [], reportedAt: 0, instrumented: [] }),

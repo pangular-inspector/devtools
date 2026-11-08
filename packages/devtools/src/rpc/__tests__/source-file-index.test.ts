@@ -58,6 +58,33 @@ export class X {}
     expect(scanPipes(cwd).map((p) => p.name)).toEqual(['uppercase']);
   });
 
+  it('rescans a component once its missing templateUrl file appears', () => {
+    const cwd = project();
+    writeFileSync(
+      join(cwd, 'src', 'x.ts'),
+      `import { Component } from '@angular/core';\n@Component({ selector: 'app-x', templateUrl: './x.html' })\nexport class X {}\n`,
+    );
+    expect(scanPipes(cwd)).toEqual([]);
+    writeFileSync(join(cwd, 'src', 'x.html'), '<p>{{ when | date }}</p>');
+    expect(scanPipes(cwd).map((p) => p.name)).toEqual(['date']);
+  });
+
+  it('checks template files on the watcher fast path', () => {
+    const cwd = project();
+    mkdirSync(join(cwd, 'shared'));
+    writeFileSync(join(cwd, 'shared', 'x.html'), '<p>{{ when | date }}</p>');
+    writeFileSync(
+      join(cwd, 'src', 'x.ts'),
+      `import { Component } from '@angular/core';\n@Component({ selector: 'app-x', templateUrl: '../shared/x.html' })\nexport class X {}\n`,
+    );
+    // The watcher covers src only, so it never reports the shared template.
+    viteScanWatcher(join(cwd, 'src'));
+    expect(scanPipes(cwd).map((p) => p.name)).toEqual(['date']);
+    writeFileSync(join(cwd, 'shared', 'x.html'), '<p>{{ name | uppercase }}</p>');
+    touch(join(cwd, 'shared', 'x.html'), 1_000_000);
+    expect(scanPipes(cwd).map((p) => p.name)).toEqual(['uppercase']);
+  });
+
   it('skips the walk while the Vite watcher covers the sources and saw no change', () => {
     const cwd = project();
     const onChange = viteScanWatcher(cwd);

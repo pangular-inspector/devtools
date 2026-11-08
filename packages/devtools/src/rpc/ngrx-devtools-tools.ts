@@ -12,7 +12,7 @@ import { UNTRUSTED, untrusted } from './forms-tools.ts';
 import type { NgrxPageRecord, NgrxPages } from './ngrx-tools.ts';
 import { storeIdNamed } from './ngrx-live-tools.ts';
 import { pageArgument, unknownPageText } from './pages.ts';
-import { refusal } from './refusal.ts';
+import { isRefusal, refusal } from './refusal.ts';
 import { rankPages } from './default-page.ts';
 
 /**
@@ -170,7 +170,7 @@ const NO_TRACE =
  * Why a state path changed, as markdown: the newest log entries on the
  * matching page(s) whose diff touches `path`, newest first, each with what
  * ran, its arguments, origin, causing event and call site. With `seq`, that
- * one entry with its whole diff.
+ * one entry with its whole diff, when it belongs to `storeId` (if given).
  */
 export function explainChangeText(
   pages: NgrxPages,
@@ -199,6 +199,9 @@ export function explainChangeText(
     const entry = page.log.find((e) => e.seq === seq);
     if (!entry) {
       return `No log entry #${seq}${where || ` on page ${code(page.pageId)}`}. It may be older than the kept log (limits.changeLog).`;
+    }
+    if (storeId && entry.storeId !== storeId) {
+      return `Log entry #${seq}${where} belongs to ${code(label(entry.storeId))}, not ${code(label(storeId))}. Leave \`store\` out to explain it.`;
     }
     const body = entryText(entry, entry.diff, label(entry.storeId));
     return `${body}${entry.trace?.length ? '' : `\n\n${NO_TRACE}`}`;
@@ -274,17 +277,15 @@ export function createNgrxDevtoolsTools(deps: Deps) {
         const page = pageArgument(args);
         const store = typeof args?.['store'] === 'string' ? args['store'] : undefined;
         const path = typeof args?.['path'] === 'string' ? args['path'].slice(0, 500) : undefined;
-        return {
-          markdown: untrusted(
-            explainChangeText(
-              pages,
-              page,
-              storeIdNamed(pages, page, store),
-              path,
-              whole(args?.['seq']),
-            ),
-          ),
-        };
+        const text = explainChangeText(
+          pages,
+          page,
+          storeIdNamed(pages, page, store),
+          path,
+          whole(args?.['seq']),
+        );
+        // A refusal stays as built, so it keeps its marking and its own notice.
+        return { markdown: isRefusal(text) ? text : untrusted(text) };
       },
     },
   ];

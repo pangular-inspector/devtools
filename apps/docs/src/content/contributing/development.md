@@ -249,16 +249,20 @@ Each job appends `overrides` for the `@angular/*` runtime packages to `pnpm-work
 
 To reproduce a job, add the same `overrides` block to `pnpm-workspace.yaml`, run `pnpm install --no-frozen-lockfile`, then `pnpm exec vitest run --root packages/devtools --config vitest.compat.config.ts`. For Angular 12, run the ngcc step from the workflow before the tests. Do this in a copy of the repository, and don't commit the changed lockfile.
 
+### Vite compatibility
+
+The same workflow has a `Vite` job for each Vite major the `vite` peer range allows below the one the workspace installs: Vite 6 and Vite 7. Each one appends a `vite` override to `pnpm-workspace.yaml`, reinstalls, and runs the Vite plugin tests (`src/__tests__/vite-*.test.ts` and `lan-address.test.ts`). To reproduce it, add `overrides: {vite: '^6.0.0'}` the same way and run `pnpm exec vitest run --root packages/devtools src/__tests__/vite- src/__tests__/lan-address.test.ts`.
+
 ### Pull request checks
 
-Two more workflows run on pull requests. A pull request title or a commit message that breaks the commit format fails `Commit message`. `Docs check` only warns.
+Two more workflows run on pull requests. A pull request title or a commit message that breaks the commit format fails `Commit message`. A code change without a docs change fails `Docs check`.
 
 | Workflow         | File                                   | What it checks                                                                                                                                                         |
 | ---------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Commit message` | `.github/workflows/commit-message.yml` | The pull request title and every commit message. The title becomes the commit on `main` when the pull request is squash merged. A bad title or commit fails the check. |
 | `Docs check`     | `.github/workflows/docs-check.yml`     | That a change to `packages/devtools/src/`, `app/src/` or the top-level files in `extension/` also changes a page in `apps/docs/src/content`. Tests don't count.        |
 
-If a code change needs no docs change, add the `no-docs` label to the pull request and say why in the description. The `Docs check` workflow then skips the warning.
+If a code change needs no docs change, add the `no-docs` label to the pull request and say why in the description. The `Docs check` workflow then passes.
 
 ## Make changes
 
