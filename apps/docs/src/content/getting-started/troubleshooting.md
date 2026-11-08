@@ -41,11 +41,11 @@ With the [Vite plugin](./vite.md), `main.ts` needs no import: the plugin adds th
 
 The overlay found no server part. It logs an error that starts with `[pangular] No devtools server found` and lists the paths it tried, and the panel says **No devtools server found**, with a **Troubleshooting** link to this section.
 
-| Cause                                                               | Fix                                                                                                                      |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| No server part is mounted, for example plain `ng serve` without SSR | Mount `initPangularHub()` in `server.ts`, or run the [client-only setup](./installation.md#client-only-angular-cli-app). |
-| The hub is mounted after `express.static` or the SSR handler        | Move `app.use(devtools.nodeMiddleware)` above them. See [Middleware order](./express.md#middleware-order).               |
-| The hub runs on a custom `base`                                     | Pass `<base>pangular/` to [`initOverlay`](./overlay.md#a-custom-mount-path).                                             |
+| Cause                                                               | Fix                                                                                                                                                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No server part is mounted, for example plain `ng serve` without SSR | Mount `initPangularHub()` in `server.ts`, or switch `ng serve` to the `dev-server` builder as in the [client-only setup](./installation.md#client-only-angular-cli-app). |
+| The hub is mounted after `express.static` or the SSR handler        | Move `app.use(devtools.nodeMiddleware)` above them. See [Middleware order](./express.md#middleware-order).                                                               |
+| The hub runs on a custom `base`                                     | Pass `<base>pangular/` to [`initOverlay`](./overlay.md#a-custom-mount-path).                                                                                             |
 
 [No devtools server found](./overlay.md#no-devtools-server-found) on the overlay page lists the paths the overlay tries.
 

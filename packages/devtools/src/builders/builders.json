@@ -1,0 +1,9 @@
+{
+  "builders": {
+    "dev-server": {
+      "implementation": "./dev-server/builder.cjs",
+      "schema": "./dev-server/schema.json",
+      "description": "Run the Angular CLI dev server with the Pangular Inspector hub mounted."
+    }
+  }
+}

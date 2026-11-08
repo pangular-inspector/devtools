@@ -36,6 +36,7 @@ import { signalPrimitivesAlias } from './vite-signals-stub.ts';
 import { terminalsEnabled } from './hub-terminals.ts';
 import { watchViteErrors, type ViteErrorSource } from './server-errors.ts';
 import { buildRegistry, viteGraphSource } from './build-graph.ts';
+import { timeViteModules } from './vite-timings.ts';
 import { lanAllowed, viteLanAddress } from './vite-lan.ts';
 
 export type { PangularConfig } from './config.ts';
@@ -217,9 +218,16 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
           if (lan.url) logger.info(`  \u279C  Pangular Inspector (LAN): ${lan.url}`);
         };
       }
-      // The module graph for the Build tab, read only when the panel or an agent asks.
+      // The module graph for the Build tab, read only when the panel or an agent asks,
+      // with what each module cost the dev server.
+      const timed = inspectors.build
+        ? timeViteModules(server as unknown as Parameters<typeof timeViteModules>[0])
+        : undefined;
       const graph = inspectors.build
-        ? viteGraphSource(server as unknown as Parameters<typeof viteGraphSource>[0])
+        ? viteGraphSource(
+            server as unknown as Parameters<typeof viteGraphSource>[0],
+            timed?.timings,
+          )
         : undefined;
       if (graph) buildRegistry().vite = graph;
       // Transform and compile errors Vite shows in its overlay, for the Errors tab.
@@ -228,6 +236,7 @@ export default function pangularVite(options: PangularViteOptions = {}): Plugin 
         : () => {};
       httpServer?.once('close', () => {
         stopViteErrors();
+        timed?.stop();
         if (graph && buildRegistry().vite === graph) buildRegistry().vite = undefined;
         // A restart opens the new server before this one closes: clear only what is still ours.
         if (analog) {

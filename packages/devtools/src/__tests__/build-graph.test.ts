@@ -14,7 +14,8 @@ import {
   viteGraphSource,
   type ViteModuleLike,
 } from '../build-graph.ts';
-import { chunkSizesText, formatBytes, moduleGraphText } from '../rpc/build-register.ts';
+import { chunkSizesText, formatBytes, formatMs, moduleGraphText } from '../rpc/build-register.ts';
+import { ModuleTimings } from '../vite-timings.ts';
 import { answerText } from './tool-answer.ts';
 
 /** A Vite-like module graph: `links` are `[from, to, dynamic?]`. */
@@ -27,6 +28,7 @@ function graph(
   for (const [url, size] of Object.entries(sizes)) {
     mods.set(url, {
       url,
+      id: join(root, url),
       file: join(root, url),
       type: url.endsWith('.css') ? 'css' : 'js',
       importers: new Set(),
@@ -116,6 +118,44 @@ describe('readViteGraph', () => {
     expect(found).toContain('`/src/admin.page.ts`');
     delete buildRegistry().vite;
     expect(moduleGraphText(readBuildGraph('/nowhere'))).toMatch(/No Vite dev server/);
+  });
+
+  it('adds the time Vite spent on each module, by its resolved id', () => {
+    const timings = new ModuleTimings();
+    timings.add(join(root, '/src/trip-map.ts'), 'resolve', 0.04);
+    timings.add(join(root, '/src/trip-map.ts'), 'load', 1.26);
+    timings.add(join(root, '/src/trip-map.ts'), 'transform', 40.5);
+    timings.add(join(root, '/src/main.ts'), 'transform', 2);
+    const result = readViteGraph({ root, modules: () => modules, timings });
+    const map = result.modules.find((m) => m.url === '/src/trip-map.ts');
+    expect(map?.time).toEqual({ resolve: 0, load: 1.3, transform: 40.5, total: 41.8 });
+    expect(result.modules.find((m) => m.url === '/src/shared.ts')).not.toHaveProperty('time');
+    expect(result.timings).toEqual({ modules: 2, capped: false });
+    expect(readViteGraph({ root, modules: () => modules })).not.toHaveProperty('timings');
+  });
+
+  it('answers module-graph with the slowest modules and a time per search hit', () => {
+    const timings = new ModuleTimings();
+    timings.add(join(root, '/src/trip-map.ts'), 'transform', 40.5);
+    timings.add(join(root, '/src/app.routes.ts'), 'transform', 1200);
+    buildRegistry().vite = { root, modules: () => modules, timings };
+    const text = moduleGraphText(readBuildGraph('/nowhere'));
+    const slowest = text.slice(text.indexOf('### Slowest modules'));
+    expect(slowest).toContain('| Module | Total | Resolve | Load | Transform |');
+    expect(slowest.indexOf('src/app.routes.ts')).toBeLessThan(slowest.indexOf('src/trip-map.ts'));
+    expect(slowest).toContain('| `src/app.routes.ts` | 1.20 s | 0.0 ms | 0.0 ms | 1.20 s |');
+    const found = moduleGraphText(readBuildGraph('/nowhere'), { search: 'trip-map' });
+    expect(found).toContain('| `src/trip-map.ts` | 600 B | 40.5 ms | 1 | 0 |  |');
+    buildRegistry().vite = { root, modules: () => modules, timings: new ModuleTimings() };
+    expect(moduleGraphText(readBuildGraph('/nowhere'))).toContain('No module was timed yet.');
+    buildRegistry().vite = { root, modules: () => modules };
+    expect(moduleGraphText(readBuildGraph('/nowhere'))).toContain('No timings:');
+  });
+
+  it('formats milliseconds', () => {
+    expect(formatMs(undefined)).toBe('');
+    expect(formatMs(12.34)).toBe('12.3 ms');
+    expect(formatMs(2500)).toBe('2.50 s');
   });
 });
 

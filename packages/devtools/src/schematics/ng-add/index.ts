@@ -4,8 +4,10 @@
 // - a Vite config (Analog): the Vite plugin, which also loads the overlay;
 // - an Express `server.ts` (Angular SSR): `initPangularHub()` and its
 //   middleware, and the overlay in `main.ts` behind a development check;
-// - anything else: the overlay in `main.ts`, and the steps to run the
-//   standalone CLI next to `ng serve`, printed.
+// - anything else: the overlay in `main.ts`, and the `serve` target switched
+//   to this package's `dev-server` builder, which mounts the hub in `ng serve`
+//   (`--dev-server=false` keeps the target and prints the steps to run the
+//   standalone CLI next to `ng serve` instead).
 //
 // Every edit is idempotent and only inserts lines next to code it recognizes.
 // When a file doesn't look the way the docs assume, it changes nothing and
@@ -19,6 +21,12 @@ import type { Rule, SchematicContext, Tree } from '@angular-devkit/schematics';
 export interface NgAddOptions {
   /** The project to set up. Defaults to the workspace's only application, or its first one. */
   project?: string;
+  /**
+   * For a project with no Express `server.ts` and no Vite config: switch its
+   * `serve` target to the `dev-server` builder. On by default; `false` keeps
+   * the target and prints the standalone CLI steps.
+   */
+  devServer?: boolean;
 }
 
 /** What one edit did: inserted the lines, found them there already, or left the file alone. */
@@ -28,6 +36,8 @@ export interface EditResult {
   status: EditStatus;
   /** The new file content, for `added`. */
   text?: string;
+  /** For `unsure`: why the edit does not apply to this project at all, so there is no snippet to add. */
+  skip?: string;
 }
 
 export const PACKAGE = '@pangular-inspector/devtools';
@@ -61,6 +71,29 @@ export const CLI_STEPS = [
   '  2. Save proxy.conf.json next to angular.json:',
   '     {"/__pangular": {"target": "http://localhost:9999", "pathRewrite": {"^/__pangular": ""}, "ws": true}}',
   '  3. Set "proxyConfig": "proxy.conf.json" in the serve options of angular.json, or run ng serve --proxy-config proxy.conf.json',
+  `See ${DOCS}/installation#client-only-angular-cli-app`,
+];
+
+/** The builder that runs `ng serve` with the hub mounted. */
+export const DEV_SERVER_BUILDER = `${PACKAGE}:dev-server`;
+
+/** Dev servers the builder can run, and the default it picks when `builder` is not set. */
+const SWITCHABLE_SERVERS = [
+  '@angular/build:dev-server',
+  '@angular-devkit/build-angular:dev-server',
+];
+const DEFAULT_SERVER = '@angular/build:dev-server';
+/** Build builders whose dev server is Vite, which takes the hub's middleware. Webpack's does not. */
+const VITE_BUILDS = /:(application|browser-esbuild)$/;
+
+export const BUILDER_SNIPPET = `"serve": {
+  "builder": "${DEV_SERVER_BUILDER}",
+  ...
+}`;
+
+export const BUILDER_STEPS = [
+  `ng serve now runs ${DEV_SERVER_BUILDER}, which mounts the devtools hub in the Angular dev server.`,
+  'Start ng serve and click the Pangular Inspector button on the page, or open http://localhost:4200/__devframes/.',
   `See ${DOCS}/installation#client-only-angular-cli-app`,
 ];
 
@@ -392,6 +425,73 @@ export function wireVitePlugin(text: string): EditResult {
   return { status: 'added', text: out };
 }
 
+/** The indent of the first indented line, such as two spaces. */
+function indentOf(text: string): string {
+  return /\n([ \t]+)\S/.exec(text)?.[1] ?? '  ';
+}
+
+/**
+ * Points the `serve` target of `project` in `angular.json` at the
+ * `dev-server` builder, so `ng serve` mounts the hub. Only for an Angular CLI
+ * dev server on a Vite-based build (`application` or `browser-esbuild`): the
+ * webpack dev server takes no middleware. A `@angular-devkit/build-angular`
+ * dev server is kept as the builder's `builder` option, so the same package
+ * keeps serving the app.
+ *
+ * A file without comments is written back with its own indent. A file with
+ * comments is only changed when the old builder name appears once and needs
+ * no option, so the comments stay.
+ */
+export function switchServeBuilder(text: string, project: string): EditResult {
+  const workspace = parseWorkspaceJson(text);
+  const projects =
+    isObject(workspace) && isObject(workspace['projects']) ? workspace['projects'] : {};
+  const target = projects[project];
+  const architect = isObject(target) && isObject(target['architect']) ? target['architect'] : {};
+  const serve = architect['serve'];
+  const build = architect['build'];
+  if (!isObject(serve)) {
+    return { status: 'unsure', skip: `${project} has no serve target in angular.json.` };
+  }
+  const current = serve['builder'];
+  if (current === DEV_SERVER_BUILDER) return { status: 'present' };
+  if (typeof current !== 'string' || !SWITCHABLE_SERVERS.includes(current)) {
+    return {
+      status: 'unsure',
+      skip: `The serve target of ${project} runs ${String(current)}, which the ${DEV_SERVER_BUILDER} builder does not run.`,
+    };
+  }
+  const buildBuilder = isObject(build) ? build['builder'] : undefined;
+  if (typeof buildBuilder !== 'string' || !VITE_BUILDS.test(buildBuilder)) {
+    return {
+      status: 'unsure',
+      skip: `${project} builds with ${String(buildBuilder)}, whose dev server takes no middleware. The ${DEV_SERVER_BUILDER} builder needs the application builder.`,
+    };
+  }
+  let strict: unknown;
+  try {
+    strict = JSON.parse(text);
+  } catch {
+    strict = undefined;
+  }
+  if (isObject(strict)) {
+    const strictServe = ((strict['projects'] as Json)[project] as Json)['architect'] as Json;
+    const next = strictServe['serve'] as Json;
+    next['builder'] = DEV_SERVER_BUILDER;
+    if (current !== DEFAULT_SERVER) {
+      next['options'] = { ...(isObject(next['options']) ? next['options'] : {}), builder: current };
+    }
+    const out = JSON.stringify(strict, null, indentOf(text));
+    return { status: 'added', text: text.endsWith('\n') ? `${out}\n` : out };
+  }
+  if (current !== DEFAULT_SERVER) return { status: 'unsure' };
+  const escaped = current.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`("builder"\\s*:\\s*)"${escaped}"`, 'g');
+  const hits = [...text.matchAll(pattern)];
+  if (hits.length !== 1) return { status: 'unsure' };
+  return { status: 'added', text: text.replace(pattern, `$1"${DEV_SERVER_BUILDER}"`) };
+}
+
 function apply(
   tree: Tree,
   context: SchematicContext,
@@ -445,10 +545,31 @@ export function ngAdd(options: NgAddOptions = {}): Rule {
         );
         apply(tree, context, setup.main, wireOverlay, 'the overlay', OVERLAY_SNIPPET);
         break;
-      case 'cli':
+      case 'cli': {
         apply(tree, context, setup.main, wireOverlay, 'the overlay', OVERLAY_SNIPPET);
-        context.logger.info(`[pangular] ${CLI_STEPS.join('\n')}`);
+        const project = setup.project;
+        const workspaceText = readText(tree, 'angular.json');
+        const skip =
+          project && workspaceText !== undefined
+            ? switchServeBuilder(workspaceText, project).skip
+            : undefined;
+        if (options.devServer !== false && skip) context.logger.info(`[pangular] ${skip}`);
+        const switched =
+          options.devServer !== false && project && !skip
+            ? apply(
+                tree,
+                context,
+                'angular.json',
+                (text) => switchServeBuilder(text, project),
+                `the ${DEV_SERVER_BUILDER} builder to the serve target of ${project}`,
+                BUILDER_SNIPPET,
+              )
+            : 'unsure';
+        context.logger.info(
+          `[pangular] ${(switched === 'unsure' ? CLI_STEPS : BUILDER_STEPS).join('\n')}`,
+        );
         break;
+      }
       case 'unreadable':
         context.logger.warn(
           `[pangular] Could not read angular.json: it is not valid JSON, even with comments and trailing commas allowed. Nothing was changed. Add the overlay to main.ts by hand:\n\n${OVERLAY_SNIPPET}\n\nSee ${DOCS}/installation`,
