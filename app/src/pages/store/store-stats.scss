@@ -1,0 +1,4 @@
+@use 'store';
+
+@include store.base;
+@include store.history-stats($stats: ':host');

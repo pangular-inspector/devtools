@@ -1,0 +1,9 @@
+@use 'components' as ct;
+
+@include ct.base;
+@include ct.buttons;
+.owner-action {
+  margin-top: 10px;
+}
+@include ct.detail;
+@include ct.values;

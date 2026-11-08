@@ -1,0 +1,14 @@
+@use 'mixins' as m;
+@use 'injectors' as inj;
+
+@include inj.mono;
+@include inj.detail-head;
+@include inj.state;
+@include inj.buttons;
+@include inj.state-buttons;
+@include inj.state-button-focus;
+// The section is the host, so the original .gone .state is :host(.gone) .state here.
+:host(.gone) .state {
+  align-items: flex-start;
+  text-align: left;
+}

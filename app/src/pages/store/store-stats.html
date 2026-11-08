@@ -1,0 +1,47 @@
+@if (store(); as current) {
+  <h4 id="ngrx-stats-heading">Action frequency</h4>
+  <p class="hint small">
+    How often each {{ current.classic ? 'action' : 'change' }} ran since the page loaded, including
+    entries the log no longer keeps.
+  </p>
+  <div class="table-wrap" tabindex="0" role="region" aria-labelledby="ngrx-stats-heading">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">{{ current.classic ? 'Action' : 'Method or write' }}</th>
+          <th scope="col" class="num">Count</th>
+          <th scope="col" class="num">Avg</th>
+          <th scope="col" class="num">Longest</th>
+          <th scope="col" class="num">Peak per second</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (stat of storeStats(); track stat.type) {
+          <tr>
+            <th scope="row" class="mono">
+              {{ stat.type }}
+              @if (stat.loop) {
+                <span class="loop">Possible effect loop</span>
+              }
+            </th>
+            <td class="num">{{ stat.count }}</td>
+            <td class="num">
+              {{ stat.avgMs !== undefined ? formatDuration(stat.avgMs) : 'n/a' }}
+            </td>
+            <td class="num">
+              {{ stat.maxMs !== undefined ? formatDuration(stat.maxMs) : 'n/a' }}
+            </td>
+            <td class="num">{{ stat.burst }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (hasLoop()) {
+    <p class="hint small">
+      A possible effect loop is an action an NgRx effect dispatched
+      {{ loopBurst }} or more times within one second. Check the effect that dispatches it for a
+      missing filter or a dispatch of its own trigger.
+    </p>
+  }
+}

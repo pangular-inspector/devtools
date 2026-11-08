@@ -1,0 +1,111 @@
+@use 'mixins' as m;
+@use 'components' as ct;
+
+:host {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+@include ct.base;
+.intro {
+  max-width: 720px;
+  margin: 0 0 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.notice {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+@include ct.search;
+@include ct.buttons;
+.refresh.spinning svg {
+  animation: spin 0.8s linear infinite;
+}
+.page-select {
+  flex: 0 1 220px;
+  min-width: 0;
+}
+.tree-action:disabled,
+.tree-action:disabled:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  opacity: 0.5;
+}
+.pick.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--text-strong);
+}
+.defer {
+  margin-top: 16px;
+}
+.pick-message {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+@media (min-width: 880px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 44%);
+  }
+  .detail {
+    position: sticky;
+    top: 64px;
+    max-height: calc(100vh - 150px);
+    overflow: auto;
+  }
+}
+@include ct.narrow;
+.tree-col {
+  position: relative;
+  min-width: 0;
+}
+.detail {
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  @include m.enter;
+}
+.detail.placeholder {
+  padding: 24px 16px;
+  border-style: dashed;
+  text-align: center;
+}
+@include ct.states;
+.source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

@@ -1,0 +1,59 @@
+@let sel = node();
+<header class="detail-head">
+  <span class="badge" [style.--tone]="tone(kind(sel))">{{ kind(sel) }}</span>
+  <h2 id="di-detail-title" class="mono">{{ label(sel) }}</h2>
+  @if (sel.injector.directives?.length) {
+    <ul class="classes" aria-label="Classes on this element">
+      @for (name of sel.injector.directives; track name) {
+        <li [class.is-component]="name === sel.injector.component">{{ name }}</li>
+      }
+    </ul>
+  }
+  @if (canShowComponent() && sel.injector.componentId; as componentId) {
+    <button type="button" class="show-component" (click)="openComponent(componentId)">
+      Show in Components
+      <span class="sr-only">: {{ sel.injector.component }}</span>
+    </button>
+  }
+</header>
+
+@if (sel.injector.inactive) {
+  <p class="hint inactive-note">
+    Inactive: the router loaded this route's injector, but no element on the page uses it now. It
+    keeps the services it created until the app is reloaded.
+  </p>
+}
+<div class="block">
+  <h3>Lookup path</h3>
+  <p class="hint">Angular asks these injectors in order until one has the token.</p>
+  <ol class="path">
+    @for (step of path(); track step.id; let first = $first) {
+      <li [class.current]="first">
+        @if (step.id === nullId) {
+          <span class="step null">
+            <span class="dot" [style.background]="tone('null')" aria-hidden="true"></span>
+            Null injector
+            <span class="hint-inline">throws NullInjectorError</span>
+          </span>
+        } @else {
+          <button type="button" class="step" (click)="reveal(step.id)">
+            <span class="dot" [style.background]="tone(step.kind)" aria-hidden="true"></span>
+            <span class="mono">{{ step.label }}</span>
+            @if (step.providers) {
+              <span class="step-count">
+                {{ step.providers }}
+                <span class="sr-only">{{ step.providers === 1 ? 'provider' : 'providers' }}</span>
+              </span>
+            }
+          </button>
+        }
+      </li>
+    }
+  </ol>
+</div>
+
+@if (sel.injector.type === 'element' || sel.dependencies) {
+  <div appInjectorDeps class="block" [node]="sel"></div>
+}
+
+<div appInjectorProviders class="block" [node]="sel"></div>

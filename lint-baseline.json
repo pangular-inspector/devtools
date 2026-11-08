@@ -14,24 +14,6 @@
   "app/src/app.ts": {
     "pangular(max-lines)": 1980
   },
-  "app/src/pages/analog-inspector.ts": {
-    "pangular(max-lines)": 2743
-  },
-  "app/src/pages/component-tree.ts": {
-    "pangular(max-lines)": 2982
-  },
-  "app/src/pages/di-inspector.ts": {
-    "pangular(max-lines)": 2742
-  },
-  "app/src/pages/pipes-inspector.ts": {
-    "pangular(max-lines)": 1606
-  },
-  "app/src/pages/signal-inspector.ts": {
-    "pangular(max-lines)": 2514
-  },
-  "app/src/pages/store-inspector.ts": {
-    "pangular(max-lines)": 2870
-  },
   "app/src/pages/store-types.ts": {
     "typescript(no-explicit-any)": 1
   },

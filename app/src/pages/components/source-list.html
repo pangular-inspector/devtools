@@ -1,0 +1,52 @@
+@for (comp of filteredSource(); track sourceKey(comp); let i = $index) {
+  <li class="source-item" [class.expanded]="openKey() === sourceKey(comp)">
+    <button
+      type="button"
+      class="source-toggle"
+      [attr.aria-expanded]="openKey() === sourceKey(comp)"
+      [attr.aria-controls]="openKey() === sourceKey(comp) ? 'ct-source-' + i : null"
+      (click)="openKey.set(openKey() === sourceKey(comp) ? null : sourceKey(comp))"
+    >
+      <span class="kind-flag" [class.directive]="comp.kind === 'directive'">{{ comp.kind }}</span>
+      <span class="row-main">
+        <span class="selector mono">{{ sourceLabel(comp) }}</span>
+        <span class="file mono">
+          @if (comp.selector) {
+            {{ bareName(comp.className) }} ·
+          }
+          {{ comp.file }}:{{ comp.line }}
+        </span>
+      </span>
+      <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m9 6 6 6-6 6" />
+      </svg>
+    </button>
+    @if (openKey() === sourceKey(comp)) {
+      <div class="inline-detail" [id]="'ct-source-' + i">
+        <dl class="facts">
+          <dt>Class</dt>
+          <dd class="mono">{{ bareName(comp.className) }}</dd>
+          <dt>File</dt>
+          <dd class="mono">
+            <app-source-link [file]="comp.file" [line]="comp.line" />
+          </dd>
+          <dt>Standalone</dt>
+          <dd>{{ comp.isStandalone ? 'Yes' : 'No' }}</dd>
+          @if (comp.kind === 'component') {
+            <dt>Change detection</dt>
+            <dd>{{ comp.changeDetection ?? 'Unknown' }}</dd>
+          }
+          <dt>Inputs</dt>
+          <dd class="mono">{{ comp.inputs.join(', ') || 'None' }}</dd>
+          <dt>Outputs</dt>
+          <dd class="mono">{{ comp.outputs.join(', ') || 'None' }}</dd>
+        </dl>
+        @for (form of formsIn(comp.file); track form.formId) {
+          <button type="button" class="show-form" (click)="showForm.emit(form.formId)">
+            Show {{ form.label }} in Forms
+          </button>
+        }
+      </div>
+    }
+  </li>
+}

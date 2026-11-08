@@ -1,0 +1,45 @@
+@if (findings().length) {
+  <p class="muted">
+    {{ plural(findings().length, 'issue') }} in {{ plural(lintCards().length, 'group') }}. Each card
+    says what is wrong, where, and how to fix it.
+  </p>
+  <ul class="findings">
+    @for (card of lintCards(); track card.rule) {
+      <li [attr.data-tone]="tone(card.severity)">
+        <div class="finding-head">
+          <span class="pill" [attr.data-tone]="tone(card.severity)">{{ card.severity }}</span>
+          <strong class="finding-title">{{ card.title }}</strong>
+          @if (card.items.length > 1) {
+            <span class="count">{{ card.items.length }}</span>
+          }
+        </div>
+        <p>{{ card.summary }}</p>
+        <ul class="where">
+          @for (item of card.items; track $index) {
+            <li>
+              @if (item.file) {
+                <app-source-link class="file" [file]="item.file"
+                  ><span class="dir">{{ dir(item.file) }}</span
+                  >{{ base(item.file) }}</app-source-link
+                >
+              }
+              @if (item.path && item.path !== item.file) {
+                <span class="mono path">{{ item.path }}</span>
+              }
+              @if (item.message) {
+                <p class="detail">{{ item.message }}</p>
+              }
+            </li>
+          }
+        </ul>
+        <div class="fix"><strong>How to fix</strong> {{ card.fix }}</div>
+        <span class="rule mono">{{ card.rule }}</span>
+      </li>
+    }
+  </ul>
+} @else {
+  <div class="callout" data-tone="good" role="status">
+    <strong>No Analog problems found.</strong> Routes, server files, prerender config and content
+    all check out.
+  </div>
+}

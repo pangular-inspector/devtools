@@ -14,27 +14,8 @@ const LABEL: Record<CallOrigin, string> = {
  */
 @Component({
   selector: 'app-call-origin',
-  template: `@if (origin()) {
-    <span class="tag" [title]="title()">likely {{ label() }}</span>
-  }`,
-  styles: `
-    :host {
-      display: contents;
-    }
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      height: 20px;
-      padding: 0 8px;
-      border: 1px dashed var(--border-strong);
-      border-radius: 99px;
-      background: var(--surface-3);
-      color: var(--text-2);
-      font-size: 11px;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-  `,
+  templateUrl: './call-origin.html',
+  styleUrl: './call-origin.scss',
 })
 export class CallOriginTag {
   readonly origin = input<CallOrigin | undefined>(undefined);

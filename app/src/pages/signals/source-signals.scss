@@ -1,0 +1,10 @@
+@use 'signals' as sig;
+
+@include sig.states;
+@include sig.cards;
+@include sig.node-list;
+@media (max-width: 480px) {
+  .node-card {
+    padding: 12px;
+  }
+}

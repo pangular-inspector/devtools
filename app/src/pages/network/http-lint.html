@@ -1,0 +1,32 @@
+<p class="intro">
+  Same GET again within {{ defaults.duplicateWindowMs }} ms, {{ defaults.minChain }} or more calls
+  in a row that could start together, and server calls the browser made again. Transfer cache hits,
+  mocks and cancelled calls are left out.
+</p>
+@if (!calls().length) {
+  <p class="none">No client calls to check yet.</p>
+} @else if (!findings().length) {
+  <p class="none ok">No duplicate requests, waterfalls or repeated server calls.</p>
+} @else {
+  <ul class="findings">
+    @for (finding of findings(); track finding.kind + ':' + finding.callIds.join(',')) {
+      <li>
+        <span class="kind" [attr.data-kind]="finding.kind">{{ kindLabel(finding.kind) }}</span>
+        <p class="message">
+          {{ finding.message }}
+          @if (finding.wastedMs) {
+            <span class="cost">About {{ finding.wastedMs }} ms to win.</span>
+          }
+        </p>
+        <p class="hint">{{ finding.hint }}</p>
+        <button
+          type="button"
+          [attr.aria-label]="'Show the first call of: ' + finding.message"
+          (click)="open.emit(finding.callIds[0])"
+        >
+          Show first call
+        </button>
+      </li>
+    }
+  </ul>
+}

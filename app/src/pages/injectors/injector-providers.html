@@ -1,0 +1,84 @@
+@let sel = node();
+<h3>
+  Provides <span class="pill">{{ providerCount(sel) }}</span>
+</h3>
+@if (hiddenProviders(sel); as hidden) {
+  <p class="hint framework-note">
+    {{ hidden }} framework {{ hidden === 1 ? 'provider' : 'providers' }} hidden.
+    <!-- The spaces around the label are kept: the link underlines them, as it did before. -->
+    <!-- prettier-ignore -->
+    <button type="button" class="link" (click)="setHideFramework(false)">
+      Show them
+    </button>
+  </p>
+}
+@if (providerCount(sel)) {
+  <ul class="providers">
+    @for (p of sel.providers; track (p.tokenId ?? p.token) + $index; let index = $index) {
+      @if (!isHidden(p)) {
+        <li class="provider" [class.hit]="matches(p.token)">
+          <div class="dep-main">
+            <span class="token mono">{{ p.token }}</span>
+            <span class="flag kind-flag">{{
+              p.type === 'unknown' ? 'provider' : 'use' + capital(p.type)
+            }}</span>
+            @if (p.isViewProvider) {
+              <span class="flag">viewProviders</span>
+            }
+            @if (p.multi) {
+              <span class="flag">multi</span>
+            }
+            @if (p.framework) {
+              <span class="flag">Angular</span>
+            }
+          </div>
+          @if (p.importPath?.length) {
+            <div class="dep-meta">via {{ p.importPath!.join(' › ') }}</div>
+          }
+          @if (sourceOf(p.token); as places) {
+            <div class="dep-meta declared">
+              <span>Declared in</span>
+              @for (place of places.shown; track place.file + place.line) {
+                <app-source-link class="decl-file" [file]="place.file" [line]="place.line" />
+              }
+              @if (places.more) {
+                <span>+{{ places.more }} more</span>
+              }
+            </div>
+          }
+          <app-store-global
+            class="provider-global"
+            [rpc]="rpc()"
+            [pageId]="shownPageId()"
+            [target]="{
+              kind: 'provider',
+              injectorId: sel.injector.id,
+              token: p.token,
+              tokenId: p.tokenId,
+              index: index,
+            }"
+            [label]="p.token + positionSuffix(sel.providers, index)"
+            [canLog]="true"
+          />
+          <app-provider-value
+            [rpc]="rpc()"
+            [pageId]="shownPageId()"
+            [injectorId]="sel.injector.id"
+            [token]="p.token"
+            [tokenId]="p.tokenId"
+            [index]="index"
+            [position]="tokenPosition(sel.providers, index)"
+          />
+        </li>
+      }
+    }
+  </ul>
+} @else if (!hiddenProviders(sel)) {
+  <p class="empty-line">
+    @if (sel.injector.type === 'element') {
+      No providers or viewProviders on this element.
+    } @else {
+      This injector has no providers of its own.
+    }
+  </p>
+}

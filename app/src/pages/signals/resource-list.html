@@ -1,0 +1,40 @@
+@for (res of filteredResources(); track res.id) {
+  <li>
+    <button
+      type="button"
+      class="node-card"
+      [class.selected]="selectedId() === res.id"
+      [attr.aria-expanded]="selectedId() === res.id"
+      [attr.aria-controls]="'signal-detail-' + res.id"
+      [attr.data-card]="res.id"
+      (click)="select(res.id)"
+    >
+      <span class="node-header">
+        <span class="kind-badge" [style.background]="kindColor('resource')">resource</span>
+        <span class="node-label">{{ res.name }}</span>
+        @if (res.status) {
+          <span class="status-tag" [class]="'tone-' + statusTone(res.status)">{{
+            res.status
+          }}</span>
+        }
+        @if (res.changes; as count) {
+          <span class="changed-badge">{{ count }} {{ count === 1 ? 'change' : 'changes' }}</span>
+        }
+        <span class="chevron" aria-hidden="true"></span>
+      </span>
+      @if (res.error !== undefined) {
+        <span class="node-value">{{ res.error | json }}</span>
+      } @else if (res.value !== undefined) {
+        <span class="node-value">{{ res.value | json }}</span>
+      }
+    </button>
+    @if (selectedId() === res.id) {
+      <div
+        class="detail-panel"
+        appSignalDetail
+        [resource]="res"
+        [id]="'signal-detail-' + res.id"
+      ></div>
+    }
+  </li>
+}

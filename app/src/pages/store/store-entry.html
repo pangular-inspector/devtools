@@ -1,0 +1,254 @@
+@let selected = entry();
+@let headingLevel = level();
+@let idPrefix = prefix();
+<div
+  class="entry-heading"
+  role="heading"
+  [attr.aria-level]="headingLevel"
+  [id]="idPrefix + '-entry-heading'"
+>
+  #{{ selected.seq }} {{ selected.type }}
+</div>
+<dl class="kv">
+  <dt>Time</dt>
+  <dd>{{ formatTime(selected.timestamp) }}</dd>
+  @if (selected.origin) {
+    <dt>Origin</dt>
+    <dd>{{ originText(selected.origin) }}</dd>
+  }
+  @if (selected.durationMs !== undefined) {
+    <dt>Duration</dt>
+    <dd>{{ formatDuration(selected.durationMs) }}</dd>
+  }
+  @if (selected.trace?.length) {
+    <dt>Called from</dt>
+    <dd>
+      <ol class="trace">
+        @for (frame of traceFrames(selected.trace); track $index) {
+          <li>
+            @if (frame.file) {
+              <app-source-link [file]="frame.file" [line]="frame.line"
+                >{{ frame.name ? frame.name + ' ' : '' }}({{ frame.file }}:{{
+                  frame.line
+                }})</app-source-link
+              >
+            } @else {
+              <code>{{ frame.name }}</code>
+            }
+          </li>
+        }
+      </ol>
+    </dd>
+  }
+  @if (selected.source === 'event') {
+    <ng-container [ngTemplateOutlet]="actionRowsTpl" [ngTemplateOutletContext]="{ selected }" />
+  }
+</dl>
+<ng-template #actionRowsTpl let-selected="selected">
+  @if (selected.action !== undefined) {
+    <dt>Action</dt>
+    <dd>
+      <pre class="code">{{ prettyText(selected.action) }}</pre>
+    </dd>
+  }
+  @if (selected.args?.length) {
+    <dt>Arguments</dt>
+    <dd>
+      <pre class="code">{{ prettyText(selected.args) }}</pre>
+    </dd>
+  }
+  @if (selected.source === 'event' && selected.payload !== undefined) {
+    <dt>Payload</dt>
+    <dd>
+      <pre class="code">{{ prettyText(selected.payload) }}</pre>
+    </dd>
+  }
+  @if (selected.causedByEvent; as caused) {
+    <dt>Caused by event</dt>
+    <dd>
+      <code class="mono">{{ caused.type }}</code>
+      @if (caused.payload !== undefined) {
+        <pre class="code">{{ prettyText(caused.payload) }}</pre>
+      }
+    </dd>
+  }
+</ng-template>
+<ng-template #diffTpl let-selected="selected">
+  <div class="sub-head">
+    <div class="sub" role="heading" [attr.aria-level]="headingLevel + 1">State diff</div>
+    @if (selected.diff.length) {
+      <button
+        type="button"
+        class="btn copy"
+        [attr.aria-label]="'Copy the state diff of #' + selected.seq"
+        (click)="copyDiff(selected)"
+      >
+        Copy
+      </button>
+    }
+  </div>
+  @if (selected.diff.length) {
+    <ul class="diff">
+      @for (change of selected.diff; track change.path) {
+        <li [class]="'diff-row ' + change.op">
+          <span class="op">{{ opLabel(change.op) }}</span>
+          <code class="path">{{ change.path }}</code>
+          <span class="values">
+            @if (change.op !== 'add') {
+              <code class="before">{{ shortText(change.before) }}</code>
+            }
+            @if (change.op === 'change') {
+              <span class="arrow" aria-hidden="true">→</span
+              ><span class="visually-hidden">became</span>
+            }
+            @if (change.op !== 'remove') {
+              <code class="after">{{ shortText(change.after) }}</code>
+            }
+          </span>
+        </li>
+      }
+    </ul>
+    @if (selected.diffTruncated) {
+      <p class="muted">{{ moreChanges(selected.diffTruncated) }}</p>
+    }
+  } @else {
+    <p class="muted">The state did not change.</p>
+  }
+</ng-template>
+@if (selected.source === 'redux') {
+  @if (selected.action !== undefined) {
+    <dl class="kv redux-action">
+      <ng-container [ngTemplateOutlet]="actionRowsTpl" [ngTemplateOutletContext]="{ selected }" />
+    </dl>
+  }
+  <ng-container [ngTemplateOutlet]="diffTpl" [ngTemplateOutletContext]="{ selected }" />
+} @else if (selected.source !== 'event') {
+  <app-entry-tabs
+    [idPrefix]="idPrefix + '-' + selected.seq"
+    [seq]="selected.seq"
+    [diffTruncated]="selected.diffTruncated"
+    [loader]="loadEntry"
+  >
+    <div tab-action>
+      @if (selected.action !== undefined || selected.args?.length || selected.causedByEvent) {
+        <dl class="kv">
+          <ng-container
+            [ngTemplateOutlet]="actionRowsTpl"
+            [ngTemplateOutletContext]="{ selected }"
+          />
+        </dl>
+      } @else {
+        <p class="muted">
+          No action or arguments: a restore, or a patchState write outside a method.
+        </p>
+      }
+    </div>
+    <div tab-diff>
+      <ng-container [ngTemplateOutlet]="diffTpl" [ngTemplateOutletContext]="{ selected }" />
+    </div>
+  </app-entry-tabs>
+}
+
+@if (selected.restorable && confirmSeq() === selected.seq) {
+  <div
+    class="confirm"
+    role="group"
+    [attr.aria-labelledby]="idPrefix + '-confirm-text'"
+    (keydown.escape)="cancelRestore($event)"
+  >
+    <p [id]="idPrefix + '-confirm-text'">
+      @if (selected.source === 'store') {
+        Store DevTools jumps the app state to the state right after action #{{ selected.seq }}.
+        Until you go back to the latest state, new actions are logged but do not change the state.
+      } @else {
+        @if (store(); as current) {
+          This sets every state key of {{ current.label }} back to its value right after change #{{
+            selected.seq
+          }}. Components that read the store update at once, and a new "Restore" entry is added to
+          the log.
+        } @else {
+          This sets every state key of the store back to its value right after change #{{
+            selected.seq
+          }}. Components that read the store update at once, and a new "Restore" entry is added to
+          the log.
+        }
+      }
+    </p>
+    <div class="actions">
+      <button
+        type="button"
+        class="btn primary"
+        [disabled]="busy()"
+        (click)="restore(selected.seq, selected.source === 'store')"
+      >
+        Restore
+      </button>
+      <button type="button" class="btn" (click)="cancelRestore()" #cancelButton>Cancel</button>
+    </div>
+  </div>
+}
+@if (
+  confirmSeq() !== selected.seq &&
+  (selected.restorable || canAgain(selected) || canToggle(selected))
+) {
+  <div class="entry-actions">
+    @if (canToggle(selected)) {
+      <button
+        type="button"
+        class="btn"
+        [disabled]="busy() || !canRestore()"
+        [attr.aria-describedby]="canRestore() ? null : idPrefix + '-writes-off'"
+        (click)="devtoolsOp({ op: 'toggle', seq: selected.seq })"
+      >
+        {{ isSkipped(selected.seq) ? 'Include this action' : 'Skip this action' }}
+      </button>
+    }
+    @if (selected.restorable) {
+      <button
+        type="button"
+        class="btn restore"
+        [disabled]="!canRestore()"
+        [attr.aria-describedby]="canRestore() ? null : idPrefix + '-writes-off'"
+        (click)="askRestore(selected.seq)"
+        #restoreButton
+      >
+        Restore this state
+      </button>
+    }
+    @if (canAgain(selected)) {
+      <button
+        type="button"
+        class="btn"
+        [disabled]="busy() || !canRestore()"
+        [attr.aria-describedby]="canRestore() ? null : idPrefix + '-writes-off'"
+        (click)="dispatchAgain(selected.seq)"
+      >
+        Dispatch again
+      </button>
+    }
+  </div>
+  @if (!canRestore()) {
+    <p [id]="idPrefix + '-writes-off'" class="hint small">{{ restoreOff }}</p>
+  }
+}
+@if (selected.source === 'redux') {
+  <p class="hint small">
+    This store reports through its Redux DevTools integration, which the panel reads but does not
+    write to, so its state cannot be restored from here.
+  </p>
+}
+@if (!selected.restorable && selected.source === 'store') {
+  <p class="hint small">
+    @if (selected.unrestorable === 'dropped') {
+      Store DevTools no longer holds this action, so this state cannot be restored. It was dropped
+      past <code>maxAge</code>, or the Store DevTools history was committed, reset or imported.
+    } @else if (selected.unrestorable === 'not-recorded') {
+      Store DevTools never recorded this action, so this state cannot be restored. An
+      <code>actionsBlocklist</code>, <code>actionsSafelist</code> or <code>predicate</code> option
+      filtered it out, or recording was paused.
+    } @else {
+      Time travel for &#64;ngrx/store needs <code>provideStoreDevtools()</code>. Without it, entries
+      cannot be restored.
+    }
+  </p>
+}

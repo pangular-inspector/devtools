@@ -1,0 +1,125 @@
+@use 'mixins' as m;
+@use 'network' as net;
+
+.page-intro {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.toolbar[hidden],
+.grid[hidden] {
+  display: none;
+}
+
+:host {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+.state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+}
+.state.error {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  @include m.tint(danger);
+}
+.state.error strong {
+  font-weight: 600;
+}
+.state.error span {
+  color: var(--text);
+}
+.state.error button {
+  margin-top: 4px;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.toolbar .page-picker {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.page-picker > span {
+  @include m.label;
+}
+.toolbar app-select {
+  width: 280px;
+  max-width: 420px;
+}
+.message {
+  flex: 1 1 200px;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: right;
+}
+.message:empty {
+  display: none;
+}
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.panel {
+  @include m.panel;
+  @include m.enter;
+  min-width: 0;
+  padding: 16px;
+}
+.wide {
+  grid-column: 1 / -1;
+}
+@include net.controls;
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .toolbar .page-picker {
+    flex: 1 1 100%;
+  }
+  .toolbar app-select {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: none;
+  }
+  .message {
+    text-align: left;
+  }
+}

@@ -1,0 +1,108 @@
+@if (project()!.content.length) {
+  <div class="table-wrap" role="region" aria-label="Content files" tabindex="0">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Title</th>
+          <th scope="col">URL</th>
+          <th scope="col">Slug</th>
+          <th scope="col">Date</th>
+          <th scope="col">File</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (f of project()!.content; track f.file) {
+          <tr>
+            <td>
+              <strong>{{ f.attributes['title'] || '(no title)' }}</strong>
+              @if (f.error) {
+                <div>
+                  <span class="pill" data-tone="bad">{{ f.error }}</span>
+                </div>
+              }
+              @if (shadowed(f.file); as page) {
+                <div>
+                  <span class="pill" data-tone="warn">takes over {{ base(page) }}</span>
+                </div>
+              }
+              @if (f.schemaErrors?.length) {
+                <div>
+                  <span class="pill" data-tone="warn">{{
+                    plural(f.schemaErrors!.length, 'schema problem')
+                  }}</span>
+                </div>
+              }
+            </td>
+            <td class="mono path">{{ contentUrl(f.file) ?? '' }}</td>
+            <td class="mono">{{ f.slug }}</td>
+            <td class="muted nowrap tnum">{{ f.attributes['date'] || '' }}</td>
+            <td>
+              <app-source-link class="file" [file]="f.file"
+                ><span class="dir">{{ dir(f.file) }}</span
+                >{{ base(f.file) }}</app-source-link
+              >
+            </td>
+            <td class="actions">
+              <button
+                type="button"
+                class="btn ghost"
+                [attr.aria-label]="'Preview ' + f.file"
+                [attr.aria-pressed]="previewFile() === f.file"
+                (click)="showPreview(f.file)"
+              >
+                Preview
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+} @else {
+  <div class="empty-box">
+    <p class="empty-lead">No markdown files under src/content.</p>
+    <p class="muted">Add a .md file there to see its title, slug, date and the URL it serves.</p>
+  </div>
+}
+@if (project()!.content.length) {
+  <dl class="facts content-facts">
+    <dt>Schema</dt>
+    <dd>
+      @if (project()!.contentSchema; as schema) {
+        @if (schema.error) {
+          <span class="pill" data-tone="bad">{{ schema.error }}</span>
+        } @else {
+          <span class="mono">{{ schema.file }}</span>
+          @if (schema.unsupported?.length) {
+            <span class="muted small"> (skips {{ schema.unsupported!.join(', ') }})</span>
+          }
+        }
+      } @else {
+        <span class="muted small"
+          >none; set <code>analog.contentSchema</code> to check frontmatter</span
+        >
+      }
+    </dd>
+    <dt>Read by</dt>
+    <dd>
+      @for (u of project()!.contentUsage ?? []; track u.file + u.line) {
+        <app-source-link class="chip mono" [file]="u.file" [line]="u.line"
+          >{{ u.api }} · {{ base(u.file) }}:{{ u.line }}</app-source-link
+        >
+      } @empty {
+        <span class="muted small"
+          >no injectContentFiles, injectContent or contentFilesSource call under src</span
+        >
+      }
+    </dd>
+  </dl>
+}
+@if (previewFile(); as file) {
+  <app-analog-content-preview
+    [rpc]="rpc()"
+    [file]="file"
+    [schema]="project()!.contentSchema?.error ? undefined : project()!.contentSchema?.file"
+    (closed)="closePreview(file)"
+  />
+}

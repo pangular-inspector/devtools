@@ -1,0 +1,20 @@
+@use 'store';
+
+@include store.base;
+@include store.lists;
+@include store.detail;
+@include store.message;
+@media (max-width: 760px) {
+  .live-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .store-list {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+@media (max-width: 480px) {
+  .store-detail {
+    padding: 12px;
+  }
+}

@@ -1,0 +1,194 @@
+@if (store(); as current) {
+  <div class="detail-head">
+    <h3>{{ current.label }}</h3>
+    <div class="chips">
+      <span class="chip">{{ kindLabel(current.kind) }}</span>
+      @if (current.redux; as other) {
+        <span class="chip">{{ other.library }}</span>
+      } @else {
+        <span class="chip">scope: {{ current.scope }}</span>
+      }
+      @if (current.signal?.declaredIn; as file) {
+        <app-source-link class="chip mono" [file]="file" />
+      }
+      @if (current.classic) {
+        <span class="chip">{{
+          current.classic.devtools ? 'Store DevTools on' : 'Store DevTools off'
+        }}</span>
+      }
+      @if (current.signal?.watchOnly) {
+        <span class="chip">withDevtools: watched only</span>
+      }
+    </div>
+    @if (current.signal?.watchOnly) {
+      <p class="hint small">
+        This store uses <code>withDevtools()</code>, so the inspector does not wrap its methods or
+        signals. Changes are logged as <code>patchState</code> entries, and method calls are not
+        counted.
+      </p>
+    }
+    @if (current.signal?.references?.length) {
+      <p class="refs">
+        Referenced by
+        @for (ref of current.signal!.references; track ref; let last = $last) {
+          <code>{{ ref }}</code
+          >{{ last ? '' : ', ' }}
+        }
+      </p>
+    }
+  </div>
+
+  @if (current.classic?.paused) {
+    <div class="paused">
+      <p>
+        <strong>Viewing a past state.</strong> New actions are logged but do not change the state
+        until you go back to the latest state.
+      </p>
+      <button
+        type="button"
+        class="btn primary"
+        [disabled]="busy() || !canRestore()"
+        [attr.aria-describedby]="canRestore() ? null : 'store-latest-off'"
+        (click)="backToLatest()"
+        #latestButton
+      >
+        Back to latest
+      </button>
+      @if (!canRestore()) {
+        <p id="store-latest-off" class="hint small">{{ restoreOff }}</p>
+      }
+    </div>
+  }
+
+  <div class="facts">
+    <section class="fact" aria-labelledby="ngrx-state-heading">
+      <div class="fact-head">
+        <h4 id="ngrx-state-heading">State</h4>
+        <div class="state-actions">
+          @if (!current.redux) {
+            <app-store-global
+              [rpc]="rpc()"
+              [pageId]="page()?.pageId"
+              [target]="{ kind: 'ngrx', storeId: current.id }"
+              [label]="current.label + ' state'"
+            />
+          }
+          <button type="button" class="btn copy" aria-label="Copy state" (click)="copyState()">
+            Copy
+          </button>
+        </div>
+      </div>
+      <app-state-tree
+        [value]="stateValue()"
+        [changed]="changedPaths()"
+        [label]="current.label + ' state'"
+        (copied)="copyPath($event)"
+      />
+    </section>
+    @if (current.signal; as info) {
+      <section class="fact" aria-labelledby="ngrx-computed-heading">
+        <h4 id="ngrx-computed-heading">Computed</h4>
+        @if (computedEntries().length) {
+          <dl class="kv">
+            @for (entry of computedEntries(); track entry.key) {
+              <dt>{{ entry.key }}</dt>
+              <dd>
+                <code [title]="entry.full">{{ entry.value }}</code>
+              </dd>
+            }
+          </dl>
+        } @else {
+          <p class="muted">No computed signals.</p>
+        }
+        <h4 id="ngrx-methods-heading" class="spaced">Methods</h4>
+        @if (info.methods.length) {
+          <ul class="methods" aria-labelledby="ngrx-methods-heading">
+            @for (method of info.methods; track method.name) {
+              <li class="chip mono">
+                {{ method.name }}
+                @if (method.signalMethod) {
+                  <span class="tag">signalMethod</span>
+                } @else if (method.rx) {
+                  <span class="tag">rxMethod</span>
+                }
+                <span class="calls"
+                  >{{ method.calls }} {{ method.calls === 1 ? 'call' : 'calls'
+                  }}{{ methodDuration(method) }}</span
+                >
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="muted">No methods.</p>
+        }
+      </section>
+      @if (info.entities?.length) {
+        <section class="fact" aria-labelledby="ngrx-entities-heading">
+          <h4 id="ngrx-entities-heading">Entities</h4>
+          <div class="entities">
+            @for (col of info.entities!; track col.idsKey) {
+              <div class="entity-group">
+                <div class="entity-head">
+                  <span class="chip mono">{{ col.collection ?? 'entities' }}</span>
+                  <span class="entity-count"
+                    >{{ col.count }} {{ col.count === 1 ? 'entity' : 'entities' }}</span
+                  >
+                </div>
+                <ul
+                  class="chips entity-ids"
+                  [attr.aria-label]="(col.collection ?? 'entities') + ' ids'"
+                >
+                  @for (id of entityIds(col.ids); track id) {
+                    <li class="chip mono">{{ id }}</li>
+                  }
+                  @if (col.count > 30) {
+                    <li class="chip more" [title]="entityOverflowTitle(col.ids, col.count)">
+                      +{{ col.count - 30 }} more
+                    </li>
+                  }
+                </ul>
+                @if (col.selectedId !== undefined) {
+                  <dl class="kv">
+                    <dt>Selected</dt>
+                    <dd>
+                      @if (col.selected !== undefined) {
+                        <code [title]="prettyText(col.selected)">{{
+                          shortText(col.selected)
+                        }}</code>
+                      } @else {
+                        <span class="muted">None selected</span>
+                      }
+                    </dd>
+                  </dl>
+                }
+              </div>
+            }
+          </div>
+        </section>
+      }
+    }
+  </div>
+
+  @if (current.classic?.devtools) {
+    <section appStoreHistory class="history" aria-labelledby="ngrx-devtools-heading"></section>
+  }
+
+  <section appStoreLog class="log" aria-labelledby="ngrx-log-heading"></section>
+
+  @if (storeStats().length) {
+    <div appStoreStats class="stats"></div>
+  }
+
+  @if (!current.redux) {
+    <app-store-session
+      [rpc]="rpc()"
+      [pageId]="page()?.pageId ?? null"
+      [storeId]="current.id"
+      [entries]="sessionEntries()"
+    />
+  }
+
+  @if (current.classic) {
+    <section appStoreDispatch class="dispatch" aria-labelledby="ngrx-dispatch-heading"></section>
+  }
+}

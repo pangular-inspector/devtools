@@ -1,0 +1,267 @@
+<ng-template #historyTpl let-id="id" let-label="label">
+  @if (selectedHistory().length) {
+    <h4 [id]="'history-heading-' + id">{{ label }}</h4>
+    <p class="history-summary">{{ historySummary(id) }}</p>
+    @let restoreNode = restorable(id);
+    @if (restoreNode) {
+      @if (restoreBlocked(); as reason) {
+        <p class="hint">Restore is off. {{ reason }}</p>
+      }
+      <p
+        class="restore-result"
+        role="status"
+        [class.has-text]="restoreResult()?.id === id"
+        [class.restore-error]="restoreResult()?.id === id && restoreResult()?.error"
+      >
+        {{ restoreResult()?.id === id ? restoreResult()?.text : '' }}
+      </p>
+    }
+    <ol class="history scroll-box" tabindex="0" [attr.aria-labelledby]="'history-heading-' + id">
+      @for (change of selectedHistory(); track change.epoch) {
+        <li>
+          <span class="history-meta">
+            <time>{{ change.at | date: 'HH:mm:ss.SSS' }}</time>
+            <span class="source-tag" [class]="'source-' + change.source">{{
+              sourceLabel(change.source)
+            }}</span>
+            <span>epoch {{ change.epoch }}</span>
+            @if (change.missed) {
+              <span class="missed">{{ change.missed }} earlier not captured</span>
+            }
+            @if (restoreNode && !restoreBlocked() && !$first) {
+              @let time = change.at | date: 'HH:mm:ss.SSS';
+              <button
+                type="button"
+                class="restore"
+                [attr.aria-label]="'Restore value from ' + time"
+                [attr.aria-disabled]="restoring() || null"
+                (click)="restore(restoreNode, change, time ?? '')"
+              >
+                Restore
+              </button>
+            }
+          </span>
+          <pre>{{ change.value | json }}</pre>
+          @if (diffs().get(change.epoch); as diff) {
+            <details class="diff">
+              <summary>Changes from the entry before ({{ diff.length }})</summary>
+              <ul class="diff-list">
+                @for (d of diff; track d.path) {
+                  <li [class]="'diff-' + d.kind">
+                    <span class="diff-kind">{{ diffLabel(d.kind) }}</span
+                    ><span class="sr-only">: </span> <code class="diff-path">{{ d.path }}</code
+                    ><span class="sr-only">, </span>
+                    @if (d.kind !== 'added') {
+                      <code class="diff-old">{{ d.before | json }}</code>
+                    }
+                    @if (d.kind === 'changed') {
+                      <span class="sr-only">to</span><span aria-hidden="true">→</span>
+                    }
+                    @if (d.kind !== 'removed') {
+                      <code class="diff-new">{{ d.after | json }}</code>
+                    }
+                  </li>
+                }
+              </ul>
+            </details>
+          }
+          @if (change.stack?.length) {
+            <ol class="stack" aria-label="Written from">
+              @for (frame of change.stack; track $index) {
+                <li>{{ frame }}</li>
+              }
+            </ol>
+          }
+        </li>
+      }
+    </ol>
+  }
+</ng-template>
+
+@if (resource(); as res) {
+  <h3 class="detail-title">{{ res.name }}</h3>
+  @if (!res.named) {
+    <p class="hint">
+      This resource has no name. Pass <code>debugName</code> to <code>resource()</code> or
+      <code>httpResource()</code> to name it here.
+    </p>
+  }
+  <dl>
+    <dt>Status</dt>
+    <dd>{{ res.status ?? 'unknown' }}</dd>
+    @if (res.isLoading !== undefined) {
+      <dt>Loading</dt>
+      <dd>{{ res.isLoading ? 'yes' : 'no' }}</dd>
+    }
+    @if (res.statusCode !== undefined) {
+      <dt>HTTP status</dt>
+      <dd>{{ res.statusCode }}</dd>
+    }
+    @if (res.params !== undefined) {
+      <dt>Params</dt>
+      <dd>
+        <pre
+          class="scroll-box"
+          role="region"
+          tabindex="0"
+          [attr.aria-label]="'Params of ' + res.name"
+          >{{ res.params | json }}</pre>
+      </dd>
+    }
+    @if (res.value !== undefined) {
+      <dt>Value</dt>
+      <dd>
+        <pre
+          class="scroll-box"
+          role="region"
+          tabindex="0"
+          [attr.aria-label]="'Value of ' + res.name"
+          >{{ res.value | json }}</pre>
+      </dd>
+    }
+    @if (res.error !== undefined) {
+      <dt>Error</dt>
+      <dd>
+        <pre
+          class="scroll-box"
+          role="region"
+          tabindex="0"
+          [attr.aria-label]="'Error of ' + res.name"
+          >{{ res.error | json }}</pre>
+      </dd>
+    }
+  </dl>
+  <ng-container
+    [ngTemplateOutlet]="historyTpl"
+    [ngTemplateOutletContext]="{ id: res.id, label: 'Status history' }"
+  />
+  <button
+    type="button"
+    class="reset internals-toggle"
+    [attr.aria-expanded]="showInternals()"
+    [attr.aria-controls]="'resource-internals-' + res.id"
+    (click)="showInternals.set(!showInternals())"
+  >
+    {{ showInternals() ? 'Hide' : 'Show' }} internal signals ({{ res.nodeIds.length }})
+  </button>
+  @if (showInternals()) {
+    <ul [id]="'resource-internals-' + res.id">
+      @for (inner of internalsOf(res); track inner.id) {
+        <li>
+          <span class="kind-badge sm" [style.background]="kindColor(inner.kind)">{{
+            inner.kind
+          }}</span>
+          <span class="rel-label">{{ inner.label ?? inner.id }}</span>
+        </li>
+      }
+    </ul>
+  }
+} @else if (selectedNode(); as node) {
+  <h3 class="detail-title">{{ selectedNode()!.label ?? selectedNode()!.id }}</h3>
+  <dl>
+    <dt>Kind</dt>
+    <dd>{{ selectedNode()!.kind }}</dd>
+    <dt>Epoch</dt>
+    <dd>{{ selectedNode()!.epoch }}</dd>
+    @if (selectedNode()!.runs; as runs) {
+      <dt>Runs</dt>
+      <dd>
+        {{ runs }}, {{ selectedNode()!.runMs ?? 0 }} ms in all, last
+        {{ selectedNode()!.lastRunMs ?? 0 }} ms
+      </dd>
+    }
+    @if (sourceMatch(); as match) {
+      <dt>Source</dt>
+      <dd class="source-matches">
+        @if (match.exact) {
+          <app-source-link [file]="match.exact.file" [line]="match.exact.line" />
+        } @else {
+          <span class="hint-inline"
+            >{{ match.candidates.length }} declarations match this name:</span
+          >
+          <ul class="source-candidates">
+            @for (c of match.candidates; track c.file + c.line) {
+              <li>
+                <app-source-link [file]="c.file" [line]="c.line" />
+                @if (c.component) {
+                  <span class="hint-inline">in {{ c.component }}</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </dd>
+    }
+    @if (selectedNode()!.value !== undefined) {
+      <dt>Value</dt>
+      <dd>
+        <pre
+          class="scroll-box"
+          role="region"
+          tabindex="0"
+          [attr.aria-label]="'Value of ' + (selectedNode()!.label ?? 'signal')"
+          >{{ selectedNode()!.value | json }}</pre>
+      </dd>
+    }
+  </dl>
+  @if (getDependencies(selectedNode()!).length) {
+    <h4>Dependencies (producers)</h4>
+    <ul>
+      @for (dep of getDependencies(selectedNode()!); track dep.id) {
+        <li>
+          <button
+            type="button"
+            class="rel-link"
+            [attr.aria-label]="'Go to ' + dep.kind + ' ' + (dep.label ?? dep.id)"
+            (click)="jumpTo(dep)"
+          >
+            <span class="kind-badge sm" [style.background]="kindColor(dep.kind)">{{
+              dep.kind
+            }}</span>
+            <span class="rel-label">{{ dep.label ?? dep.id }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+  @if (getConsumers(selectedNode()!).length) {
+    <h4>Consumers</h4>
+    <ul>
+      @for (con of getConsumers(selectedNode()!); track con.id) {
+        <li>
+          <button
+            type="button"
+            class="rel-link"
+            [attr.aria-label]="'Go to ' + con.kind + ' ' + (con.label ?? con.id)"
+            (click)="jumpTo(con)"
+          >
+            <span class="kind-badge sm" [style.background]="kindColor(con.kind)">{{
+              con.kind
+            }}</span>
+            <span class="rel-label">{{ con.label ?? con.id }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+  @if (isWatchable(selectedNode()!)) {
+    <button
+      type="button"
+      class="reset watch-toggle"
+      [attr.aria-pressed]="watchedIds().has(selectedNode()!.id)"
+      (click)="toggleWatch(selectedNode()!)"
+    >
+      Watch
+    </button>
+    <p class="hint">
+      A watched signal is listed under Watched and logs each change to the page console.
+    </p>
+  }
+  @if (writeHint(); as hint) {
+    <p class="hint">{{ hint }}</p>
+  }
+  <ng-container
+    [ngTemplateOutlet]="historyTpl"
+    [ngTemplateOutletContext]="{ id: node.id, label: 'Value history' }"
+  />
+}

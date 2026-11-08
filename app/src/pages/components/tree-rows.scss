@@ -1,0 +1,182 @@
+@use 'mixins' as m;
+@use 'components' as ct;
+
+@include ct.base;
+@include ct.buttons;
+.tree {
+  min-width: 0;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  @include m.enter;
+}
+.window-note {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.tree.windowed .row {
+  height: 32px;
+  overflow: hidden;
+}
+.row {
+  position: relative;
+  scroll-margin-top: var(--ct-toolbar-clearance, 72px);
+  scroll-margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px 0 calc(4px + var(--depth, 0) * 18px);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease);
+}
+.row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 14px;
+  width: calc(var(--depth, 0) * 18px);
+  background: repeating-linear-gradient(to right, var(--border) 0 1px, transparent 1px 18px);
+  pointer-events: none;
+}
+.row:hover {
+  background: var(--surface-2);
+}
+.row:focus-visible {
+  @include m.focus-ring(-2px);
+}
+.row.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.twisty,
+.twisty-space {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.twisty {
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  color: var(--text-3);
+}
+.twisty:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.twisty svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 150ms var(--ease);
+}
+.twisty.open svg {
+  transform: rotate(90deg);
+}
+.name {
+  min-width: 0;
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  @include m.truncate;
+}
+.tag {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  @include m.truncate;
+}
+.routed {
+  flex: none;
+  max-width: 40%;
+  padding: 0 8px;
+  border: 1px solid var(--accent-line);
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 18px;
+  @include m.truncate;
+}
+.checks {
+  flex: none;
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.checks + .dirs {
+  margin-left: 0;
+}
+.row.dir-host .host-tag {
+  color: var(--text);
+}
+.host-dirs {
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  font-style: italic;
+  @include m.truncate;
+}
+.row.dir-host .twisty-space,
+.row.dir-host .twisty {
+  border-left: 1px dashed var(--border-strong);
+}
+.hyd {
+  flex: none;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 18px;
+}
+.hyd-skipped {
+  @include m.tint(warn);
+}
+.hyd-mismatched {
+  @include m.tint(danger);
+}
+.name-tip {
+  position: absolute;
+  z-index: 1;
+  left: 8px;
+  max-width: calc(100% - 16px);
+  padding: 4px 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  @include m.enter(150ms);
+}
+.dirs {
+  flex: none;
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 18px;
+}
+@include ct.states;

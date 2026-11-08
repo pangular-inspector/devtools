@@ -1,0 +1,35 @@
+<p class="page-intro">
+  NgRx signal stores and &#64;ngrx/store state from the live page, with every change, plus NGXS, Elf
+  and MiniRx stores. Source declarations lists the stores your files declare.
+</p>
+<div class="toolbar">
+  <app-search-field
+    #filterInput
+    class="search"
+    placeholder="Filter stores, changes and declarations"
+    saveKey="store"
+    [(value)]="filter"
+  />
+  @if (allPages().length > 1) {
+    <span class="visually-hidden" id="ngrx-page-label">Page</span>
+    <app-select
+      class="page-select"
+      labelledBy="ngrx-page-label"
+      [options]="pageOptions()"
+      [value]="page()?.pageId ?? null"
+      (valueChange)="selectPage($event)"
+    />
+  }
+  <span class="status" [class.on]="pageConnected()">
+    <span class="live-dot" aria-hidden="true"></span>
+    {{ !stateLoaded() ? 'Loading…' : pageConnected() ? 'Live' : 'No page connected' }}
+  </span>
+</div>
+
+<section appStoreLive class="block" aria-labelledby="ngrx-live-heading"></section>
+
+@if (hasEvents()) {
+  <section appStoreEvents class="block" aria-labelledby="ngrx-events-heading"></section>
+}
+
+<section appStoreSource class="block" aria-labelledby="ngrx-source-heading"></section>

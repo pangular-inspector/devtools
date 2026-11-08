@@ -1,0 +1,7 @@
+@use 'network' as net;
+
+@include net.controls;
+@include net.table;
+@include net.status;
+@include net.preview;
+@include net.stats;

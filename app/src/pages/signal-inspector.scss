@@ -1,0 +1,198 @@
+@use 'mixins' as m;
+@use 'signals' as sig;
+
+:host {
+  display: block;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+input {
+  flex: 1 1 200px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  background: var(--bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition:
+    border-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+input::placeholder {
+  color: var(--text-3);
+}
+input:hover {
+  border-color: color-mix(in srgb, var(--text-3) 60%, var(--control-border));
+}
+input:focus-visible {
+  @include m.field-focus;
+}
+@include sig.states;
+.intro {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--control-border);
+  border-radius: 99px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+.kind-chip:hover {
+  border-color: var(--text-3);
+  background: var(--surface-3);
+  color: var(--text);
+}
+.kind-chip:active {
+  transform: translateY(0.5px);
+}
+.kind-chip.active {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+.kind-chip:focus-visible {
+  @include m.focus-ring;
+}
+.chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kind-chip .count {
+  flex: none;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.kind-chip.active .count {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text-strong);
+}
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.picker app-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.page-picker {
+  flex: 0 1 240px;
+}
+.label-key {
+  flex: none;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.showing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.showing-name {
+  color: var(--text-strong);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+.mono {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.source-note {
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 99px;
+  line-height: 18px;
+}
+.fallback {
+  margin: 0 0 8px;
+  color: var(--warn);
+  font-size: 12px;
+}
+.source-label {
+  @include m.label;
+  margin: 0 0 12px;
+}
+@include sig.list-heading;
+.jump-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.jump-note:not(:empty) {
+  margin-bottom: 8px;
+}
+@media (max-width: 480px) {
+  .toolbar {
+    padding: 8px;
+  }
+  .toolbar input,
+  .picker {
+    flex-basis: 100%;
+  }
+}

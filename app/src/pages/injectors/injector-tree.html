@@ -1,0 +1,68 @@
+@for (row of rows(); track row.node.injector.id; let i = $index) {
+  <div
+    class="row"
+    role="treeitem"
+    [attr.aria-level]="row.depth + 1"
+    [attr.aria-expanded]="row.hasChildren ? row.expanded : null"
+    [attr.aria-selected]="selected()?.injector?.id === row.node.injector.id"
+    [attr.tabindex]="rovingId() === row.node.injector.id ? 0 : -1"
+    [attr.data-id]="row.node.injector.id"
+    [class.selected]="selected()?.injector?.id === row.node.injector.id"
+    [style.--depth]="row.depth"
+    (click)="select(row.node.injector.id)"
+    (focus)="focusId.set(row.node.injector.id); highlight(row.node)"
+    (blur)="highlight(null)"
+    (mouseenter)="highlight(row.node)"
+    (mouseleave)="highlight(null)"
+  >
+    @if (row.hasChildren) {
+      <span
+        class="twisty"
+        aria-hidden="true"
+        [class.open]="row.expanded"
+        (click)="toggle(row.node.injector.id, $event)"
+      >
+        <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>
+      </span>
+    } @else {
+      <span class="twisty-space" aria-hidden="true"></span>
+    }
+    <span
+      class="kind"
+      [style.--tone]="tone(kind(row.node))"
+      [attr.title]="kind(row.node)"
+      aria-hidden="true"
+      >{{ kind(row.node)[0].toUpperCase() }}</span
+    >
+    <span class="sr-only">{{ kind(row.node) }}</span>
+    <span class="name mono">{{ label(row.node) }}</span>
+    @if (row.node.injector.inactive) {
+      <span class="flag inactive-flag">inactive</span>
+    }
+    @if (row.node.injector.component) {
+      <span class="sub">{{ row.node.injector.component }}</span>
+    } @else if (row.node.injector.directives?.length) {
+      <span class="sub">{{ row.node.injector.directives!.join(', ') }}</span>
+    }
+    <span class="meta">
+      @if ((row.node.dependencies?.length ?? 0) > 0) {
+        <span class="count" [attr.title]="row.node.dependencies!.length + ' injected'">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14M5 12l7 7 7-7" />
+          </svg>
+          <span class="sr-only">injects</span>
+          {{ row.node.dependencies!.length }}
+        </span>
+      }
+      @if (providerCount(row.node); as provided) {
+        <span class="count provides" [attr.title]="provided + ' provided'">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 8 12 3 3 8v8l9 5 9-5z" />
+          </svg>
+          <span class="sr-only">provides</span>
+          {{ provided }}
+        </span>
+      }
+    </span>
+  </div>
+}

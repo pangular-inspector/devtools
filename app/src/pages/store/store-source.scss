@@ -1,0 +1,12 @@
+@use 'store';
+
+@include store.base;
+@include store.lists;
+@include store.detail;
+@include store.source;
+@include store.spinner;
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

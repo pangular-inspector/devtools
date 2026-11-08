@@ -1,0 +1,58 @@
+<div class="section-head">
+  <h2 id="ngrx-events-heading">Events</h2>
+  <span class="pill">{{ pageEvents().length }}</span>
+</div>
+<p class="intro">
+  Events dispatched through &#64;ngrx/signals/events, across every store on this page.
+</p>
+<ul
+  #eventsList
+  class="events-list"
+  appRovingList="button.event-item"
+  aria-label="Dispatched events"
+  [rovingWindow]="eventWindow"
+  [style.padding-top.px]="eventWindow.enabled() ? 6 + eventWindow.padTop() : null"
+  [style.padding-bottom.px]="eventWindow.enabled() ? 6 + eventWindow.padBottom() : null"
+>
+  @for (shown of shownEvents(); track shown.entry.seq) {
+    @let evt = shown.entry;
+    <li
+      [attr.data-vindex]="shown.index"
+      [attr.aria-setsize]="eventWindow.enabled() ? pageEvents().length : null"
+      [attr.aria-posinset]="eventWindow.enabled() ? shown.index + 1 : null"
+    >
+      <button
+        type="button"
+        class="event-item"
+        [class.selected]="evt.seq === selectedEventSeq()"
+        [attr.aria-pressed]="evt.seq === selectedEventSeq()"
+        [attr.aria-controls]="evt.seq === selectedEventSeq() ? 'ngrx-event-detail' : null"
+        (click)="selectEvent(evt.seq)"
+      >
+        <span class="dot" aria-hidden="true" [style.background]="kindColor('event')"></span>
+        <span class="event-type mono" [title]="evt.eventType ?? evt.type">{{
+          evt.eventType ?? evt.type
+        }}</span>
+        @if (evt.payload !== undefined) {
+          <code class="event-payload" [title]="prettyText(evt.payload)">{{
+            shortText(evt.payload)
+          }}</code>
+        }
+        <span class="event-time">{{ formatTime(evt.timestamp) }}</span>
+      </button>
+    </li>
+  } @empty {
+    <li class="muted pad">No events match this filter.</li>
+  }
+</ul>
+@if (eventEntry(); as selected) {
+  <div id="ngrx-event-detail" tabindex="-1" class="event-detail-focus" #eventDetailHeading>
+    <section
+      appStoreEntry
+      class="entry"
+      [selected]="selected"
+      [headingLevel]="3"
+      [idPrefix]="'ngrx-event'"
+    ></section>
+  </div>
+}

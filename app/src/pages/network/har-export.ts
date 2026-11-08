@@ -24,57 +24,8 @@ export function harFileName(pageUrl: string | undefined): string {
  */
 @Component({
   selector: 'app-har-export',
-  template: `
-    <button
-      type="button"
-      [disabled]="!calls().length"
-      aria-describedby="har-export-note"
-      (click)="save()"
-    >
-      Export HAR
-    </button>
-    <span id="har-export-note" class="sr-only"
-      >Saves the timeline as a HAR file with secrets masked.</span
-    >
-  `,
-  styles: `
-    @use 'mixins' as m;
-
-    :host {
-      display: contents;
-    }
-    button {
-      display: inline-flex;
-      align-items: center;
-      height: 34px;
-      padding: 0 14px;
-      border: 1px solid var(--control-border);
-      border-radius: var(--radius-sm);
-      background: var(--surface-2);
-      font-weight: 500;
-      white-space: nowrap;
-      cursor: pointer;
-      transition:
-        background-color 0.2s var(--ease),
-        border-color 0.2s var(--ease);
-      &:hover:not(:disabled) {
-        border-color: var(--accent-line);
-        background: var(--surface-3);
-      }
-      &:focus-visible {
-        @include m.focus-ring;
-      }
-      &:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      button {
-        transition: none;
-      }
-    }
-  `,
+  templateUrl: './har-export.html',
+  styleUrl: './har-export.scss',
 })
 export class HarExport {
   readonly calls = input<readonly RecordedCall[]>([]);

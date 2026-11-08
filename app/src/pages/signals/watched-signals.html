@@ -1,0 +1,59 @@
+<h2 id="signal-watched-heading" class="list-heading">Watched</h2>
+@if (watchedElsewhere(); as other) {
+  <p class="hint">
+    {{ other }} watched {{ other === 1 ? 'signal is' : 'signals are' }} not in this graph. Their
+    changes still log to the page console.
+  </p>
+}
+<ul class="watched-list">
+  @for (node of watchedNodes(); track node.id) {
+    <li>
+      <span class="rel-label">{{ node.label ?? '(unnamed)' }}</span>
+      @if (node.value !== undefined) {
+        <span class="watched-value">{{ node.value | json }}</span>
+      }
+      @if (changeCount(node.id); as count) {
+        <span class="changed-badge">{{ count }} {{ count === 1 ? 'change' : 'changes' }}</span>
+      }
+      <button
+        type="button"
+        class="link-button"
+        [attr.aria-label]="'Stop watching ' + (node.label ?? 'the unnamed signal')"
+        (click)="toggleWatch(node)"
+      >
+        Stop watching
+      </button>
+    </li>
+  }
+</ul>
+@if (watchLog().length) {
+  <h3 class="sub-heading" id="signal-watch-log-heading">Recent changes</h3>
+  <div
+    class="watch-log scroll-box"
+    role="log"
+    tabindex="0"
+    aria-labelledby="signal-watch-log-heading"
+  >
+    <ol class="history">
+      @for (entry of watchLog(); track entry.id + ':' + entry.change.epoch) {
+        <li>
+          <span class="history-meta">
+            <time>{{ entry.change.at | date: 'HH:mm:ss.SSS' }}</time>
+            <span class="rel-label">{{ entry.label }}</span>
+            <span class="source-tag" [class]="'source-' + entry.change.source">{{
+              sourceLabel(entry.change.source)
+            }}</span>
+          </span>
+          <pre>{{ entry.change.value | json }}</pre>
+          @if (entry.change.stack?.length) {
+            <ol class="stack" aria-label="Written from">
+              @for (frame of entry.change.stack; track $index) {
+                <li>{{ frame }}</li>
+              }
+            </ol>
+          }
+        </li>
+      }
+    </ol>
+  </div>
+}

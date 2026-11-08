@@ -1,0 +1,475 @@
+// Styles shared by the Components page's sections (`app/src/pages/components/`), in the order the
+// page had them as one component, so each section looks as it did. Include the groups a section
+// uses, in this order: base, search, buttons, narrow, detail, facts, values, states.
+@use 'mixins' as m;
+
+// Monospace and muted text.
+@mixin base {
+  .mono {
+    font-family: var(--font-mono);
+  }
+  .muted {
+    color: var(--text-2);
+  }
+}
+
+// The search fields and the count beside them.
+@mixin search {
+  .search {
+    position: relative;
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+  .search-icon {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    width: 14px;
+    height: 14px;
+    transform: translateY(-50%);
+    fill: none;
+    stroke: var(--text-3);
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    pointer-events: none;
+  }
+  .search:focus-within .search-icon {
+    stroke: var(--accent);
+  }
+  input[type='search'] {
+    width: 100%;
+    height: 34px;
+    padding: 0 12px 0 34px;
+    background: var(--bg);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+  }
+  input[type='search']::placeholder {
+    color: var(--text-3);
+  }
+  input[type='search']:focus-visible {
+    @include m.field-focus;
+  }
+  .count {
+    flex: none;
+    color: var(--text-2);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+}
+
+// Every button of the page.
+@mixin buttons {
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 34px;
+    padding: 0 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    transition:
+      background-color 150ms var(--ease),
+      border-color 150ms var(--ease);
+  }
+  button:hover {
+    background: var(--surface-3);
+    border-color: var(--accent-line);
+  }
+  button:focus-visible {
+    @include m.focus-ring;
+  }
+  button svg {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+// The toolbar actions, and the search and count on a narrow panel.
+@mixin narrow {
+  .tree-action[aria-pressed='true'] {
+    background: var(--accent-soft);
+    border-color: var(--accent-line);
+    color: var(--text-strong);
+  }
+  /* A narrow panel keeps the search and count on one row and the tree
+     actions on a second one, as icons named by their hidden labels. */
+  .tree-actions {
+    display: contents;
+  }
+  @media (max-width: 600px) {
+    .toolbar {
+      gap: 8px;
+    }
+    .search {
+      flex-basis: 100%;
+    }
+    .toolbar:has(.page-select) .search {
+      flex-basis: 160px;
+    }
+    .page-select {
+      flex: 1 1 120px;
+    }
+    .count {
+      flex: 1 1 80px;
+      min-width: 0;
+      white-space: normal;
+      line-height: 1.3;
+    }
+    .tree-actions {
+      display: flex;
+      flex: none;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .tree-action,
+    .pick {
+      flex: none;
+      width: var(--control-h);
+      padding: 0;
+    }
+    .tree-action .label,
+    .pick .label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
+}
+
+// The detail header, the source location guesses and the action rows.
+@mixin detail {
+  .detail-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .detail-head h2 {
+    min-width: 0;
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 15px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .where {
+    width: 100%;
+    margin: 0;
+    color: var(--text-2);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .directive-where {
+    margin: -4px 0 8px;
+    font-size: 12px;
+  }
+  .directive-where:empty {
+    display: none;
+  }
+  .directive-guess {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-sans);
+  }
+  .likely {
+    display: inline-block;
+    margin-right: 6px;
+    padding: 0 6px;
+    border: 1px solid;
+    border-radius: 99px;
+    @include m.tint(warn);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 16px;
+    text-transform: uppercase;
+    vertical-align: 1px;
+  }
+  .guess-text {
+    margin: 0;
+  }
+  .guess-list {
+    margin: 4px 0 0;
+    padding-left: 18px;
+  }
+  .badge {
+    padding: 2px 8px;
+    border-radius: 99px;
+    @include m.tint(accent);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+}
+
+// The Show in Forms button and the facts list.
+@mixin facts {
+  .show-form {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+  .show-form:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 8px 16px;
+    margin: 0;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .facts dt {
+    @include m.label;
+    align-self: center;
+  }
+  .facts dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+}
+
+// The detail blocks: values, chips, flags and injected services.
+@mixin values {
+  .block {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .block:last-child {
+    border-bottom: 0;
+  }
+  h3 {
+    @include m.label;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 8px;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 99px;
+    background: var(--surface-3);
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+  .props,
+  .deps,
+  .chips {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .prop,
+  .dep {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+  }
+  .prop.changed {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+    animation: value-flash 1s var(--ease) forwards;
+  }
+  @keyframes value-flash {
+    from {
+      outline-color: var(--accent);
+    }
+    to {
+      outline-color: transparent;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .prop.changed {
+      animation: none;
+    }
+  }
+  .signal-link {
+    height: auto;
+    min-height: 0;
+    margin-left: 6px;
+    padding: 0 6px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 18px;
+  }
+  .signal-link:focus-visible {
+    @include m.focus-ring(-2px);
+  }
+  .prop-name {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  pre {
+    max-height: 200px;
+    margin: 0;
+    overflow: auto;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 99px;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .chip.on {
+    @include m.tint(ok);
+  }
+  .chip-note {
+    color: var(--text-2);
+    font-size: 11px;
+  }
+  .chip.on .chip-note {
+    color: inherit;
+  }
+  .dep {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+  }
+  .token {
+    min-width: 0;
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .flag {
+    padding: 0 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 16px;
+    text-transform: none;
+  }
+  .from {
+    margin-left: auto;
+    color: var(--text-2);
+    font-size: 12px;
+  }
+  .from .mono {
+    color: var(--text);
+  }
+  .from.missing {
+    color: var(--warn);
+  }
+  .empty-line {
+    margin: 0;
+    color: var(--text-2);
+  }
+}
+
+// The loading, empty and no-match states.
+@mixin states {
+  .state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 40px 16px;
+    text-align: center;
+    background: var(--surface);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius);
+  }
+  .state.compact {
+    padding: 24px 12px;
+    border: 0;
+    background: none;
+  }
+  .state-title {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 14px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .state-hint {
+    max-width: 440px;
+    margin: 0 auto;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner,
+    .refresh.spinning svg {
+      animation: none;
+    }
+  }
+}

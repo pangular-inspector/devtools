@@ -1,0 +1,30 @@
+<button
+  type="button"
+  class="orphans-toggle"
+  [attr.aria-expanded]="orphansOpen()"
+  aria-controls="di-orphans"
+  (click)="orphansOpen.set(!orphansOpen())"
+>
+  <svg class="chevron" [class.open]="orphansOpen()" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="m9 6 6 6-6 6" />
+  </svg>
+  <span class="hint-tag">Hint</span>
+  {{ orphanedText() }}
+</button>
+<div id="di-orphans" class="orphans-body" [hidden]="!orphansOpen()">
+  <p class="hint">
+    Provided in your source, but nothing on this page has injected them so far. This is not an
+    error: a guard, an interceptor or code that has not run yet may still use them.
+  </p>
+  <ul class="orphan-list">
+    @for (p of orphaned(); track p.token + p.file + p.line) {
+      <li>
+        <span class="token mono">{{ p.token }}</span>
+        @if (p.providedIn) {
+          <span class="flag">providedIn: {{ p.providedIn }}</span>
+        }
+        <app-source-link class="orphan-file" [file]="p.file" [line]="p.line" />
+      </li>
+    }
+  </ul>
+</div>

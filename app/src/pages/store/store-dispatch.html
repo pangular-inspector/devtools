@@ -1,0 +1,46 @@
+<h4 id="ngrx-dispatch-heading">Dispatch an action</h4>
+<form class="dispatch-form" (submit)="dispatchAction($event)">
+  <label>
+    <span>Type</span>
+    <input
+      required
+      spellcheck="false"
+      autocomplete="off"
+      list="ngrx-action-types"
+      placeholder="e.g. [Cart] Add Item"
+      [value]="dispatchType()"
+      (input)="dispatchType.set($any($event.target).value)"
+    />
+  </label>
+  <datalist id="ngrx-action-types">
+    @for (type of actionTypes(); track type) {
+      <option [value]="type"></option>
+    }
+  </datalist>
+  <label>
+    <span>Payload <span class="optional">(JSON object, optional)</span></span>
+    <textarea
+      rows="3"
+      spellcheck="false"
+      placeholder='e.g. {"id": 7}'
+      [value]="dispatchPayload()"
+      (input)="dispatchPayload.set($any($event.target).value)"
+      [attr.aria-invalid]="payloadError() ? 'true' : null"
+      aria-describedby="ngrx-payload-error"
+    ></textarea>
+  </label>
+  <p id="ngrx-payload-error" class="field-error">{{ payloadError() }}</p>
+  <div class="actions">
+    <button
+      type="submit"
+      class="btn primary"
+      [disabled]="busy() || !canRestore() || !dispatchRequest()"
+      [attr.aria-describedby]="canRestore() ? null : 'store-dispatch-off'"
+    >
+      Dispatch
+    </button>
+  </div>
+  @if (!canRestore()) {
+    <p id="store-dispatch-off" class="hint small">{{ restoreOff }}</p>
+  }
+</form>
