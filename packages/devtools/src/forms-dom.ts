@@ -247,7 +247,8 @@ export function submitDom(el: Element, context: SubmitContext = {}): SubmitDom {
     return owner === el || (owner === undefined && inside.includes(b));
   });
   const submitters = candidates.filter(isSubmitter);
-  const disabledButtons = submitters.filter((b) => (b as HTMLButtonElement).disabled).length;
+  // `:disabled` also counts a button inside a disabled `<fieldset>`.
+  const disabledButtons = submitters.filter((b) => b.matches(':disabled')).length;
   const typed = candidates.filter((b) => b instanceof HTMLButtonElement && !isSubmitter(b));
   if (!submitters.length) {
     reasons.push(

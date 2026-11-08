@@ -631,6 +631,7 @@ describe('forms collector and a running WebMCP call', () => {
       await tick(LEASED_PUSH_MS + 100);
       const values = h.lastEvents().filter((e) => e.type === 'value' && e.path === 'name');
       expect(values.find((e) => e.detail === '"Ada"')).toMatchObject({ origin: 'agent' });
+      expect(values.find((e) => e.detail === '"Code"')).toBeDefined();
       expect(values.find((e) => e.detail === '"Code"')?.origin).not.toBe('agent');
       releaseSlowSubmit();
       await pending;

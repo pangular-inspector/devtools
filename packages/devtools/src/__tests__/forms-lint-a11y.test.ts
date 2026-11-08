@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { CollectedForm, FormFieldNode } from '../forms.ts';
-import { autocompleteHint, domFacts } from '../forms-dom.ts';
+import { autocompleteHint, domFacts, submitDom } from '../forms-dom.ts';
 import { lintForm } from '../rpc/forms-lint.ts';
 
 function input(html: string): Element {
@@ -50,6 +50,13 @@ describe('forms accessibility lint', () => {
     expect(autocompleteHint(input('<input type="checkbox" name="email" />'))).toBeUndefined();
     expect(autocompleteHint(input('<select name="country"></select>'))).toBeUndefined();
     expect(domFacts(input('<input name="city" />'), {}).autocomplete).toBe('address-level2');
+  });
+
+  it('counts a submit button inside a disabled fieldset as disabled', () => {
+    const form = input(
+      '<form><fieldset disabled><button type="submit">Save</button></fieldset></form>',
+    );
+    expect(submitDom(form)).toMatchObject({ buttons: 1, disabledButtons: 1 });
   });
 
   it('reads a control inside a disabled fieldset as disabled', () => {
