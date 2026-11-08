@@ -1147,6 +1147,15 @@ describe('FormsFields inline editing', () => {
     const edit = button(fixture, 'Edit email');
     expect(edit.disabled).toBe(true);
     expect(edit.getAttribute('aria-describedby')).toBe('forms-writes-off');
+    const notes = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll('[id="forms-writes-off"]'),
+    ];
+    expect(notes.length).toBeGreaterThan(0);
+    for (const note of notes) {
+      expect(note.textContent!.trim()).not.toBe('');
+      expect(note.textContent).not.toContain('function');
+      expect(note.textContent).not.toContain('[Input Signal');
+    }
   });
 });
 

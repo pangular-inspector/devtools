@@ -75,7 +75,7 @@ import { FORMS_STYLES } from './forms-types';
         </button>
       </div>
       @if (!canWrite()) {
-        <p id="forms-writes-off" class="muted">{{ writesOff }}</p>
+        <p id="forms-writes-off" class="muted">{{ writesOff() }}</p>
       }
       <p class="status" role="status">{{ message() }}</p>
     </div>

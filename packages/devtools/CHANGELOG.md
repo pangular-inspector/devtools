@@ -332,6 +332,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The **Pipes** list is one Tab stop with arrow keys, Home and End, like the other lists in the panel, and in every list the Tab stop follows a row selected with a click that does not focus it, as in Safari (#370).
 - The popup's **No devtools server found** state and the panel's **Can't reach the devtools server** message link to the troubleshooting docs (#373).
 - On Angular 22.3 prereleases the Signals tab folds the new `Resource#name.params` computed into its resource, instead of showing it as an extra **resource 2** card.
+- The Forms tab's note under the action buttons, shown when form writes are off, says why instead of printing `[Input Signal: …]`.
 
 ### Docs
 
