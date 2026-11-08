@@ -2,6 +2,7 @@ import {readFileSync, readdirSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 import * as prettier from 'prettier';
 import {API_DIR, readApiEntries, renderApiReference} from './api-reference';
+import {readDebugApi} from './debug-api-compat';
 
 const docsRoot = import.meta.dirname;
 const repoRoot = resolve(docsRoot, '../..');
@@ -25,6 +26,20 @@ describe('API reference', () => {
     const hub = entries.find((entry) => entry.slug === 'hub');
     expect(hub?.symbols.map((s) => s.name)).toContain('initPangularHub');
     expect(entries.some((entry) => entry.slug.startsWith('internal-'))).toBe(false);
+  }, 60_000);
+
+  it('lists every debug API function with the version its @since tag names', () => {
+    const fns = readDebugApi(repoRoot);
+    expect(fns.find((fn) => fn.name === 'getComponent')).toMatchObject({
+      since: '12.0',
+      required: true,
+    });
+    expect(fns.find((fn) => fn.name === 'ɵgetSignalGraph')).toMatchObject({
+      since: '19.1',
+      required: false,
+    });
+    expect(fns.find((fn) => fn.name === 'ɵgetTransferState')?.since).toBeUndefined();
+    expect(fns.every((fn) => !fn.summary.includes('@since'))).toBe(true);
   }, 60_000);
 
   it('names the package root as an alias of the entry point it loads', () => {

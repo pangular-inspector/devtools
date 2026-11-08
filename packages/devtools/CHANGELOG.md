@@ -340,6 +340,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - The Express and other servers pages say which port the WebSocket side-car uses (the first free one from 9777), how to pin it with `ws: {port}`, and how to serve the socket on the app's own server with `attach(server)` (#426).
 - A **Renamed tools** table in the agent tools page, and the public API and the supported versions in the publishing guide.
 - Corrected guides and samples from the readiness review: the Vite auth default in the Analog guide and the glossary, JSON samples without a path comment, no separate devframe install in the package README, and `ws: false` for a panel-only devframe host.
+- The API reference has an **Angular debug API** page: each `window.ng` function the overlay reads and the first Angular version that publishes it, generated from the `@since` tags in `debug-api.ts` by `pnpm docs:api` (#373).
 
 ### Release and CI
 

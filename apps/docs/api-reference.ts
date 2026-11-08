@@ -1,6 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {join, posix} from 'node:path';
 import {Node, Project, ts, type JSDoc} from 'ts-morph';
+import {DEBUG_API_PAGE, renderDebugApiCompat} from './debug-api-compat.ts';
 
 /**
  * Builds the API reference pages in `src/content/api/` from the public entry
@@ -243,7 +244,7 @@ export function renderApiIndex(entries: ApiEntry[]): string {
     '',
     '# API reference',
     '',
-    'Each entry point of `@pangular-inspector/devtools` has a page with every symbol it exports, its declaration and its JSDoc. The pages are generated from the package source, so names and types match the published code. [Installation](../getting-started/installation.md#entry-points) says what each entry point is for, and [Configuration](../getting-started/configuration.md) explains the options.',
+    'Each entry point of `@pangular-inspector/devtools` has a page with every symbol it exports, its declaration and its JSDoc. The pages are generated from the package source, so names and types match the published code. [Installation](../getting-started/installation.md#entry-points) says what each entry point is for, and [Configuration](../getting-started/configuration.md) explains the options. [Angular debug API](./angular-debug-api.md) lists the `window.ng` functions the overlay reads and the Angular version each one needs.',
     '',
     '| Entry point | Exports |',
     '| ----------- | ------- |',
@@ -257,5 +258,6 @@ export function renderApiReference(repoRoot: string, githubUrl: string): Map<str
   const entries = readApiEntries(repoRoot);
   const pages = new Map<string, string>([['index.md', renderApiIndex(entries)]]);
   for (const entry of entries) pages.set(`${entry.slug}.md`, renderApiPage(entry, githubUrl));
+  pages.set(DEBUG_API_PAGE, renderDebugApiCompat(repoRoot, githubUrl));
   return pages;
 }
