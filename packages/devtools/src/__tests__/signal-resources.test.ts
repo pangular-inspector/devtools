@@ -70,6 +70,37 @@ describe('groupResources', () => {
     ]);
   });
 
+  it('folds the params computed of Angular 22.3 prereleases into its resource, and keeps another resource it reads apart', () => {
+    // From 22.3 `extRequest` reads a `params` computed, which runs the user's params function.
+    const nodes = [
+      node('1', 'computed', 'Resource.value', 'Ada'),
+      node('2', 'linkedSignal', 'Resource.state'),
+      node('3', 'linkedSignal', 'Resource.extRequest'),
+      node('4', 'computed', 'Resource.params', 1),
+      node('5', 'computed', 'Resource.value', ['Ada post']),
+      node('6', 'linkedSignal', 'Resource.state'),
+      node('7', 'linkedSignal', 'Resource.extRequest'),
+      node('8', 'computed', 'Resource.params', 'Ada'),
+      node('9', 'signal', 'userId', 1),
+    ];
+    const edges: SignalGraphEdge[] = [
+      { consumer: 0, producer: 1 },
+      { consumer: 1, producer: 2 },
+      { consumer: 2, producer: 3 },
+      { consumer: 3, producer: 8 },
+      { consumer: 4, producer: 5 },
+      { consumer: 5, producer: 6 },
+      { consumer: 6, producer: 7 },
+      // The second resource's params read the first resource's value.
+      { consumer: 7, producer: 0 },
+    ];
+    const resources = groupResources(nodes, edges, [], serialize);
+    expect(resources.map((r) => [r.name, r.value, r.nodeIds])).toEqual([
+      ['resource 1', 'Ada', ['1', '2', '3', '4']],
+      ['resource 2', ['Ada post'], ['5', '6', '7', '8']],
+    ]);
+  });
+
   it('derives status from the graph when no instance holds the resource', () => {
     const nodes = [
       node('1', 'computed', 'Resource#trips.value', '(threw an error)'),

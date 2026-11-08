@@ -98,6 +98,17 @@ function find(parent: number[], i: number): number {
   return i;
 }
 
+/**
+ * Whether an edge between two parts of same-named resources is internal to one
+ * resource. The parts that run the user's params function may read another
+ * resource: `extRequest` up to 22.2, and the `params` computed that the 22.3
+ * prereleases add between them (`extRequest` then reads only its own `params`).
+ */
+function ownEdge(consumer: string, producer: string): boolean {
+  if (consumer === 'extRequest') return producer === 'params';
+  return consumer !== 'params';
+}
+
 function groupsOf(nodes: SignalGraphNode[], edges: SignalGraphEdge[]): Group[] {
   const parsed = nodes.map((n) => parseResourceLabel(n.label));
   const parent = nodes.map((_, i) => i);
@@ -115,8 +126,7 @@ function groupsOf(nodes: SignalGraphNode[], edges: SignalGraphEdge[]): Group[] {
     if (!valid(e)) continue;
     const a = parsed[e.consumer];
     const b = parsed[e.producer];
-    // extRequest reads the user's params, which may read another resource.
-    if (a && b && a.name === b.name && a.part !== 'extRequest') union(e.consumer, e.producer);
+    if (a && b && a.name === b.name && ownEdge(a.part, b.part)) union(e.consumer, e.producer);
   }
   // httpResource signals have plain names: `_statusCode` and friends read the
   // resource's own signals, and its `stream` is read by the resource value.

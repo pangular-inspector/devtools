@@ -84,7 +84,7 @@ Click an entry under **Dependencies (producers)** or **Consumers** to open that 
 
 ### Resources
 
-Angular builds each `resource()`, `httpResource()` and `rxResource()` from several internal signals, labeled `Resource#name.value`, `Resource#name.state` and so on. The tab folds them into one card under **Resources**, and leaves them out of the **Signals** list. Angular labels these signals from 21.0.1. On earlier versions they have no names, so the tab shows no **Resources** cards and lists them as unnamed nodes. Each card shows:
+Angular builds each `resource()`, `httpResource()` and `rxResource()` from several internal signals, labeled `Resource#name.value`, `Resource#name.state` and so on. The tab folds them into one card under **Resources**, and leaves them out of the **Signals** list. Angular labels these signals from 21.0.1, and the 22.3 prereleases add a `Resource#name.params` computed that the tab folds in the same way. On earlier versions they have no names, so the tab shows no **Resources** cards and lists them as unnamed nodes. Each card shows:
 
 | Field           | Meaning                                                                                   |
 | --------------- | ----------------------------------------------------------------------------------------- |
