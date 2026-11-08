@@ -1018,10 +1018,7 @@ const pangular = defineDevframe({
         dropGoneStreamPages();
         // A report that failed to merge left no page, so its navigations stay out of the stream.
         if (routerPages.has(report.pageId)) {
-          navigationStream.record(report.pageId, report.navigations);
-          for (const app of report.apps ?? []) {
-            if (!app.primary) navigationStream.record(report.pageId, app.navigations ?? [], app.id);
-          }
+          navigationStream.recordReport(report);
         }
         return { hasConfig: !!routerPages.get(report.pageId)?.config };
       },

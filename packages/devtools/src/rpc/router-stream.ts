@@ -1,4 +1,5 @@
 import type { NavigationRecord } from '../router.ts';
+import type { RouterReport } from '../router-types.ts';
 import { code, UNTRUSTED } from './forms-tools.ts';
 import { capped, MAX_TOOL_CHARS } from './router-tools.ts';
 
@@ -108,6 +109,15 @@ export class NavigationStream {
     // A copy: each waiter removes itself from the set when it wakes.
     // oxlint-disable-next-line unicorn/no-useless-spread
     if (added) for (const wake of [...this.waiters]) wake();
+    return added;
+  }
+
+  /** Adds a router report's navigations: the first app's, then each other app's under its id. */
+  recordReport(report: RouterReport): number {
+    let added = this.record(report.pageId, report.navigations);
+    for (const app of report.apps ?? []) {
+      if (!app.primary) added += this.record(report.pageId, app.navigations ?? [], app.id);
+    }
     return added;
   }
 
