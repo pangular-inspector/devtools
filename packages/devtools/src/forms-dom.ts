@@ -197,8 +197,10 @@ export function domFacts(
   ];
   if (describedBy.length) facts.describedBy = describedBy.some((d) => !!d.textContent?.trim());
   if (model.hasErrors) facts.errorShown = errorElements(el).some(isShown);
-  const disabled = (el as HTMLInputElement).disabled;
-  if (typeof disabled === 'boolean' && disabled !== !!model.disabled) facts.disabled = disabled;
+  // `:disabled` also covers a control inside a disabled `<fieldset>`, which its own `disabled` misses.
+  const disabled =
+    typeof (el as HTMLInputElement).disabled === 'boolean' ? el.matches(':disabled') : undefined;
+  if (disabled !== undefined && disabled !== !!model.disabled) facts.disabled = disabled;
   const dom = domValue(el);
   const same =
     el instanceof HTMLSelectElement && typeof dom === 'string'

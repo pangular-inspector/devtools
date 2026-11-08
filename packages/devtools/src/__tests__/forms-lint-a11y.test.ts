@@ -52,6 +52,13 @@ describe('forms accessibility lint', () => {
     expect(domFacts(input('<input name="city" />'), {}).autocomplete).toBe('address-level2');
   });
 
+  it('reads a control inside a disabled fieldset as disabled', () => {
+    const fieldset = input('<fieldset disabled><input name="city" /></fieldset>');
+    const field = fieldset.querySelector('input')!;
+    expect(domFacts(field, { disabled: false }).disabled).toBe(true);
+    expect(domFacts(field, { disabled: true }).disabled).toBeUndefined();
+  });
+
   it('flags a personal field without autocomplete, unless it is hidden or disabled', () => {
     expect(
       rules(

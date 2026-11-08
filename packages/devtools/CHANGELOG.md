@@ -322,6 +322,7 @@ What remains: `/config` exports `DEFAULT_POPUP_HOTKEY`, `PANGULAR_ACTIONS`, `PAN
 - During a keyboard pick on the **Components** tab, a message that repeats, such as the same component again, is read out again.
 - **Show in Signals** for a page that has not reported its graph yet shows that page once it reports, and picking another component drops a signal still waiting to be selected.
 - A signal store change to a key that needs quotes, such as `profile["first name"]`, is logged with the path the **NgRx Store** state tree uses, so the tree marks it and **Copy path** matches `ngrx-explain-change`.
+- The forms collector reads a control inside a disabled `<fieldset>` as disabled on the page, so it no longer looks enabled in the DOM facts.
 
 ### Docs
 
