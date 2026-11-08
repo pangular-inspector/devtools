@@ -1,0 +1,348 @@
+@let sel = node();
+<header class="detail-head">
+  <span class="badge">component</span>
+  <h2 id="ct-detail-title" class="mono">{{ sel.name }}</h2>
+  <span class="mono muted">&lt;{{ sel.tag }}&gt;</span>
+  @if (detail()?.source; as where) {
+    <p class="where mono">
+      <app-source-link [file]="where.file" [line]="where.line" />
+    </p>
+  } @else {
+    @let guesses = sourceCandidates(sel);
+    @if (guesses.length === 1) {
+      <p class="where mono guess" [title]="guessTitle">
+        <span class="likely">Likely</span><span class="sr-only">, matched by class name: </span
+        ><app-source-link [file]="guesses[0].file" [line]="guesses[0].line" />
+      </p>
+    } @else if (guesses.length > 1) {
+      <div class="where guess" [title]="guessTitle">
+        <p class="guess-text">
+          <span class="likely">Not certain</span>
+          {{ guesses.length }} source files define {{ bareName(sel.name) }}:
+        </p>
+        <ul class="guess-list mono">
+          @for (guess of guesses; track sourceKey(guess)) {
+            <li><app-source-link [file]="guess.file" [line]="guess.line" /></li>
+          }
+        </ul>
+      </div>
+    }
+  }
+  @if (devtoolsActions()) {
+    <div class="actions" role="group" aria-label="Chrome DevTools">
+      <button type="button" (click)="revealInElements(sel)">Reveal in Elements</button>
+      <button type="button" (click)="openSource(sel)">Open source</button>
+    </div>
+    <p class="where action-message" role="status">{{ actionMessage() }}</p>
+  }
+  @if (sourceFor(sel); as src) {
+    @if (formsIn(src.file).length) {
+      <div class="actions">
+        @for (form of formsIn(src.file); track form.formId) {
+          <button type="button" class="show-form" (click)="showForm.emit(form.formId)">
+            Show {{ form.label }} in Forms
+          </button>
+        }
+      </div>
+    }
+  }
+  @if ((canShowInjector() || canShowSignals()) && !staticReport()) {
+    <div class="actions">
+      @if (canShowInjector()) {
+        <button type="button" (click)="openInjector(sel)">
+          Show in Injectors
+          <span class="sr-only">: {{ sel.name }}</span>
+        </button>
+      }
+      @if (canShowSignals()) {
+        <button type="button" (click)="openSignals(sel)">
+          Show in Signals
+          <span class="sr-only">: {{ sel.name }}</span>
+        </button>
+      }
+    </div>
+  }
+  @if (detail(); as d) {
+    <div class="actions" role="group" aria-label="Copy">
+      <button type="button" (click)="copyJson(d)">Copy as JSON</button>
+      <button type="button" (click)="copyHostPath(d)">Copy host path</button>
+    </div>
+    <p class="where action-message" role="status">{{ copyMessage() }}</p>
+  }
+  @if (!staticReport() && !native()) {
+    <app-store-global
+      class="console-global"
+      [rpc]="rpc()"
+      [pageId]="page()?.pageId"
+      [target]="{ kind: 'component', id: sel.id }"
+      [label]="sel.name"
+    />
+  }
+</header>
+
+@if (detail(); as d) {
+  <dl class="facts">
+    <dt>Change detection</dt>
+    <dd>{{ d.changeDetection ?? 'Unknown' }}</dd>
+    <dt>Encapsulation</dt>
+    <dd>{{ d.encapsulation ?? 'Unknown' }}</dd>
+    <dt>Host path</dt>
+    <dd class="mono">{{ d.path }}</dd>
+    @for (hit of routedById().get(sel.id) ?? []; track hit.outlet + hit.route) {
+      <dt>Routed</dt>
+      <dd class="mono">{{ hit.route || '/' }} in outlet {{ hit.outlet }}</dd>
+    }
+  </dl>
+
+  <div class="prop-filter">
+    <app-search-field
+      #propFilterInput
+      class="search"
+      label="Filter values"
+      placeholder="Filter inputs, outputs and properties by name"
+      [(value)]="propFilter"
+    />
+    @if (propQuery()) {
+      <span class="count">{{ shownValues()?.count ?? 0 }} of {{ valueTotal() }}</span>
+    }
+    <p class="sr-only" role="status">{{ propFilterStatus() }}</p>
+  </div>
+
+  @if (shownValues(); as v) {
+    <app-redaction-count [value]="v" />
+    @if (propQuery() && !v.count) {
+      <div class="state compact">
+        <p class="state-title">
+          No inputs, outputs or properties match “{{ propFilter().trim() }}”
+        </p>
+        <p class="state-hint">
+          The filter searches names, and the nested keys of values you opened.
+        </p>
+        <button type="button" (click)="clearPropFilter()">Clear filters</button>
+      </div>
+    }
+
+    @if (!propQuery() || v.inputs.length) {
+      <div class="block">
+        <h3>
+          Inputs <span class="pill">{{ v.inputs.length }}</span>
+        </h3>
+        @if (v.inputs.length) {
+          <ul class="props">
+            @for (p of v.inputs; track p.name) {
+              <li class="prop" [class.changed]="flashed('input', p.name)">
+                <span class="prop-name mono">
+                  {{ p.name }}
+                  @if (p.prop !== p.name) {
+                    <span class="muted">({{ p.prop }})</span>
+                  }
+                </span>
+                <app-value-tree
+                  [prop]="p"
+                  [store]="values"
+                  [query]="propFilter()"
+                  [componentId]="d.id"
+                  [pageId]="page()?.pageId ?? null"
+                  [rpc]="rpc()"
+                  [writes]="canEdit()"
+                />
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="empty-line">No inputs.</p>
+        }
+      </div>
+    }
+
+    @if (!propQuery() || v.outputs.length) {
+      <div class="block">
+        <h3>
+          Outputs <span class="pill">{{ v.outputs.length }}</span>
+        </h3>
+        @if (v.outputs.length) {
+          <ul class="chips">
+            @for (p of v.outputs; track p.name) {
+              <li class="chip" [class.on]="p.listened">
+                <span class="mono">{{ p.name }}</span>
+                <span class="chip-note">{{ p.listened ? 'listened' : 'no listener' }}</span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="empty-line">No outputs.</p>
+        }
+      </div>
+    }
+
+    @if (!propQuery() || v.properties.length) {
+      <div class="block">
+        <h3>
+          Properties <span class="pill">{{ v.properties.length }}</span>
+        </h3>
+        @if (v.properties.length) {
+          <ul class="props">
+            @for (p of v.properties; track p.name) {
+              <li class="prop" [class.changed]="flashed('property', p.name)">
+                <span class="prop-name mono">
+                  {{ p.name }}
+                  @if (p.kind) {
+                    <span class="flag">{{ p.kind }}</span>
+                  }
+                  @if (p.kind === 'signal' && canShowSignals() && !staticReport()) {
+                    <button type="button" class="signal-link" (click)="openSignals(sel, p.prop)">
+                      Show in Signals<span class="sr-only">: {{ p.name }}</span>
+                    </button>
+                  }
+                </span>
+                <app-value-tree
+                  [prop]="p"
+                  [store]="values"
+                  [query]="propFilter()"
+                  [componentId]="d.id"
+                  [pageId]="page()?.pageId ?? null"
+                  [rpc]="rpc()"
+                  [writes]="canEdit()"
+                />
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="empty-line">No other properties.</p>
+        }
+      </div>
+    }
+
+    @if (!propQuery() && d.listeners.length) {
+      <div class="block">
+        <h3>
+          DOM listeners <span class="pill">{{ d.listeners.length }}</span>
+        </h3>
+        <ul class="chips">
+          @for (name of d.listeners; track name) {
+            <li class="chip mono">{{ name }}</li>
+          }
+        </ul>
+      </div>
+    }
+
+    @if (!propQuery() && ownedDeferBlocks().length) {
+      <div class="block">
+        <h3>
+          Defer blocks <span class="pill">{{ ownedDeferBlocks().length }}</span>
+        </h3>
+        <ul class="chips">
+          @for (block of ownedDeferBlocks(); track block.id) {
+            <li class="chip">
+              <span class="mono">{{ block.state }}</span>
+              <span class="chip-note">{{ block.triggers.join(', ') || 'no triggers' }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+    @for (dir of v.directives; track dir.name + dir.index) {
+      <div class="block">
+        <h3>
+          <span class="mono">{{ dir.name }}</span>
+          <span class="flag">directive on host</span>
+        </h3>
+        <p class="directive-where mono">
+          <ng-container
+            [ngTemplateOutlet]="directiveSource"
+            [ngTemplateOutletContext]="{ $implicit: dir.name }"
+          />
+        </p>
+        @if (dir.inputs.length) {
+          <ul class="props">
+            @for (p of dir.inputs; track p.name) {
+              <li class="prop" [class.changed]="flashed('directive', p.name, dir.index)">
+                <span class="prop-name mono">{{ p.name }}</span>
+                <app-value-tree
+                  [prop]="p"
+                  [store]="values"
+                  [query]="propFilter()"
+                  [directive]="dir.index"
+                  [componentId]="d.id"
+                  [pageId]="page()?.pageId ?? null"
+                  [rpc]="rpc()"
+                />
+              </li>
+            }
+          </ul>
+        }
+        @if (dir.outputs.length) {
+          <ul class="chips">
+            @for (p of dir.outputs; track p.name) {
+              <li class="chip" [class.on]="p.listened">
+                <span class="mono">{{ p.name }}</span>
+                <span class="chip-note">{{ p.listened ? 'listened' : 'no listener' }}</span>
+              </li>
+            }
+          </ul>
+        }
+        @if (!dir.inputs.length && !dir.outputs.length) {
+          <p class="empty-line">No inputs or outputs.</p>
+        }
+      </div>
+    }
+  }
+
+  <div class="block">
+    <h3>
+      Injected <span class="pill">{{ d.dependencies.length }}</span>
+    </h3>
+    @if (d.dependencies.length) {
+      <ul class="deps">
+        @for (dep of d.dependencies; track dep.token + $index) {
+          <li class="dep">
+            <span class="token mono">{{ dep.token }}</span>
+            @for (flag of dep.flags; track flag) {
+              <span class="flag">{{ flag }}</span>
+            }
+            @if (dep.providedBy) {
+              <span class="from"
+                >from <span class="mono">{{ dep.providedByName ?? 'an injector' }}</span></span
+              >
+            } @else {
+              <span class="from missing">not provided</span>
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="empty-line">Nothing is injected through the constructor or inject().</p>
+    }
+  </div>
+
+  @if (canShowPipes()) {
+    <app-component-pipes
+      [rpc]="rpc()"
+      [pageId]="page()?.pageId"
+      [component]="bareName(sel.name)"
+      [canShowPipes]="!staticReport()"
+      (showPipe)="showPipe.emit({ name: $event, pageId: page()?.pageId })"
+    />
+  }
+} @else {
+  <div class="state compact" role="status">
+    <span class="spinner" aria-hidden="true"></span>
+    <p class="state-hint">Reading live values from the page…</p>
+  </div>
+}
+
+<!-- A directive's file from the source scan, by class name: the page gives none. -->
+<ng-template #directiveSource let-name>
+  @let found = directiveSources(name);
+  @if (found.length === 1) {
+    <span class="directive-guess" [title]="guessTitle">
+      <span class="likely">Likely</span><span class="sr-only">, matched by class name: </span
+      ><app-source-link [file]="found[0].file" [line]="found[0].line" />
+    </span>
+  } @else if (found.length > 1) {
+    <span class="chip-note" [title]="guessTitle"
+      >{{ found.length }} source files define {{ bareName(name) }}</span
+    >
+  }
+</ng-template>

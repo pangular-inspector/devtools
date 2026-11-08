@@ -1,0 +1,48 @@
+@let host = node();
+<header class="detail-head">
+  <span class="badge">directive host</span>
+  <h2 id="ct-detail-title" class="mono">&lt;{{ host.tag }}&gt;</h2>
+  <span class="mono muted">{{ hostLabel(host) }}</span>
+</header>
+<div class="block">
+  <h3>
+    Directives <span class="pill">{{ host.directives?.length ?? 0 }}</span>
+  </h3>
+  <ul class="chips">
+    @for (name of host.directives ?? []; track name + $index) {
+      <li class="chip mono">
+        {{ name }}
+        <ng-container
+          [ngTemplateOutlet]="directiveSource"
+          [ngTemplateOutletContext]="{ $implicit: name }"
+        />
+      </li>
+    }
+  </ul>
+</div>
+<div class="block">
+  <p class="empty-line">
+    This element hosts directives but no component. Their inputs are bound in the template of the
+    component that renders it.
+  </p>
+  @if (ownerOf(host.id); as owner) {
+    <div class="actions owner-action">
+      <button type="button" (click)="reveal(owner.id, true)">Show {{ owner.name }}</button>
+    </div>
+  }
+</div>
+
+<!-- A directive's file from the source scan, by class name: the page gives none. -->
+<ng-template #directiveSource let-name>
+  @let found = directiveSources(name);
+  @if (found.length === 1) {
+    <span class="directive-guess" [title]="guessTitle">
+      <span class="likely">Likely</span><span class="sr-only">, matched by class name: </span
+      ><app-source-link [file]="found[0].file" [line]="found[0].line" />
+    </span>
+  } @else if (found.length > 1) {
+    <span class="chip-note" [title]="guessTitle"
+      >{{ found.length }} source files define {{ bareName(name) }}</span
+    >
+  }
+</ng-template>
