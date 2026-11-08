@@ -80,7 +80,7 @@ describe('live redirect-from-query check', () => {
   it('flags code that navigates to a return URL from the current query', () => {
     const router = routerAt('/login?returnUrl=%2Forders%2F7');
     const navigations: NavigationRecord[] = [];
-    setCaller('navigateByUrl() from LoginPage.submit', true);
+    setCaller('navigateByUrl() from LoginPage.submit', true, router);
     applyRouterEvent(navigations, { type: 0, id: 4, url: '/orders/7' }, Date.now(), router);
     expect(navigations[0].queryRedirect).toEqual({
       param: 'returnUrl',

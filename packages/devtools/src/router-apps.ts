@@ -4,16 +4,18 @@ import {
   droppedNavigations,
   findRouterRoots,
   read,
+  setGeneration,
   snapshotRouter,
-  watchRouter,
   type AnyRecord,
   type NavigationRecord,
   type RouterDebugApi,
 } from './router.ts';
+import { watchApp, type AppWatch } from './router-app-watch.ts';
 import { ConfigTracker, activeIds, walkConfig, type RouteNode } from './router-config.ts';
+import { linksOf, linksOfRouters, outletsOf } from './router-links.ts';
 import { detectSetup, type RouterSetup } from './router-setup.ts';
 
-import type { RouterAppReport } from './router-types.ts';
+import type { LinkInfo, OutletInfo, PreloadRecord, RouterAppReport } from './router-types.ts';
 export type { RouterAppReport } from './router-types.ts';
 
 /** Most apps one page reports. */
@@ -61,7 +63,12 @@ interface WatchedApp {
   root: Element;
   router: AnyRecord;
   navigations: NavigationRecord[];
-  stop: (() => void) | null;
+  preloads: PreloadRecord[];
+  watch: AppWatch;
+  outlets: OutletInfo[];
+  links: LinkInfo[];
+  linksTruncated: number;
+  linksUnchecked: number;
   tracker: ConfigTracker;
   config?: RouteNode[];
   configTruncated: number;
@@ -70,19 +77,55 @@ interface WatchedApp {
 
 /**
  * The apps on a page that each have a Router. The overlay keeps watching the
- * first app as before; this watches every other app's router events and
- * describes each one in the report's `apps` list. A page with one app
- * reports no list, so its report stays as it was.
+ * first app as before; this watches every other app the same way (its router
+ * events, callers, error handler, preloads and, when on, guard runs) and
+ * describes each one, with its own outlets and links, in the report's `apps`
+ * list. A page with one app reports no list, so its report stays as it was.
  */
 export class RouterApps {
   private primary: { id: string; name: string; selector: string; root: Element } | null = null;
   private others: WatchedApp[] = [];
   private roots: Element[] = [];
+  private instrumented = false;
 
   private readonly onChange: () => void;
 
-  constructor(onChange: () => void) {
+  constructor(onChange: () => void, instrumented = false) {
     this.onChange = onChange;
+    this.instrumented = instrumented;
+  }
+
+  /** Turns guard and resolver recording on or off in every app other than the first. */
+  setInstrumented(on: boolean): void {
+    this.instrumented = on;
+    for (const app of this.others) app.watch.setInstrumented(on);
+  }
+
+  /**
+   * The links of the first app, from one pass over the page that also files
+   * every other app's links under that app. On a page with one app this is
+   * `linksOf` as it always was. Reads each app's outlets too.
+   */
+  links(
+    ng: RouterDebugApi,
+    primary: AnyRecord,
+    cut: { links: number; unchecked?: number },
+  ): LinkInfo[] {
+    this.dropGone();
+    if (!this.primary || !this.others.length) return linksOf(ng, primary, cut);
+    const cuts = this.others.map(() => ({ links: 0, unchecked: 0 }));
+    const [first, ...rest] = linksOfRouters(
+      ng,
+      [primary, ...this.others.map((app) => app.router)],
+      [cut, ...cuts],
+    );
+    this.others.forEach((app, index) => {
+      app.links = rest[index];
+      app.linksTruncated = cuts[index].links;
+      app.linksUnchecked = cuts[index].unchecked;
+      app.outlets = read(() => outletsOf(app.router), []);
+    });
+    return first;
   }
 
   /**
@@ -115,6 +158,7 @@ export class RouterApps {
       keep.add(router);
       if (this.others.some((app) => app.router === router)) continue;
       const navigations: NavigationRecord[] = [];
+      const preloads: PreloadRecord[] = [];
       this.others.push({
         id: appIdOf(root),
         name: appNameOf(ng, root),
@@ -122,7 +166,12 @@ export class RouterApps {
         root,
         router,
         navigations,
-        stop: watchRouter(router, navigations, this.onChange),
+        preloads,
+        watch: watchApp(ng, router, root, navigations, preloads, this.onChange, this.instrumented),
+        outlets: read(() => outletsOf(router), []),
+        links: [],
+        linksTruncated: 0,
+        linksUnchecked: 0,
         tracker: new ConfigTracker(),
         configTruncated: 0,
       });
@@ -158,6 +207,7 @@ export class RouterApps {
         app.config = walkConfig(app.router, cut);
         app.configTruncated = cut.routes;
         app.setup = read(() => detectSetup(ng, app.router, routers, app.root), undefined);
+        setGeneration(app.tracker.generation, app.router);
       }
       const entry: RouterAppReport = {
         id: app.id,
@@ -168,7 +218,12 @@ export class RouterApps {
         generation: app.tracker.generation,
         config: app.config,
         activeIds: read(() => activeIds(app.router), []),
+        outlets: app.outlets,
+        links: app.links,
+        preloads: app.preloads,
       };
+      if (app.linksTruncated) entry.linksTruncated = app.linksTruncated;
+      if (app.linksUnchecked) entry.linksUnchecked = app.linksUnchecked;
       const dropped = droppedNavigations(app.navigations);
       if (dropped) entry.dropped = dropped;
       if (app.configTruncated) entry.configTruncated = app.configTruncated;
@@ -197,7 +252,7 @@ export class RouterApps {
 
   /** Stops watching every app, after the first app's router went away. */
   reset(): void {
-    for (const app of this.others) app.stop?.();
+    for (const app of this.others) app.watch.stop();
     this.others = [];
     this.primary = null;
     this.roots = [];
@@ -215,7 +270,7 @@ export class RouterApps {
   }
 
   private drop(app: WatchedApp): void {
-    app.stop?.();
+    app.watch.stop();
     this.others = this.others.filter((other) => other !== app);
   }
 }
