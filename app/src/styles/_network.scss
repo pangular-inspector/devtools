@@ -265,12 +265,6 @@
   tr.selected td:first-child {
     box-shadow: inset 2px 0 0 var(--accent);
   }
-  .method {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-strong);
-  }
   td.url {
     width: 100%;
     max-width: 0;
@@ -299,6 +293,12 @@
 }
 
 @mixin status {
+  .method {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
   .status {
     font-family: var(--font-mono);
     font-size: 12px;
