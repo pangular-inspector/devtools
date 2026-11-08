@@ -27,3 +27,10 @@ export type PangularScope = DevframeScopedNodeContext<'pangular'>;
 
 /** A page's signal graph as the setup keeps it. */
 export type PageGraph = SignalGraph & { pageId?: string };
+
+/** The setup's `register`: an RPC function, unless the config turns it off. */
+export type Register = PangularScope['rpc']['register'];
+/** Whether the connection of the current call owns the page (`rpc/page-owners.ts`). */
+export type Owns = (pageId: unknown) => pageId is string;
+/** Whether a message from `pageId` may settle a request sent to `target`. */
+export type AnswersFor = (target: string | undefined, pageId: unknown) => boolean;

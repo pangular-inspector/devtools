@@ -224,7 +224,7 @@ The docs describe what the code does today. Before you write a claim, find it in
 | Page                      | Source of truth                                                                                                    |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | Inspector pages           | The tab in `app/src/pages/` and its collector in `packages/devtools/src/`                                          |
-| Agent tools and resources | `packages/devtools/src/devframe.ts`, `rpc/*.ts` and `rpc/analog-register.ts`                                       |
+| Agent tools and resources | `packages/devtools/src/devframe.ts`, `devframe-*.ts`, `rpc/*.ts` and `rpc/analog-register.ts`                      |
 | Setup pages               | `packages/devtools/package.json` exports, `hub.ts`, `vite.ts`, `config.ts`, `overlay.ts`, `popup.ts` and the demos |
 | Security                  | `hub.ts`, `vite.ts` and the redaction code, such as `forms-privacy.ts`                                             |
 | Contributing              | Root `package.json` scripts, `nx.json`, `project.json` files and `.github/workflows`                               |

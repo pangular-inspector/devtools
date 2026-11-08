@@ -130,7 +130,7 @@ Rules:
 | Page               | Source of truth                                                                                             |
 | ------------------ | ----------------------------------------------------------------------------------------------------------- |
 | inspectors/\*      | `app/src/pages/*.ts` (the tab) and `packages/devtools/src/*` (collectors, actions)                          |
-| agents/\*          | `packages/devtools/src/devframe.ts`, `rpc/*.ts`, `rpc/analog-register.ts`, Devframe built-ins               |
+| agents/\*          | `packages/devtools/src/devframe.ts`, `devframe-*.ts`, `rpc/*.ts`, `rpc/analog-register.ts`, Devframe built-ins               |
 | getting-started/\* | `packages/devtools/package.json` exports, `hub.ts`, `vite.ts`, `config.ts`, `overlay.ts`, `popup.ts`, demos |
 | security           | `hub.ts`, `vite.ts`, `forms-privacy.ts`, `forms-actions.ts`, router and Analog redaction                    |
 | contributing/\*    | root `package.json`, `nx.json`, `project.json` files, `.github/workflows`, `extension/`                     |
