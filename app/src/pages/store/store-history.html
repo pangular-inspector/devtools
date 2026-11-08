@@ -1,0 +1,81 @@
+@if (store(); as current) {
+  <h4 id="ngrx-devtools-heading">Store DevTools history</h4>
+  <p class="hint small">
+    {{
+      current.classic!.recordingPaused
+        ? 'Recording is paused: new actions change the state but are not recorded.'
+        : 'Recording new actions.'
+    }}
+    @if (current.classic!.skipped?.length; as skippedCount) {
+      {{ skippedCount }} skipped {{ skippedCount === 1 ? 'action is' : 'actions are' }} left out of
+      the state.
+    }
+  </p>
+  @if (confirmReset()) {
+    <div
+      class="confirm"
+      role="group"
+      aria-labelledby="ngrx-reset-text"
+      (keydown.escape)="cancelReset($event)"
+    >
+      <p id="ngrx-reset-text">
+        Reset puts the store back on its initial state and empties the Store DevTools history.
+        Entries logged so far can no longer be restored.
+      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="btn primary"
+          [disabled]="busy()"
+          (click)="devtoolsOp({ op: 'reset' })"
+        >
+          Reset history
+        </button>
+        <button type="button" class="btn" (click)="cancelReset()" #resetCancel>Cancel</button>
+      </div>
+    </div>
+  } @else {
+    <div class="actions">
+      <button
+        type="button"
+        class="btn"
+        [disabled]="busy() || !canRestore()"
+        [attr.aria-describedby]="canRestore() ? null : 'store-history-off'"
+        (click)="devtoolsOp({ op: 'pause', paused: !current.classic!.recordingPaused })"
+      >
+        {{ current.classic!.recordingPaused ? 'Resume recording' : 'Pause recording' }}
+      </button>
+      <button
+        type="button"
+        class="btn"
+        [disabled]="busy() || !canRestore()"
+        [attr.aria-describedby]="canRestore() ? null : 'store-history-off'"
+        (click)="devtoolsOp({ op: 'jump', index: 0 })"
+      >
+        Jump to committed state
+      </button>
+      <button
+        type="button"
+        class="btn"
+        [disabled]="busy() || !canRestore()"
+        [attr.aria-describedby]="canRestore() ? null : 'store-history-off'"
+        (click)="devtoolsOp({ op: 'commit' })"
+      >
+        Commit
+      </button>
+      <button
+        type="button"
+        class="btn"
+        [disabled]="busy() || !canRestore()"
+        [attr.aria-describedby]="canRestore() ? null : 'store-history-off'"
+        (click)="askReset()"
+        #resetButton
+      >
+        Reset…
+      </button>
+    </div>
+  }
+  @if (!canRestore()) {
+    <p id="store-history-off" class="hint small">{{ restoreOff }}</p>
+  }
+}

@@ -1,0 +1,71 @@
+<div class="section-head">
+  <h2 id="ngrx-source-heading">Source declarations</h2>
+  @if (sourceEntries().length) {
+    <span class="pill">{{ sourceEntries().length }}</span>
+  }
+</div>
+@if (!sourceLoaded()) {
+  <div class="empty compact" role="status">
+    <span class="spinner" aria-hidden="true"></span>
+    <p class="empty-title">Scanning source for NgRx declarations…</p>
+  </div>
+} @else if (sourceEntries().length === 0) {
+  <div class="empty compact">
+    <p class="empty-title">No NgRx declarations found in source.</p>
+    <p class="hint">
+      The scan looks for <code>signalStore</code>, <code>signalState</code>,
+      <code>signalMethod</code>, <code>createAction</code>, <code>createReducer</code>,
+      <code>createEffect</code>, <code>createSelector</code> and <code>createFeature</code>.
+    </p>
+  </div>
+} @else {
+  <div class="kinds" role="group" aria-label="Filter declarations by kind">
+    <button
+      type="button"
+      class="kind-chip"
+      [class.active]="!kind()"
+      [attr.aria-pressed]="!kind()"
+      (click)="kind.set(null)"
+    >
+      All <span class="count">{{ sourceEntries().length }}</span>
+    </button>
+    @for (group of groupedEntries(); track group.kind) {
+      <button
+        type="button"
+        class="kind-chip"
+        [class.active]="kind() === group.kind"
+        [attr.aria-pressed]="kind() === group.kind"
+        (click)="kind.set(kind() === group.kind ? null : group.kind)"
+      >
+        <span class="dot" aria-hidden="true" [style.background]="kindColor(group.kind)"></span>
+        <span class="chip-text">{{ kindLabel(group.kind) }}</span>
+        <span class="count">{{ group.count }}</span>
+      </button>
+    }
+  </div>
+
+  <ul class="nodes">
+    @for (entry of filteredEntries(); track entry.name + entry.file + entry.line) {
+      <li class="node-card">
+        <div class="node-header">
+          <span class="dot" aria-hidden="true" [style.background]="kindColor(entry.kind)"></span>
+          <span class="node-label">{{ entry.name }}</span>
+          <span class="chip">{{ kindLabel(entry.kind) }}</span>
+        </div>
+        <div class="node-meta">
+          <app-source-link class="file" [file]="entry.file" [line]="entry.line" />
+        </div>
+        @if (entry.detail) {
+          <p class="detail">{{ entry.detail }}</p>
+        }
+      </li>
+    } @empty {
+      <li>
+        <div class="empty compact" role="status">
+          <p class="empty-title">No declarations match.</p>
+          <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
+        </div>
+      </li>
+    }
+  </ul>
+}

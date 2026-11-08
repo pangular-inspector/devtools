@@ -1,0 +1,81 @@
+<div class="section-head">
+  <h2 id="ngrx-live-heading">Live stores</h2>
+  @if (liveStores().length) {
+    <span class="pill">{{ liveStores().length }}</span>
+  }
+</div>
+
+@if (failed()) {
+  <app-state kind="error" (retry)="retry()">
+    Could not load the live store state.
+    <p detail>Check that the dev server with Pangular Inspector is still running.</p>
+  </app-state>
+} @else if (!stateLoaded()) {
+  <app-state kind="loading">Loading the live stores…</app-state>
+} @else if (!page()) {
+  <app-state kind="empty">
+    No page is reporting store state yet.
+    <p detail>Open the app in a browser. Stores show up here as soon as the page creates them.</p>
+  </app-state>
+} @else if (!liveStores().length) {
+  <app-angular-unavailable [page]="angularPage()" capability="injectorProviders" compact>
+    The overlay finds stores through the injectors, so stores it can't reach from a component are
+    not listed.
+  </app-angular-unavailable>
+  <div class="empty">
+    @if (usesSignals()) {
+      <p class="empty-title">No signal store instance on this page yet.</p>
+      <p class="hint">
+        A <code>signalStore</code> is created the first time something injects it. Navigate to a
+        page that uses the store and it appears here.
+      </p>
+    } @else if (usesClassic()) {
+      <p class="empty-title">The &#64;ngrx/store Store was not found on this page.</p>
+      <p class="hint">
+        Check that <code>provideStore()</code> or <code>StoreModule.forRoot()</code> is part of the
+        providers of the running app.
+      </p>
+    } @else {
+      <p class="empty-title">This page has no store.</p>
+      <p class="hint">
+        Stores from <code>&#64;ngrx/signals</code> (<code>signalStore</code>,
+        <code>signalState</code>) and <code>&#64;ngrx/store</code> are listed here once the app
+        creates them. NGXS, Elf and MiniRx stores show up through their Redux DevTools integration
+        when the app loads
+        <code>&#64;pangular-inspector/devtools/store-hook</code>
+        first.
+      </p>
+    }
+  </div>
+} @else {
+  <div class="live-layout">
+    <ul class="store-list" aria-label="Stores on this page">
+      @for (item of filteredStores(); track item.id) {
+        <li>
+          <button
+            type="button"
+            class="store-item"
+            [class.selected]="item.id === store()?.id"
+            [attr.aria-pressed]="item.id === store()?.id"
+            (click)="selectStore(item.id)"
+          >
+            <span class="store-top">
+              <span class="dot" aria-hidden="true" [style.background]="kindColor(item.kind)"></span>
+              <span class="store-name">{{ item.label }}</span>
+            </span>
+            <span class="store-meta">
+              {{ kindLabel(item.kind) }} · {{ item.scope }} · {{ countText(item) }}
+            </span>
+          </button>
+        </li>
+      } @empty {
+        <li class="muted pad">No stores match this filter.</li>
+      }
+    </ul>
+
+    @if (store()) {
+      <div appStoreDetail class="store-detail"></div>
+    }
+  </div>
+}
+<p class="message" role="status">{{ message() }}</p>

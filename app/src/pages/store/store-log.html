@@ -1,0 +1,105 @@
+@if (store(); as current) {
+  <h4 id="ngrx-log-heading">
+    {{ current.classic || current.redux ? 'Action log' : 'Change log' }}
+    <span class="pill">{{ storeLog().length }}</span>
+  </h4>
+  <div class="live-row">
+    <app-live-controls
+      [feed]="logFeed"
+      [what]="current.classic || current.redux ? 'actions' : 'changes'"
+    />
+  </div>
+  <app-limit-note
+    [dropped]="(current.redux ? reduxPage()?.dropped : page()?.dropped) ?? 0"
+    [max]="maxLog()"
+    what="changes on this page"
+    limit="changeLog"
+  />
+  <div class="log-layout" [style.--log-list-size.px]="logListSize()">
+    <ul
+      #logList
+      class="log-list"
+      appRovingList="button.log-item"
+      [rovingWindow]="logWindow"
+      [style.padding-top.px]="logWindow.enabled() ? 2 + logWindow.padTop() : null"
+      [style.padding-bottom.px]="logWindow.enabled() ? 2 + logWindow.padBottom() : null"
+      [attr.aria-label]="current.classic || current.redux ? 'Actions' : 'Changes'"
+    >
+      @for (shown of shownLog(); track shown.entry.seq) {
+        @let entry = shown.entry;
+        <li
+          [attr.data-vindex]="shown.index"
+          [attr.aria-setsize]="logWindow.enabled() ? storeLog().length : null"
+          [attr.aria-posinset]="logWindow.enabled() ? shown.index + 1 : null"
+        >
+          <button
+            type="button"
+            class="log-item"
+            [class.selected]="entry.seq === selectedChangeSeq()"
+            [attr.aria-pressed]="entry.seq === selectedChangeSeq()"
+            [attr.aria-controls]="entry.seq === selectedChangeSeq() ? 'ngrx-change-detail' : null"
+            (click)="selectChange(entry.seq)"
+          >
+            <span class="seq">#{{ entry.seq }}</span>
+            <span class="log-type-row">
+              <span class="log-type" [title]="entry.type">{{ entry.type }}</span>
+              @if (entry.causedByEvent; as caused) {
+                <span
+                  class="tag"
+                  [title]="'Caused by ' + kindLabel('event') + ': ' + caused.type"
+                  >{{ caused.type }}</span
+                >
+              }
+            </span>
+            <span class="log-meta">
+              @if (isSkipped(entry.seq)) {
+                <span class="tag">skipped</span>
+              }
+              @if (entry.origin) {
+                <span class="tag">{{ entry.origin }}</span>
+              }
+              {{ changesLabel(entry) }}
+              ·
+              {{ formatTime(entry.timestamp) }}
+              @if (entry.durationMs !== undefined) {
+                · {{ formatDuration(entry.durationMs) }}
+              }
+            </span>
+          </button>
+        </li>
+      } @empty {
+        <li class="muted pad">
+          @if (filter()) {
+            No entries match this filter.
+          } @else if (current.classic || current.redux) {
+            No actions dispatched since the page connected.
+          } @else {
+            No state changes yet. Method calls and patchState writes that change the state are
+            recorded here.
+          }
+        </li>
+      }
+    </ul>
+    <app-splitter
+      view="store-log"
+      pane="before"
+      label="Resize the change list"
+      [min]="200"
+      [max]="640"
+      [defaultSize]="300"
+      [(size)]="logListSize"
+    />
+
+    @if (changeEntry(); as selected) {
+      <div id="ngrx-change-detail">
+        <section
+          appStoreEntry
+          class="entry"
+          [selected]="selected"
+          [headingLevel]="5"
+          [idPrefix]="'ngrx-change'"
+        ></section>
+      </div>
+    }
+  </div>
+}

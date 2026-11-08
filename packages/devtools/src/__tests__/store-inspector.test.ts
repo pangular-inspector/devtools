@@ -14,12 +14,29 @@ async function mount() {
   const { StoreSession } = await import('../../../../app/src/pages/store-session.ts');
   const { Select } = await import('../../../../app/src/ui/select.ts');
   const { LiveControls } = await import('../../../../app/src/ui/live-feed.ts');
-  (StoreInspector as unknown as { propDecorators: unknown }).propDecorators = Object.fromEntries(
-    ['stateTree', 'latestButton', 'cancelButton', 'restoreButton'].map((name) => [
-      name,
-      [{ type: ViewChild, args: [name, { isSignal: true }] }],
-    ]),
-  );
+  const { StoreDetail } = await import('../../../../app/src/pages/store/store-detail.ts');
+  const { StoreEntry } = await import('../../../../app/src/pages/store/store-entry.ts');
+  const viewChildren = (type: unknown, names: string[]) => {
+    (type as { propDecorators: unknown }).propDecorators = Object.fromEntries(
+      names.map((name) => [name, [{ type: ViewChild, args: [name, { isSignal: true }] }]]),
+    );
+  };
+  viewChildren(StoreDetail, ['stateTree', 'latestButton']);
+  viewChildren(StoreEntry, ['cancelButton', 'restoreButton']);
+  // The entry detail reads its inputs under the names the old shared template used.
+  (StoreEntry as unknown as { propDecorators: Record<string, unknown[]> }).propDecorators = {
+    ...(StoreEntry as unknown as { propDecorators: Record<string, unknown[]> }).propDecorators,
+    ...Object.fromEntries(
+      [
+        ['entry', 'selected'],
+        ['level', 'headingLevel'],
+        ['prefix', 'idPrefix'],
+      ].map(([name, alias]) => [
+        name,
+        [{ type: Input, args: [{ isSignal: true, alias, required: true }] }],
+      ]),
+    ),
+  };
   // JIT sees signal inputs only through the metadata the AOT compiler would write.
   const signalInputs = (type: unknown, names: string[], required: string[] = []) => {
     (type as { propDecorators: unknown }).propDecorators = Object.fromEntries(

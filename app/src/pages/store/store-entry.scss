@@ -1,0 +1,14 @@
+@use 'store';
+
+@include store.base;
+@include store.lists;
+@include store.code;
+@include store.entry($entry: ':host');
+@include store.actions;
+@include store.history-stats;
+@include store.trace;
+@media (max-width: 480px) {
+  .kv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

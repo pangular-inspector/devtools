@@ -14,11 +14,15 @@ async function pageSources(): Promise<Map<string, string>> {
     readdirSync(path: string, options: { recursive: true }): string[];
   };
   // Recursive, so a page split into a folder (pages/network/) is still checked.
-  const files = fs
-    .readdirSync(PAGES, { recursive: true })
-    .map((file) => file.replaceAll('\\', '/'))
-    .filter((file) => file.endsWith('.ts'));
-  return new Map(files.map((file) => [file, fs.readFileSync(`${PAGES}${file}`, 'utf8')]));
+  const all = fs.readdirSync(PAGES, { recursive: true }).map((file) => file.replaceAll('\\', '/'));
+  const files = all.filter((file) => file.endsWith('.ts'));
+  // A component's template and style files count as part of its source.
+  const read = (file: string) =>
+    [file, file.replace(/\.ts$/, '.html'), file.replace(/\.ts$/, '.scss')]
+      .filter((path) => all.includes(path))
+      .map((path) => fs.readFileSync(`${PAGES}${path}`, 'utf8'))
+      .join('\n');
+  return new Map(files.map((file) => [file, read(file)]));
 }
 
 describe('every page uses the shared search field', () => {
@@ -59,10 +63,10 @@ describe('pages with a splitter', () => {
     const page = (name: string) => sources.get(name) ?? '';
     expect(page('di-inspector.ts')).toMatch(/<app-splitter[^>]*view="injectors"/s);
     expect(page('di-inspector.ts')).toContain("storedPaneSize('injectors', 420)");
-    expect(page('store-inspector.ts')).toMatch(
+    expect(page('store/store-log.ts')).toMatch(
       /<app-splitter[^>]*view="store-log"[^>]*pane="before"/s,
     );
-    expect(page('store-inspector.ts')).toContain("storedPaneSize('store-log', 300)");
+    expect(page('store/store-log.ts')).toContain("storedPaneSize('store-log', 300)");
   });
 });
 
@@ -76,7 +80,7 @@ describe('pages use the shared state component', () => {
       'plugins-inspector.ts',
       'audit-inspector.ts',
       'query-inspector.ts',
-      'store-inspector.ts',
+      'store/store-live.ts',
       'network-inspector.ts',
       'live-route.ts',
       'route-lint.ts',
@@ -133,7 +137,8 @@ describe('pages with a keyboard list use the shared roving list', () => {
       'network/ssr-requests.ts': '',
       'query-inspector.ts': '',
       'signal-inspector.ts': '',
-      'store-inspector.ts': '',
+      'store/store-log.ts': '',
+      'store/store-events.ts': '',
       'timeline.ts': '',
     };
     for (const [file, selector] of Object.entries(lists)) {

@@ -1,0 +1,6 @@
+@use 'store';
+
+@include store.field;
+@include store.base;
+@include store.actions;
+@include store.dispatch;
