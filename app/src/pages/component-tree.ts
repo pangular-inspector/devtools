@@ -2688,7 +2688,8 @@ export class ComponentTree {
 
   private say(message: string) {
     this.pickMessage.set(message);
-    this.announcement.set(message);
+    // A repeated message, such as "The page did not move.", is read out again.
+    this.announce(message);
   }
 
   private sendSelection(id: string | null) {
