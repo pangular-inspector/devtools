@@ -1,0 +1,55 @@
+@for (group of groupedProviders(); track group.type) {
+  <section class="provider-group">
+    @if (group.type === helperType) {
+      <h2>
+        <button
+          type="button"
+          class="group-toggle"
+          [attr.aria-expanded]="helpersShown()"
+          aria-controls="di-helpers"
+          (click)="helpersOpen.set(!helpersOpen())"
+        >
+          <svg class="chevron" [class.open]="helpersShown()" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+          {{ group.label }}
+          <span class="section-count">{{ group.items.length }}</span>
+        </button>
+      </h2>
+      <p class="hint helper-hint" [hidden]="!helpersShown()">
+        provide*() calls the scan can't resolve to the tokens they register, such as your own
+        provider functions.
+      </p>
+    } @else {
+      <h2>
+        {{ group.label }} <span class="section-count">{{ group.items.length }}</span>
+      </h2>
+    }
+    <ul
+      class="provider-list"
+      role="list"
+      [attr.id]="group.type === helperType ? 'di-helpers' : null"
+      [hidden]="group.type === helperType && !helpersShown()"
+    >
+      @for (p of group.items; track p.token + p.file + p.line) {
+        <li class="provider-card">
+          <div class="provider-header">
+            <span class="token">{{ p.token }}</span>
+            @if (p.providedIn) {
+              <span class="provided-in">providedIn: {{ p.providedIn }}</span>
+            }
+            @if (p.type === helperType) {
+              <span class="flag">helper (unresolved)</span>
+            }
+          </div>
+          <div class="provider-meta">
+            <app-source-link class="path" [file]="p.file" [line]="p.line" />
+            @if (p.source !== 'class' && p.source !== 'providers array' && p.type !== helperType) {
+              <span class="as">as {{ p.source }}</span>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  </section>
+}

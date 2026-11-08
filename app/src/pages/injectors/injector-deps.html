@@ -1,0 +1,77 @@
+@let sel = node();
+<h3>
+  {{ sel.injector.type === 'element' ? 'Injected here' : 'Injected by its services' }}
+  <span class="pill">{{ sel.dependencies?.length ?? 0 }}</span>
+</h3>
+@if (sel.injector.type !== 'element') {
+  <p class="hint">Only services this injector has already created are listed.</p>
+}
+@if (sel.dependencies?.length) {
+  <ul class="deps">
+    @for (dep of sel.dependencies; track dep.from + (dep.tokenId ?? dep.token) + $index) {
+      <li class="dep" [class.hit]="matches(dep.token)">
+        <div class="dep-main">
+          <span class="token mono">{{ dep.token }}</span>
+          @for (flag of dep.flags; track flag) {
+            <span class="flag">{{ flag }}</span>
+          }
+        </div>
+        <div class="dep-meta">
+          @if (
+            sel.injector.type !== 'element' ||
+            (sel.injector.directives && sel.injector.directives.length > 1)
+          ) {
+            <span>for {{ dep.from }}</span>
+          }
+          @if (dep.providedBy; as by) {
+            <button type="button" class="from" (click)="reveal(by)">
+              <span class="dot" [style.background]="tone(kindById(by))" aria-hidden="true"></span>
+              from <span class="mono">{{ labelById(by) }}</span>
+            </button>
+          } @else if (dep.flags.includes('optional')) {
+            <span class="from absent">optional, not provided</span>
+          } @else {
+            <span class="from missing">not provided anywhere</span>
+          }
+          <button
+            type="button"
+            class="link resolve-toggle"
+            [attr.aria-expanded]="resolvingKey() === depKey(dep, $index)"
+            [attr.aria-controls]="'di-resolve-' + $index"
+            (click)="toggleResolve(depKey(dep, $index))"
+          >
+            Resolution
+            <span class="sr-only">of {{ dep.token }}</span>
+          </button>
+        </div>
+        <div
+          class="resolution"
+          [id]="'di-resolve-' + $index"
+          [hidden]="resolvingKey() !== depKey(dep, $index)"
+        >
+          @if (resolvingKey() === depKey(dep, $index)) {
+            <ol class="resolve-graph" [attr.aria-label]="'How Angular resolves ' + dep.token">
+              @for (step of resolution(dep); track step.id + $index) {
+                <li [class]="'resolve-' + step.state">
+                  <span class="resolve-dot" aria-hidden="true"></span>
+                  @if (step.id === nullId) {
+                    <span class="mono">Null injector</span>
+                  } @else {
+                    <button type="button" class="step" (click)="reveal(step.id)">
+                      <span class="mono">{{ step.label }}</span>
+                    </button>
+                  }
+                  <span class="resolve-state">{{ step.text }}</span>
+                </li>
+              }
+            </ol>
+          }
+        </div>
+      </li>
+    }
+  </ul>
+} @else if (sel.injector.type === 'element') {
+  <p class="empty-line">Nothing is injected through the constructor or inject().</p>
+} @else {
+  <p class="empty-line">No service created here has injected anything yet.</p>
+}

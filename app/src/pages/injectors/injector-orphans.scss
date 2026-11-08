@@ -1,0 +1,47 @@
+@use 'mixins' as m;
+@use 'injectors' as inj;
+
+@include inj.mono;
+@include inj.hint;
+@include inj.token;
+@include inj.flag;
+@include inj.buttons;
+@include inj.chevron;
+@include inj.toggle;
+.hint-tag {
+  padding: 0 6px;
+  border-radius: 5px;
+  @include m.tint(accent);
+  font-size: 10px;
+  line-height: 16px;
+}
+.orphans-body {
+  padding: 0 12px 12px;
+}
+.orphan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.orphan-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.orphans-body .hint {
+  margin: 0 0 8px;
+}
+.orphan-list .orphan-file {
+  min-width: 0;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+@include inj.hidden;

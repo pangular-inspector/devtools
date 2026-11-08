@@ -1,0 +1,75 @@
+@use 'mixins' as m;
+@use 'injectors' as inj;
+
+@include inj.mono;
+@include inj.chips;
+@include inj.dot;
+@include inj.detail-head;
+.badge {
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--tone) 14%, transparent);
+  color: var(--tone);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.classes li {
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.classes li.is-component {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.block {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.block:last-child {
+  border-bottom: 0;
+}
+@include inj.heading;
+@include inj.hint;
+@include inj.path;
+.show-component {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-h);
+  padding: 0 14px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--ease),
+    border-color 150ms var(--ease);
+}
+.show-component:hover {
+  background: var(--surface-3);
+  border-color: var(--accent-line);
+}
+.show-component:focus-visible {
+  @include m.focus-ring;
+}
+@include inj.buttons;
+.inactive-note {
+  margin: 0 0 12px;
+}

@@ -1,0 +1,131 @@
+@use 'mixins' as m;
+@use 'injectors' as inj;
+
+@include inj.mono;
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px 0 calc(4px + var(--depth, 0) * 18px);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease);
+}
+.row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 14px;
+  width: calc(var(--depth, 0) * 18px);
+  background: repeating-linear-gradient(to right, var(--border) 0 1px, transparent 1px 18px);
+  pointer-events: none;
+}
+.row:hover {
+  background: var(--surface-2);
+}
+.row:focus-visible {
+  @include m.focus-ring(-2px);
+}
+.row.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.twisty,
+.twisty-space {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.twisty {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+}
+.twisty:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.twisty svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 150ms var(--ease);
+}
+.twisty.open svg {
+  transform: rotate(90deg);
+}
+.kind {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--tone) 16%, transparent);
+  color: var(--tone);
+  font-size: 10px;
+  font-weight: 700;
+}
+.name {
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  @include m.truncate;
+}
+.row.selected .name {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.sub {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  @include m.truncate;
+}
+.meta {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 11px;
+}
+.count.provides {
+  @include m.tint(ok);
+}
+.count svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@include inj.flag;
+.inactive-flag {
+  flex: none;
+}

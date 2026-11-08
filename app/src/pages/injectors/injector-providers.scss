@@ -1,0 +1,35 @@
+@use 'mixins' as m;
+@use 'injectors' as inj;
+
+@include inj.mono;
+@include inj.pill;
+@include inj.chips;
+@include inj.link;
+@include inj.heading;
+@include inj.hint;
+@include inj.dep-list;
+.provider-global {
+  margin-top: 6px;
+}
+.framework-note {
+  margin: 0 0 10px;
+  color: var(--text-2);
+}
+@include inj.dep-main;
+@include inj.token;
+@include inj.flag;
+.kind-flag {
+  @include m.tint(accent);
+}
+@include inj.dep-meta;
+@include inj.empty-line;
+@include inj.buttons;
+.declared {
+  color: var(--text-3);
+}
+.decl-file {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
