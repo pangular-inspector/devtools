@@ -18,6 +18,14 @@ describe('stateRows', () => {
     expect(childPath('cart', 'items')).toBe('cart.items');
     expect(childPath('cart.items', 0)).toBe('cart.items[0]');
     expect(childPath('user', 'first name')).toBe('user["first name"]');
+    // The collector writes a top-level key that needs quotes the same way.
+    expect(childPath('', 'display name')).toBe('"display name"');
+  });
+
+  it('marks a changed key that needs quotes', () => {
+    const rows = stateRows(state, { changed: ['user["first name"]'] }).rows;
+    expect(rows.find((r) => r.path === 'user["first name"]')!.changed).toBe(true);
+    expect(rows.find((r) => r.path === 'user')!.holdsChange).toBe(true);
   });
 
   it('opens the first level, nodes holding a change, and what the user opened', () => {
