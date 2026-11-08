@@ -221,6 +221,13 @@ describe('signal kind badges', () => {
 // both themes get a value these tests check.
 const TOKEN_ONLY_PAGES = [
   'analog-inspector.ts',
+  'analog/analog-content.ts',
+  'analog/analog-lint.ts',
+  'analog/analog-render.ts',
+  'analog/analog-routes.ts',
+  'analog/analog-server.ts',
+  // The Analog page's styles, which moved out of the page into shared mixins.
+  '../styles/_analog.scss',
   'route-timeline.ts',
   'signal-graph-view.ts',
   'signal-inspector.ts',
@@ -233,8 +240,14 @@ describe('pages that use theme tokens only', () => {
       const fsName = 'node:fs';
       const fs = (await import(/* @vite-ignore */ fsName)) as {
         readFileSync(path: string, encoding: 'utf8'): string;
+        existsSync(path: string): boolean;
       };
-      const source = fs.readFileSync(`${PAGES}${file}`, 'utf8');
+      // A component's template and style files count as part of its source.
+      const source = [file, file.replace(/\.ts$/, '.html'), file.replace(/\.ts$/, '.scss')]
+        .filter((path, index, all) => all.indexOf(path) === index)
+        .filter((path) => fs.existsSync(`${PAGES}${path}`))
+        .map((path) => fs.readFileSync(`${PAGES}${path}`, 'utf8'))
+        .join('\n');
       expect(source.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);
     });
   }

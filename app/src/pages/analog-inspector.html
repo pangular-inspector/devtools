@@ -1,0 +1,139 @@
+@if (project() === null && loadFailed()) {
+  <div class="empty" role="alert">
+    <h2 class="empty-title">Could not read the project.</h2>
+    <p class="muted">
+      Check that the dev server with Pangular Inspector is still running, then retry.
+    </p>
+    <button type="button" class="btn" (click)="retry()">Retry</button>
+  </div>
+} @else if (project() === null) {
+  <div class="loading" role="status">
+    <span class="spinner" aria-hidden="true"></span>
+    <span>Reading the project…</span>
+  </div>
+} @else if (!project()!.analog) {
+  <div class="empty">
+    <h2 class="empty-title">This app is not an Analog app.</h2>
+    <p class="muted">
+      Add <code>pangular()</code> from <code>@pangular-inspector/devtools/vite</code> next to
+      <code>analog()</code> in vite.config.ts and run the Analog dev server.
+    </p>
+  </div>
+} @else {
+  <section class="summary" aria-label="Analog summary">
+    <div class="stat">
+      <span class="label">Analog</span>
+      <span class="value">{{ project()!.version || 'unknown' }}</span>
+    </div>
+    <div class="stat">
+      <span class="label">Pages</span>
+      <span class="value">{{ pageCount() }}</span>
+    </div>
+    <div class="stat">
+      <span class="label">API routes</span>
+      <span class="value">{{ project()!.api.length }}</span>
+    </div>
+    <div class="stat">
+      <span class="label">Server calls</span>
+      <span class="value">{{ tabCalls().length }}</span>
+    </div>
+    <div class="stat" [attr.data-tone]="lintTone() || 'good'">
+      <span class="label">Issues</span>
+      <span class="value">{{ lintCount().errors + lintCount().warnings }}</span>
+    </div>
+    @if (page(); as p) {
+      <div class="stat wide">
+        <span class="label">Open in the browser</span>
+        <span class="value mono" [title]="p.url">{{ p.url }}</span>
+      </div>
+    }
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="Analog views" (keydown)="onKey($event)">
+    @for (v of views(); track v.id) {
+      <button
+        type="button"
+        role="tab"
+        [id]="'analog-tab-' + v.id"
+        [attr.aria-selected]="v.id === view()"
+        [attr.aria-controls]="'analog-panel-' + v.id"
+        [attr.tabindex]="v.id === view() ? 0 : -1"
+        (click)="view.set(v.id)"
+      >
+        {{ v.label }}
+        @if (v.count !== null) {
+          <span class="count" [attr.data-tone]="v.tone">{{ v.count }}</span>
+        }
+      </button>
+    }
+  </div>
+
+  @switch (view()) {
+    @case ('routes') {
+      <div
+        appAnalogRoutes
+        class="panel"
+        role="tabpanel"
+        id="analog-panel-routes"
+        aria-labelledby="analog-tab-routes"
+      ></div>
+    }
+    @case ('server') {
+      <div
+        appAnalogServer
+        class="panel"
+        role="tabpanel"
+        id="analog-panel-server"
+        aria-labelledby="analog-tab-server"
+      ></div>
+    }
+    @case ('render') {
+      <div
+        appAnalogRender
+        class="panel"
+        role="tabpanel"
+        id="analog-panel-render"
+        aria-labelledby="analog-tab-render"
+      ></div>
+    }
+    @case ('content') {
+      <div
+        appAnalogContent
+        class="panel"
+        role="tabpanel"
+        id="analog-panel-content"
+        aria-labelledby="analog-tab-content"
+      ></div>
+    }
+    @case ('data') {
+      <div class="panel" role="tabpanel" id="analog-panel-data" aria-labelledby="analog-tab-data">
+        <app-analog-data
+          [rpc]="rpc()"
+          [page]="page()"
+          [serverFns]="serverFns()"
+          [duplicates]="state().duplicates ?? []"
+          [refetches]="state().refetches ?? []"
+        />
+      </div>
+    }
+    @case ('runtime') {
+      <div
+        class="panel"
+        role="tabpanel"
+        id="analog-panel-runtime"
+        aria-labelledby="analog-tab-runtime"
+      >
+        <app-analog-runtime [rpc]="rpc()" />
+      </div>
+    }
+    @case ('lint') {
+      <div
+        appAnalogLint
+        class="panel"
+        role="tabpanel"
+        id="analog-panel-lint"
+        aria-labelledby="analog-tab-lint"
+      ></div>
+    }
+  }
+}

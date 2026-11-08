@@ -1,0 +1,282 @@
+@if (duplicates().length) {
+  <div class="callout" data-tone="warn" role="note">
+    <strong>load() ran twice</strong> for
+    @for (d of duplicates(); track d; let last = $last) {
+      <span class="mono">{{ d }}</span
+      >{{ last ? '' : ', ' }}
+    }
+    : once while server rendering, again in the browser. TransferState did not serve the server
+    result.
+  </div>
+}
+@if (refetchedFns().length) {
+  <div class="callout" data-tone="warn" role="note">
+    <strong>Server function read ran twice</strong>:
+    @for (name of refetchedFns(); track name; let last = $last) {
+      <span class="mono">{{ name }}</span
+      >{{ last ? '' : ', ' }}
+    }
+    ran while server rendering, then again in the browser. The browser did not use the TransferState
+    seed.
+  </div>
+}
+<h2 id="analog-calls-heading">Server calls</h2>
+<div class="calls-bar">
+  <fieldset class="segmented">
+    <legend class="sr-only">Show calls of kind</legend>
+    @for (k of kinds; track k) {
+      <label [class.on]="kind() === k">
+        <input
+          type="radio"
+          name="analog-kind"
+          class="sr-only"
+          [attr.data-kind]="k"
+          [checked]="kind() === k"
+          (change)="kind.set(k)"
+        />
+        {{ kindLabel(k) }} <span class="muted">{{ kindCount(k) }}</span>
+      </label>
+    }
+  </fieldset>
+  <div class="calls-actions">
+    <button type="button" class="btn ghost" [disabled]="!allCalls().length" (click)="clearCalls()">
+      Clear calls
+    </button>
+    <span class="calls-message" role="status">{{ callsMessage() }}</span>
+  </div>
+</div>
+<div class="call-filters" role="group" aria-label="Filter the server calls">
+  <app-search-field
+    class="search"
+    inputId="analog-call-search"
+    placeholder="Filter by URL, path or function"
+    saveKey="analog-calls"
+    [(value)]="callQuery"
+  />
+  <label class="check">
+    <input
+      type="checkbox"
+      [checked]="failedOnly()"
+      (change)="failedOnly.set($any($event.target).checked)"
+    />
+    Failed only
+  </label>
+  @if (scopePageId()) {
+    <label class="check">
+      <input
+        type="checkbox"
+        data-testid="analog-all-tabs"
+        [checked]="allTabs()"
+        (change)="allTabs.set($any($event.target).checked)"
+      />
+      All tabs (including untagged)
+    </label>
+  }
+  <span class="total" aria-live="polite"
+    >{{ matchingCalls().length }} of {{ tabCalls().length }}</span
+  >
+</div>
+@if (shownCount() < matchingCalls().length || serverFull()) {
+  <p class="note">
+    @if (shownCount() < matchingCalls().length) {
+      Showing the newest {{ shownCount() }} of {{ matchingCalls().length }}.
+    }
+    @if (serverFull()) {
+      The dev server keeps only the newest {{ maxServerCalls }} calls and drops older ones.
+    }
+  </p>
+}
+@if (calls().length) {
+  <div class="table-wrap" role="region" aria-label="Server calls" tabindex="0">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">At</th>
+          <th scope="col">Kind</th>
+          <th scope="col">Request</th>
+          <th scope="col">Status</th>
+          <th scope="col" class="num">Duration</th>
+          <th scope="col">From</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of calls(); track c.id) {
+          <tr>
+            <td class="muted nowrap">{{ time(c.at) }}</td>
+            <td>
+              <span class="pill" [attr.data-call]="c.kind">{{ kindLabel(c.kind) }}</span>
+            </td>
+            <td class="request">
+              <div class="meta">
+                <span class="method" [attr.data-method]="c.method">{{ c.method }}</span>
+                @if (fnOf(c); as fn) {
+                  <strong class="mono url">{{ fn.name }}</strong>
+                  @if (fn.file) {
+                    <app-source-link class="mono muted" [file]="fn.file">{{
+                      short(fn.file)
+                    }}</app-source-link>
+                  }
+                } @else {
+                  <span class="mono url">{{ c.url }}</span>
+                }
+                @if (c.seeded) {
+                  <span class="pill">ran during server rendering</span>
+                }
+                @if (c.outcome) {
+                  <span class="pill" [attr.data-tone]="outcomeTone(c.outcome)"
+                    >{{ outcomeLabel(c.outcome) }}
+                    @if (c.location) {
+                      to {{ c.location }}
+                    }
+                  </span>
+                }
+                @if (c.render) {
+                  <span class="pill" [attr.data-mode]="c.render === 'ssr' ? 'ssr' : 'client'">{{
+                    c.render === 'ssr' ? 'server rendered' : 'client only'
+                  }}</span>
+                }
+              </div>
+              @if (c.preview) {
+                <details>
+                  <summary>Response</summary>
+                  <pre class="code">{{ pretty(c.preview) }}</pre>
+                </details>
+              }
+            </td>
+            <td>
+              <span class="status" [attr.data-status]="statusClass(c.status)">{{ c.status }}</span>
+            </td>
+            <td class="num nowrap">
+              @if (c.seeded) {
+                <span class="muted">in process</span>
+              } @else {
+                {{ c.ms }} ms
+              }
+            </td>
+            <td class="muted">{{ c.from }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+} @else if (tabCalls().length && callFiltered()) {
+  <div class="empty-box no-match" role="status">
+    <p class="empty-lead">No calls match.</p>
+    <p class="muted">
+      @if (callQuery().trim()) {
+        Nothing matches “{{ callQuery().trim() }}” with these filters.
+      } @else {
+        None of the {{ tabCalls().length }} calls fit these filters.
+      }
+    </p>
+    <div class="empty-actions">
+      <button type="button" class="btn ghost" (click)="clearCallFilters()">Clear filters</button>
+    </div>
+  </div>
+} @else {
+  <div class="empty-box">
+    <p class="empty-lead">
+      @if (tabCalls().length) {
+        No calls of this kind yet.
+      } @else if (allCalls().length) {
+        No calls from this tab yet.
+      } @else {
+        No calls yet.
+      }
+    </p>
+    <p class="muted">
+      Navigate in the app to see page renders, load() fetches, form actions, server functions and
+      API calls.
+      @if (!tabCalls().length && allCalls().length) {
+        Tick “All tabs (including untagged)” to see the
+        {{ allCalls().length }} calls from other tabs or tied to no tab.
+      }
+    </p>
+  </div>
+}
+
+<h2>API routes</h2>
+<div class="table-wrap" role="region" aria-label="API routes" tabindex="0">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Method</th>
+        <th scope="col">Path</th>
+        <th scope="col">File</th>
+        <th scope="col"><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (api of project()!.api; track api.file + api.method) {
+        <tr>
+          <td>
+            <span class="method" [attr.data-method]="api.method">{{ api.method }}</span>
+          </td>
+          <td class="mono">{{ api.path }}</td>
+          <td>
+            <app-source-link class="file" [file]="api.file"
+              ><span class="dir">{{ dir(api.file) }}</span
+              >{{ base(api.file) }}</app-source-link
+            >
+          </td>
+          <td class="actions">
+            <button
+              type="button"
+              class="btn ghost"
+              [attr.aria-label]="'Try ' + api.method + ' ' + api.path"
+              (click)="tryApi(api)"
+            >
+              Try
+            </button>
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="4" class="empty-row">
+            No API routes. Add a handler under src/server/routes to test it here.
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+@if (serverFns().length) {
+  <h2>Server functions</h2>
+  <div class="table-wrap" role="region" aria-label="Server functions" tabindex="0">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Method</th>
+          <th scope="col">Name</th>
+          <th scope="col">File</th>
+          <th scope="col" class="num">Calls</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (fn of serverFns(); track fn.id) {
+          <tr>
+            <td>
+              <span class="method" [attr.data-method]="fn.method">{{ fn.method }}</span>
+            </td>
+            <td class="mono">{{ fn.name }}</td>
+            <td>
+              <app-source-link class="file" [file]="fn.file"
+                ><span class="dir">{{ dir(fn.file) }}</span
+                >{{ base(fn.file) }}</app-source-link
+              >
+            </td>
+            <td class="num tnum">{{ fnCalls(fn.id) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<app-analog-playground
+  [rpc]="rpc()"
+  [routes]="project()!.api"
+  [target]="tryTarget()"
+  [origin]="devOrigin()"
+/>

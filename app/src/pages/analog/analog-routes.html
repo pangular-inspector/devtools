@@ -1,0 +1,164 @@
+<div class="toolbar">
+  <form class="inline explain" (submit)="$event.preventDefault(); explain()">
+    <label for="analog-url">Test a URL</label>
+    <input
+      id="analog-url"
+      class="field grow mono"
+      type="text"
+      placeholder="/products/42"
+      [value]="testUrl()"
+      (input)="testUrl.set($any($event.target).value)"
+    />
+    <button type="submit" class="btn primary" [disabled]="explaining()">
+      {{ explaining() ? 'Explaining…' : 'Explain' }}
+    </button>
+  </form>
+  <app-search-field
+    class="filter"
+    inputId="route-filter"
+    placeholder="Filter by path or file"
+    saveKey="analog-routes"
+    [(value)]="filter"
+  />
+</div>
+<div class="explain-result" role="status">
+  @if (explainError(); as error) {
+    <div class="callout" data-tone="bad">{{ error }}</div>
+  } @else if (explained(); as e) {
+    <div class="callout" [attr.data-tone]="e.match.matched ? 'good' : 'bad'">
+      @if (e.match.matched) {
+        <strong class="mono">{{ e.url }}</strong> renders
+        <ol class="chain">
+          @for (r of e.match.chain; track r.id) {
+            <li>
+              @if (r.file) {
+                <app-source-link class="mono" [file]="r.file">{{ short(r.file) }}</app-source-link>
+              } @else {
+                <span class="mono">{{ r.fullPath }}</span>
+              }
+              <span class="pill" [attr.data-kind]="r.kind">{{ r.kind }}</span>
+            </li>
+          }
+        </ol>
+        @if (paramList(e.match.params).length) {
+          <div class="chips">
+            @for (p of paramList(e.match.params); track p[0]) {
+              <span class="chip mono">{{ p[0] }} = {{ p[1] }}</span>
+            }
+          </div>
+        }
+      } @else {
+        <strong class="mono">{{ e.url }}</strong> matches no file route. Angular throws NG04002
+        "Cannot match any routes".
+        @if (e.match.rejected.length) {
+          <ul class="plain">
+            @for (r of e.match.rejected.slice(0, 5); track $index) {
+              <li>
+                @if (r.file) {
+                  <app-source-link class="mono" [file]="r.file">{{
+                    short(r.file)
+                  }}</app-source-link>
+                } @else {
+                  <span class="mono">{{ r.path }}</span>
+                }
+                <span class="muted">{{ r.reason }}</span>
+              </li>
+            }
+          </ul>
+        }
+      }
+    </div>
+  }
+</div>
+<div class="table-wrap" role="region" aria-label="File routes" tabindex="0">
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Route</th>
+        <th scope="col">File</th>
+        <th scope="col">Data</th>
+        <th scope="col">Route meta</th>
+        <th scope="col"><span class="sr-only">Actions</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of routeRows(); track row.route.id) {
+        <tr
+          [class.open]="isOpen(row.route)"
+          [class.dim]="row.route.kind === 'group' || row.route.kind === 'implicit'"
+        >
+          <td>
+            <div class="route" [style.padding-left.px]="row.depth * 16">
+              @if (row.depth) {
+                <span class="guide" aria-hidden="true">└</span>
+              }
+              <span class="mono path">{{ row.route.fullPath }}</span>
+              <span class="pill" [attr.data-kind]="row.route.kind">{{ kindText(row.route) }}</span>
+              @if (isOpen(row.route)) {
+                <span class="pill live">{{ openText(row.route) }}</span>
+              }
+            </div>
+          </td>
+          <td>
+            @if (row.route.file) {
+              <app-source-link class="file" [file]="row.route.file"
+                ><span class="dir">{{ dir(row.route.file) }}</span
+                >{{ base(row.route.file) }}</app-source-link
+              >
+            } @else {
+              <span class="muted">folder only</span>
+            }
+          </td>
+          <td>
+            <div class="meta">
+              @for (e of serverExports(row.route); track e) {
+                <span class="pill" data-kind="load">{{ e }}()</span>
+              }
+            </div>
+          </td>
+          <td>
+            @if (row.route.title) {
+              <span class="chip">"{{ row.route.title }}"</span>
+            }
+            @for (key of row.route.routeMeta ?? []; track key) {
+              @if (key !== 'title') {
+                <span class="chip mono">{{ key }}</span>
+              }
+            }
+          </td>
+          <td class="actions">
+            @if (row.route.file && row.route.kind !== 'markdown') {
+              <button
+                type="button"
+                class="btn ghost"
+                [attr.aria-label]="'Show the Vite transform stack of ' + row.route.file"
+                [attr.aria-pressed]="transformFile() === row.route.file"
+                (click)="showTransform(row.route.file)"
+              >
+                Transform
+              </button>
+            }
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="5" class="empty-row">
+            @if (filter().trim()) {
+              No route matches the filter. Try part of a path or a file name.
+            } @else {
+              No file routes yet. Add a .page.ts file under src/app/pages.
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+@if (transformFile(); as file) {
+  <app-analog-transform
+    [rpc]="rpc()"
+    [file]="file"
+    [serverFns]="serverFns()"
+    (closed)="closeTransform(file)"
+  />
+}
