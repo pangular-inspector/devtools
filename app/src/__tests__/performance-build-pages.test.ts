@@ -7,7 +7,13 @@ import {
   perfPages,
   type PerfPage,
 } from '../pages/performance-inspector';
-import { BuildInspector, formatBytes, type BuildGraph } from '../pages/build-inspector';
+import {
+  BuildInspector,
+  formatBytes,
+  formatMs,
+  timeBreakdown,
+  type BuildGraph,
+} from '../pages/build-inspector';
 
 function client(options: { state?: unknown; call?: (name: string) => unknown }) {
   const call = vi.fn(async (name: string) => options.call?.(name));
@@ -171,5 +177,59 @@ describe('Build tab', () => {
 
   it('formats bytes', () => {
     expect(formatBytes(4200)).toBe('4.2 kB');
+  });
+
+  it('shows the time per module and sorts the module list by time', async () => {
+    const timed: BuildGraph = {
+      ...graph,
+      vite: {
+        ...graph.vite!,
+        modules: graph.vite!.modules.map((mod, i) =>
+          i === 0 ? mod : { ...mod, time: { resolve: 0.2, load: 1, transform: i, total: i + 1.2 } },
+        ),
+        timings: { modules: 29, capped: false },
+      },
+    };
+    const { host } = await render(timed);
+    const table = () => host.querySelectorAll('section')[0]!.querySelectorAll('table')[1]!;
+    const firstCells = () =>
+      [...table().querySelectorAll('tbody tr')].slice(0, 2).map((row) => {
+        const cells = row.querySelectorAll('td');
+        return [cells[0]!.textContent!.trim(), cells[2]!.textContent!.trim()];
+      });
+    expect(host.textContent).toContain('Time is what the dev server spent on 29 modules');
+    // Biggest first, as the server sends them; m0 was not timed.
+    expect(firstCells()).toEqual([
+      ['src/m0.ts', ''],
+      ['src/m1.ts', '2.2 ms'],
+    ]);
+    expect(table().querySelectorAll('tbody tr td')[7]!.getAttribute('title')).toBe(
+      'Resolve 0.2 ms, load 1.0 ms, transform 1.0 ms',
+    );
+    const timeHeader = [...table().querySelectorAll('th')].find((th) =>
+      th.textContent!.includes('Time'),
+    )!;
+    const sortButton = timeHeader.querySelector('button')!;
+    sortButton.click();
+    await fixture.whenStable();
+    expect(timeHeader.getAttribute('aria-sort')).toBe('ascending');
+    expect(firstCells()[0]).toEqual(['src/m1.ts', '2.2 ms']);
+    sortButton.click();
+    await fixture.whenStable();
+    expect(timeHeader.getAttribute('aria-sort')).toBe('descending');
+    expect(firstCells()[0]).toEqual(['src/m29.ts', '30.2 ms']);
+    // The module without a time stays last in both directions.
+    [...host.querySelectorAll('button')].find((b) => b.textContent!.includes('Show all'))!.click();
+    await fixture.whenStable();
+    const rows = table().querySelectorAll('tbody tr');
+    expect(rows[rows.length - 1]!.querySelector('td')!.textContent!.trim()).toBe('src/m0.ts');
+  });
+
+  it('formats milliseconds and the time breakdown', () => {
+    expect(formatMs(12.34)).toBe('12.3 ms');
+    expect(formatMs(2500)).toBe('2.50 s');
+    expect(timeBreakdown({ resolve: 0.1, load: 2, transform: 40.5, total: 42.6 })).toBe(
+      'Resolve 0.1 ms, load 2.0 ms, transform 40.5 ms',
+    );
   });
 });
