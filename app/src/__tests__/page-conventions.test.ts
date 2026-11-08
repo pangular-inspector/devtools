@@ -14,11 +14,15 @@ async function pageSources(): Promise<Map<string, string>> {
     readdirSync(path: string, options: { recursive: true }): string[];
   };
   // Recursive, so a page split into a folder (pages/network/) is still checked.
-  const files = fs
-    .readdirSync(PAGES, { recursive: true })
-    .map((file) => file.replaceAll('\\', '/'))
-    .filter((file) => file.endsWith('.ts'));
-  return new Map(files.map((file) => [file, fs.readFileSync(`${PAGES}${file}`, 'utf8')]));
+  const all = fs.readdirSync(PAGES, { recursive: true }).map((file) => file.replaceAll('\\', '/'));
+  const files = all.filter((file) => file.endsWith('.ts'));
+  // A component's template and style files count as part of its source.
+  const read = (file: string) =>
+    [file, file.replace(/\.ts$/, '.html'), file.replace(/\.ts$/, '.scss')]
+      .filter((path) => all.includes(path))
+      .map((path) => fs.readFileSync(`${PAGES}${path}`, 'utf8'))
+      .join('\n');
+  return new Map(files.map((file) => [file, read(file)]));
 }
 
 describe('every page uses the shared search field', () => {

@@ -224,6 +224,15 @@ const TOKEN_ONLY_PAGES = [
   'route-timeline.ts',
   'signal-graph-view.ts',
   'signal-inspector.ts',
+  'signals/resource-list.ts',
+  'signals/signal-detail-state.ts',
+  'signals/signal-detail.ts',
+  'signals/signal-graph-section.ts',
+  'signals/signal-list.ts',
+  'signals/signal-model.ts',
+  'signals/signal-state.ts',
+  'signals/source-signals.ts',
+  'signals/watched-signals.ts',
 ];
 
 describe('pages that use theme tokens only', () => {
@@ -232,9 +241,14 @@ describe('pages that use theme tokens only', () => {
       // The panel tsconfig has no Node types, so read the file through a loose import.
       const fsName = 'node:fs';
       const fs = (await import(/* @vite-ignore */ fsName)) as {
+        existsSync(path: string): boolean;
         readFileSync(path: string, encoding: 'utf8'): string;
       };
-      const source = fs.readFileSync(`${PAGES}${file}`, 'utf8');
+      // A component's template and style files count as part of its source.
+      const source = [file, file.replace(/\.ts$/, '.html'), file.replace(/\.ts$/, '.scss')]
+        .filter((path) => fs.existsSync(`${PAGES}${path}`))
+        .map((path) => fs.readFileSync(`${PAGES}${path}`, 'utf8'))
+        .join('\n');
       expect(source.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);
     });
   }

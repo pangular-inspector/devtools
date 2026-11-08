@@ -1,0 +1,229 @@
+@use 'mixins' as m;
+@use 'signals' as sig;
+
+@include sig.states;
+@include sig.cards;
+@include sig.fields;
+@include sig.pre;
+@include sig.badge-sm;
+:host(.detail-panel) {
+  margin-top: 8px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  @include m.enter(0.25s);
+}
+.detail-title {
+  margin: 0 0 16px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+:host(.detail-panel) h4 {
+  @include m.label;
+  margin: 20px 0 8px;
+}
+:host(.detail-panel) dd pre {
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+@include sig.scroll-box;
+:host(.detail-panel) .hint {
+  margin: 0 0 12px;
+}
+.internals-toggle {
+  margin-top: 16px;
+}
+:host(.detail-panel) .internals-toggle + ul {
+  margin-top: 8px;
+}
+:host(.detail-panel) ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+}
+:host(.detail-panel) ul li,
+.rel-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--text-2);
+  border-radius: 6px;
+}
+:host(.detail-panel) ul li:has(> .rel-link) {
+  padding: 0;
+}
+.rel-link {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+.rel-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.rel-link:focus-visible {
+  @include m.focus-ring;
+}
+@include sig.rel-label;
+.history-summary {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+@include sig.history;
+.missed {
+  color: var(--warn);
+}
+.restore {
+  margin-left: auto;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 150ms var(--ease),
+    border-color 150ms var(--ease);
+}
+.restore:hover:not([aria-disabled='true']) {
+  background: var(--surface-3);
+  border-color: var(--accent-line);
+}
+.restore[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: progress;
+}
+.restore:focus-visible {
+  @include m.focus-ring(-2px);
+}
+.diff {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.diff summary {
+  color: var(--text-2);
+  cursor: pointer;
+}
+.diff summary:focus-visible {
+  @include m.focus-ring;
+}
+.diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.diff-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.diff-kind {
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 10px;
+  line-height: 16px;
+}
+.diff-added .diff-kind {
+  @include m.tint(ok);
+}
+.diff-removed .diff-kind {
+  @include m.tint(danger);
+}
+.diff-changed .diff-kind {
+  @include m.tint(accent);
+}
+.diff-path {
+  color: var(--text-strong);
+}
+.diff-old {
+  color: var(--text-2);
+  text-decoration: line-through;
+}
+.diff-new {
+  color: var(--text);
+}
+.source-matches {
+  min-width: 0;
+}
+.source-candidates {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hint-inline {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.restore-result {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.restore-result.has-text {
+  margin-bottom: 8px;
+}
+.restore-result.restore-error {
+  color: var(--danger-text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .restore {
+    transition: none;
+  }
+}
+@include sig.stack;
+.watch-toggle {
+  margin: 16px 0 8px;
+}
+.watch-toggle[aria-pressed='true'] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+@media (max-width: 480px) {
+  :host(.detail-panel) {
+    padding: 12px;
+  }
+  dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  dd + dt {
+    margin-top: 8px;
+  }
+}

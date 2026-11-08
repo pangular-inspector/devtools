@@ -1,0 +1,21 @@
+@for (sig of filteredSourceSignals(); track sig.name + sig.file + sig.line) {
+  <div class="node-card">
+    <div class="node-header">
+      <span class="kind-badge" [style.background]="kindColor(sig.kind)">{{ sig.kind }}</span>
+      <span class="node-label">{{ sig.name }}</span>
+    </div>
+    <div class="node-meta">
+      <app-source-link class="file" [file]="sig.file" [line]="sig.line" />
+      @if (sig.component) {
+        <span class="sep" aria-hidden="true">·</span>
+        <span>in &lt;{{ sig.component }}&gt;</span>
+      }
+    </div>
+  </div>
+} @empty {
+  <div class="empty compact" role="status">
+    <p class="empty-title">No signals match.</p>
+    <p class="hint">Try a different name or kind.</p>
+    <button type="button" class="reset" (click)="clearFilters()">Clear filters</button>
+  </div>
+}
