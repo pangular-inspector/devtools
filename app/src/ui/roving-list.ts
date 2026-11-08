@@ -36,6 +36,8 @@ export class RovingList {
   private current: HTMLElement | null = null;
   /** Whether focus is in the list, kept when the focused item is removed rather than left. */
   private focusInside = false;
+  /** The items that were selected when the list last synced, to tell a newly selected one. */
+  private readonly wasSelected = new WeakSet<HTMLElement>();
 
   constructor() {
     const destroyRef = inject(DestroyRef);
@@ -46,7 +48,13 @@ export class RovingList {
       const observer = new MutationObserver((records) => {
         for (const record of records) {
           const target = record.target as HTMLElement;
-          if (record.type === 'attributes' && this.isItem(target) && target.matches(SELECTED)) {
+          // Only a row that becomes selected takes the stop; another class change on it doesn't.
+          if (
+            record.type === 'attributes' &&
+            this.isItem(target) &&
+            target.matches(SELECTED) &&
+            !this.wasSelected.has(target)
+          ) {
             this.current = target;
           }
         }
@@ -87,6 +95,8 @@ export class RovingList {
       this.current = items.find((item) => item.matches(SELECTED)) ?? items[0] ?? null;
     }
     for (const item of items) {
+      if (item.matches(SELECTED)) this.wasSelected.add(item);
+      else this.wasSelected.delete(item);
       const tabIndex = item === this.current ? '0' : '-1';
       if (item.getAttribute('tabindex') !== tabIndex) item.setAttribute('tabindex', tabIndex);
     }
