@@ -115,6 +115,8 @@ export interface NgDebugApi {
   ): unknown;
   /** The reactive graph of an injector. Node ids from 20.1. @since 19.1 */
   ɵgetSignalGraph?(injector: unknown): NgDebugSignalGraph | null;
+  /** Watches or unwatches a signal-graph node by id. Present in 22.3 prereleases; not called by the overlay. */
+  toggleWatchSignal?(id: string): void;
   /** `@defer` blocks under a node. Replaced by `ɵgetControlFlowBlocks` in 22.0. @since 19.1 */
   ɵgetDeferBlocks?(node: Node): unknown[];
   /** `@defer` and `@for` blocks under a node. @since 22.0 */
@@ -156,6 +158,7 @@ export const NG_DEBUG_FUNCTIONS = [
   'ɵgetInjectorMetadata',
   'ɵsetProfiler',
   'ɵgetSignalGraph',
+  'toggleWatchSignal',
   'ɵgetDeferBlocks',
   'ɵgetControlFlowBlocks',
   'ɵgetTransferState',
