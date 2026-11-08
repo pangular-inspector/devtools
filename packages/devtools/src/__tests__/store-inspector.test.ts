@@ -13,6 +13,7 @@ async function mount() {
   const { EntryTabs } = await import('../../../../app/src/pages/store-entry-tabs.ts');
   const { StoreSession } = await import('../../../../app/src/pages/store-session.ts');
   const { Select } = await import('../../../../app/src/ui/select.ts');
+  const { LiveControls } = await import('../../../../app/src/ui/live-feed.ts');
   (StoreInspector as unknown as { propDecorators: unknown }).propDecorators = Object.fromEntries(
     ['stateTree', 'latestButton', 'cancelButton', 'restoreButton'].map((name) => [
       name,
@@ -39,6 +40,7 @@ async function mount() {
     ['seq', 'idPrefix', 'loader'],
   );
   signalInputs(StoreSession, ['rpc', 'pageId', 'storeId', 'entries']);
+  signalInputs(LiveControls, ['feed', 'what'], ['feed', 'what']);
   signalInputs(
     Select,
     [
