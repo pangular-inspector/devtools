@@ -1,0 +1,143 @@
+<h2 id="overrides-heading">SSR overrides</h2>
+<p class="muted small">
+  Development only. These change what the server sends for matching pages, from the next full page
+  load, and the request is marked <strong>overridden</strong>.
+</p>
+<form class="rule-form" (submit)="addOverride($event)">
+  <div class="field-group">
+    <span id="override-kind-label">Override</span>
+    <app-select
+      labelledBy="override-kind-label"
+      [describedBy]="overrideDraft().kind === 'state-edit' ? '' : 'override-kind-help'"
+      [options]="overrideKindOptions"
+      [value]="overrideDraft().kind"
+      (valueChange)="setOverrideDraft('kind', $event ?? 'render-error')"
+    />
+  </div>
+  <label>
+    <span>Page pattern <span class="hint">(substring or * glob, ^ anchors the path)</span></span>
+    <input
+      id="override-pattern"
+      required
+      spellcheck="false"
+      autocomplete="off"
+      placeholder="e.g. /examples/ssr"
+      [value]="overrideDraft().pattern"
+      (input)="patchOverride('pattern', $event)"
+    />
+  </label>
+  @switch (overrideDraft().kind) {
+    @case ('render-error') {
+      <p id="override-kind-help" class="muted small">
+        Throws while the server renders, so it needs <code>providePangularHttp()</code> and a page
+        the engine renders. Prerendered files served as static files skip it.
+      </p>
+      <label>
+        Error message
+        <input
+          spellcheck="false"
+          placeholder="Simulated render error"
+          aria-describedby="override-kind-help"
+          [value]="overrideDraft().message"
+          (input)="patchOverride('message', $event)"
+        />
+      </label>
+    }
+    @case ('state-edit') {
+      <label>
+        TransferState key
+        <input
+          id="override-key"
+          spellcheck="false"
+          autocomplete="off"
+          [value]="overrideDraft().key"
+          (input)="patchOverride('key', $event)"
+        />
+      </label>
+      <label>
+        <span>New JSON value <span class="hint">(empty removes the entry)</span></span>
+        <textarea
+          id="override-value"
+          rows="3"
+          spellcheck="false"
+          [value]="overrideDraft().value"
+          (input)="patchOverride('value', $event)"
+          [attr.aria-invalid]="overrideValueError() ? 'true' : null"
+          [attr.aria-describedby]="
+            overrideFromPayload()
+              ? 'override-value-error override-value-note'
+              : 'override-value-error'
+          "
+        ></textarea>
+      </label>
+      <p id="override-value-error" class="field-error">{{ overrideValueError() }}</p>
+      @if (overrideFromPayload(); as from) {
+        <p id="override-value-note" class="muted small">
+          Filled in from the TransferState payload. The value starts empty because the panel only
+          shows a redacted copy, so type the JSON the server should send.
+          @if (from === 'http') {
+            For a cached HTTP response this is the whole cache record, not only the response body.
+          }
+        </p>
+      }
+    }
+    @case ('client-render') {
+      <p id="override-kind-help" class="muted small">
+        Serves <code>index.csr.html</code> instead of rendering. Needs
+        <code>browserDistFolder</code> in <code>initPangularHub()</code>.
+      </p>
+    }
+  }
+  <div class="form-actions">
+    <button
+      type="submit"
+      [disabled]="!canWrite() || !overrideReady()"
+      [attr.aria-disabled]="addingOverride() || null"
+      [attr.aria-describedby]="canWrite() ? null : 'http-writes-off'"
+    >
+      Add override
+    </button>
+  </div>
+</form>
+
+<h3 id="override-list-heading" class="rules-heading" tabindex="-1">
+  Overrides ({{ overrides().length }})
+</h3>
+<ul class="rules">
+  @for (o of overrides(); track o.id) {
+    <li [class.off]="!o.enabled">
+      <label class="inline">
+        <input
+          type="checkbox"
+          [checked]="o.enabled"
+          [disabled]="!canWrite()"
+          (change)="toggleOverride(o.id)"
+          [attr.aria-label]="'Enable ' + overrideLabel(o.kind) + ' for ' + o.pattern"
+        />
+        <code class="rule-pattern" [title]="o.pattern"
+          ><span class="rule-method">{{ overrideLabel(o.kind) }}</span> {{ o.pattern }}</code
+        >
+      </label>
+      <button
+        type="button"
+        class="link remove"
+        data-remove-override
+        [disabled]="!canWrite()"
+        (click)="removeOverride(o.id)"
+        [attr.aria-label]="'Remove ' + overrideLabel(o.kind) + ' for ' + o.pattern"
+      >
+        Remove
+      </button>
+      <span class="rule-meta">
+        @if (o.message) {
+          <span>{{ o.message }}</span>
+        }
+        @if (o.key) {
+          <span>{{ o.value === undefined ? 'remove' : 'set' }} {{ o.key }}</span>
+        }
+      </span>
+    </li>
+  } @empty {
+    <li class="empty-rule">No overrides.</li>
+  }
+</ul>

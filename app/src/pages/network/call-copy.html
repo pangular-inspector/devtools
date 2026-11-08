@@ -1,0 +1,16 @@
+@if (call(); as c) {
+  <button
+    type="button"
+    [attr.aria-label]="'Copy ' + c.method + ' ' + c.url + ' as fetch'"
+    (click)="copy('fetch')"
+  >
+    Copy as fetch
+  </button>
+  <button
+    type="button"
+    [attr.aria-label]="'Copy ' + c.method + ' ' + c.url + ' as cURL'"
+    (click)="copy('curl')"
+  >
+    Copy as cURL
+  </button>
+}

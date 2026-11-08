@@ -1,0 +1,189 @@
+<h2 id="timeline-heading">HTTP timeline ({{ timeline().length }})</h2>
+<app-limit-note [dropped]="droppedCalls()" [max]="maxCalls()" what="HTTP calls" limit="httpCalls" />
+<div
+  class="filters"
+  role="group"
+  aria-label="Filter the HTTP timeline"
+  [class.no-calls]="!timeline().length"
+>
+  <app-search-field
+    class="search"
+    inputId="timeline-search"
+    placeholder="Filter by URL or method"
+    saveKey="network"
+    [(value)]="callQuery"
+  />
+  <app-select class="side-filter" ariaLabel="Side" [options]="sideOptions" [(value)]="sideFilter" />
+  <label class="inline failed-toggle">
+    <input
+      type="checkbox"
+      [checked]="failedOnly()"
+      (change)="failedOnly.set($any($event.target).checked)"
+    />
+    Failed only
+  </label>
+  <div class="view-toggle" role="group" aria-label="Timeline view">
+    <button
+      type="button"
+      [attr.aria-pressed]="timelineView() === 'table'"
+      (click)="timelineView.set('table')"
+    >
+      Table
+    </button>
+    <button
+      type="button"
+      [attr.aria-pressed]="timelineView() === 'waterfall'"
+      (click)="timelineView.set('waterfall')"
+    >
+      Waterfall
+    </button>
+  </div>
+  <span class="total">{{ countText() }}</span>
+  <span class="sr-only" role="status">{{ filterStatus() }}</span>
+</div>
+<div class="live-row">
+  <app-live-controls [feed]="callFeed" what="calls" />
+</div>
+@if (visibleCalls().length && timelineView() === 'waterfall') {
+  <app-network-waterfall
+    [calls]="waterfallCalls()"
+    [selectedId]="selectedCall()?.id ?? null"
+    (open)="openCall($event)"
+  />
+} @else if (visibleCalls().length) {
+  @if (callWindow.enabled()) {
+    <p class="muted small window-note">
+      Rows render as you scroll, so the browser's find only sees the ones near view; the search
+      field searches them all.
+    </p>
+  }
+  <div class="table-wrap">
+    <table [attr.aria-rowcount]="visibleCalls().length + 1">
+      <thead>
+        <tr aria-rowindex="1">
+          <th scope="col">Side</th>
+          <th scope="col" appSortHeader="method" [(sort)]="callSort">Method</th>
+          <th scope="col" appSortHeader="url" [(sort)]="callSort">URL</th>
+          <th scope="col">Page</th>
+          <th scope="col" appSortHeader="status" [(sort)]="callSort">Status</th>
+          <th scope="col" class="num" appSortHeader="time" [(sort)]="callSort">Time</th>
+          <th scope="col">Notes</th>
+        </tr>
+      </thead>
+      <tbody #callsBody appRovingList="button[data-call-id]" [rovingWindow]="callWindow">
+        @if (callWindow.padTop()) {
+          <tr class="spacer" aria-hidden="true">
+            <td colspan="7" [style.height.px]="callWindow.padTop()"></td>
+          </tr>
+        }
+        @for (shown of shownCalls(); track shown.entry.side + shown.entry.id) {
+          @let entry = shown.entry;
+          <tr
+            [attr.aria-rowindex]="shown.index + 2"
+            [attr.data-vindex]="shown.index"
+            [class.selected]="selectedCall()?.id === entry.id"
+            (click)="openCall(entry.id)"
+          >
+            <td>
+              <span class="tag" [class.server]="entry.side === 'server'">{{
+                entry.side === 'server' ? 'SSR' : 'Client'
+              }}</span>
+            </td>
+            <td class="method">{{ entry.method }}</td>
+            <td class="url">
+              <button
+                type="button"
+                class="link"
+                [title]="entry.url"
+                [attr.data-call-id]="entry.id"
+                [attr.aria-pressed]="selectedCall()?.id === entry.id"
+                [attr.aria-controls]="selectedCall() ? 'call-preview' : null"
+              >
+                {{ entry.url }}
+              </button>
+            </td>
+            <td class="page-url" [title]="entry.pageUrl ?? ''">
+              {{ entry.pageUrl ?? '' }}
+            </td>
+            <td
+              class="status"
+              [class.ok]="callTone(entry) === 'ok'"
+              [class.redirect]="callTone(entry) === 'redirect'"
+              [class.bad]="callTone(entry) === 'bad'"
+            >
+              <span class="dot" aria-hidden="true"></span>{{ statusLabel(entry) }}
+            </td>
+            <td class="num">{{ entry.durationMs }} ms</td>
+            <td>
+              <div class="notes">
+                @if (entry.nativeFetch) {
+                  <span class="tag" title="Made with fetch() directly, not through HttpClient"
+                    >fetch()</span
+                  >
+                }
+                @if (entry.origin) {
+                  <app-call-origin [origin]="entry.origin" />
+                }
+                @if (entry.cacheHit) {
+                  <span class="tag">transfer cache</span>
+                }
+                @if (entry.delayMs) {
+                  <span class="tag">delayed {{ entry.delayMs }} ms</span>
+                }
+                @if (entry.mocked) {
+                  <span class="tag mock">mocked</span>
+                }
+                @if (entry.faulted) {
+                  <span class="tag fault">faulted</span>
+                }
+                @if (rulePatternOf(entry); as pattern) {
+                  <span class="tag rule-ref" [title]="'Matched rule: ' + pattern"
+                    >rule <code>{{ pattern }}</code></span
+                  >
+                }
+              </div>
+            </td>
+          </tr>
+        }
+        @if (callWindow.padBottom()) {
+          <tr class="spacer" aria-hidden="true">
+            <td colspan="7" [style.height.px]="callWindow.padBottom()"></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+} @else if (timeline().length) {
+  <div class="empty no-match" role="status">
+    <p>No requests match.</p>
+    <p class="muted small">
+      @if (callQuery().trim()) {
+        Nothing matches “{{ callQuery().trim() }}” with these filters.
+      } @else {
+        None of the {{ timeline().length }} requests fit these filters.
+      }
+    </p>
+    <div class="empty-actions">
+      <button type="button" (click)="clearCallFilters()">Clear filters</button>
+    </div>
+  </div>
+} @else {
+  <div class="empty">
+    <p>No requests yet.</p>
+    <p class="muted small">
+      Add <code>withPangular()</code> to <code>provideHttpClient</code>, then load a page of the
+      app.
+    </p>
+  </div>
+}
+@if (selectedCall(); as detail) {
+  <div
+    appResponsePreview
+    id="call-preview"
+    class="preview"
+    role="region"
+    aria-labelledby="preview-heading"
+    [call]="detail"
+    (keydown.escape)="closePreview()"
+  ></div>
+}

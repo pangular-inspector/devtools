@@ -1,0 +1,37 @@
+@let info = insights();
+@if (info.overBudget) {
+  <p class="budget over">
+    <strong>{{ bytes(info.size) }}, over the {{ bytes(info.budget) }} budget.</strong>
+    The payload is inlined in the HTML, so it delays the first render. Look at the largest entries
+    below.
+  </p>
+} @else {
+  <p class="budget">{{ bytes(info.size) }}, within the {{ bytes(info.budget) }} budget.</p>
+}
+@if (info.largest.length) {
+  <h3 id="payload-largest-heading">Largest entries</h3>
+  <ol class="largest" aria-labelledby="payload-largest-heading">
+    @for (item of info.largest; track item.key) {
+      <li>
+        <span class="name" [title]="item.key">{{ item.label }}</span>
+        <span class="size">{{ bytes(item.size) }}, {{ item.share }}%</span>
+        <span class="bar" aria-hidden="true"><span [style.width.%]="item.share"></span></span>
+      </li>
+    }
+  </ol>
+}
+@if (info.sameUrl.length) {
+  <h3 id="payload-same-url-heading">Same URL stored more than once ({{ info.sameUrl.length }})</h3>
+  <p class="hint">
+    Each key holds its own response, because the headers, params or body differ. Check whether one
+    request could serve them all.
+  </p>
+  <ul class="same-url" aria-labelledby="payload-same-url-heading">
+    @for (group of info.sameUrl; track group.url) {
+      <li>
+        <code class="name">{{ group.url }}</code>
+        <span class="size">{{ group.keys.length }} keys, {{ bytes(group.size) }}</span>
+      </li>
+    }
+  </ul>
+}

@@ -1,0 +1,90 @@
+@use 'mixins' as m;
+@use 'network' as net;
+
+@include net.controls;
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+}
+.live-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: -4px 0 12px;
+}
+.search {
+  position: relative;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.search:focus-within .search-icon {
+  stroke: var(--accent);
+}
+.filters input[type='search'] {
+  height: var(--control-h);
+  padding-left: 34px;
+}
+.filters .side-filter {
+  flex: 0 0 140px;
+}
+.failed-toggle {
+  flex: none;
+  height: var(--control-h);
+  font-size: 13px;
+  font-weight: 500;
+}
+.total {
+  flex: none;
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* "0 of 0" says nothing before the first call; the empty state below explains it. */
+.filters.no-calls .total {
+  display: none;
+}
+@include net.table;
+@include net.status;
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.view-toggle button {
+  height: calc(var(--control-h) - 2px);
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-2);
+}
+.view-toggle button + button {
+  border-left: 1px solid var(--border-strong);
+}
+.view-toggle button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+.view-toggle button:focus-visible {
+  @include m.focus-ring(-2px);
+}
+@include net.preview;

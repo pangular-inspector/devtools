@@ -1,0 +1,62 @@
+@use 'mixins' as m;
+
+:host {
+  display: block;
+  margin-bottom: 12px;
+}
+h3 {
+  @include m.label;
+  margin: 12px 0 6px;
+}
+.budget,
+.hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.budget.over {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+}
+ol,
+ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  font-size: 12px;
+}
+.name {
+  @include m.truncate;
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+.size {
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+  span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+}
+.same-url {
+  margin-top: 6px;
+}

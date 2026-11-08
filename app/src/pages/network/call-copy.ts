@@ -13,62 +13,8 @@ import {
  */
 @Component({
   selector: 'app-call-copy',
-  template: `
-    @if (call(); as c) {
-      <button
-        type="button"
-        [attr.aria-label]="'Copy ' + c.method + ' ' + c.url + ' as fetch'"
-        (click)="copy('fetch')"
-      >
-        Copy as fetch
-      </button>
-      <button
-        type="button"
-        [attr.aria-label]="'Copy ' + c.method + ' ' + c.url + ' as cURL'"
-        (click)="copy('curl')"
-      >
-        Copy as cURL
-      </button>
-    }
-  `,
-  styles: `
-    @use 'mixins' as m;
-
-    :host {
-      display: contents;
-    }
-    button {
-      display: inline-flex;
-      align-items: center;
-      height: 28px;
-      padding: 0 10px;
-      border: 1px solid transparent;
-      border-radius: var(--radius-sm);
-      background: none;
-      color: var(--text-2);
-      font-size: 12px;
-      font-weight: 500;
-      white-space: nowrap;
-      cursor: pointer;
-      transition:
-        background-color 0.2s var(--ease),
-        border-color 0.2s var(--ease),
-        color 0.2s var(--ease);
-      &:hover {
-        border-color: var(--border-strong);
-        background: var(--surface-2);
-        color: var(--text);
-      }
-      &:focus-visible {
-        @include m.focus-ring;
-      }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      button {
-        transition: none;
-      }
-    }
-  `,
+  templateUrl: './call-copy.html',
+  styleUrl: './call-copy.scss',
 })
 export class CallCopy {
   readonly call = input<SnippetCall | null>(null);

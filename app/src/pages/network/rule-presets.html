@@ -1,0 +1,24 @@
+<div class="presets" role="group" aria-labelledby="rule-presets-label">
+  <span id="rule-presets-label" class="label">Presets</span>
+  <ul>
+    @for (preset of presets; track preset.id) {
+      <li>
+        <button
+          type="button"
+          class="ghost"
+          [attr.data-preset]="preset.id"
+          [disabled]="disabled()"
+          [attr.aria-describedby]="'preset-' + preset.id + ' ' + describedBy()"
+          (click)="add.emit(preset.id)"
+        >
+          {{ preset.label }}
+        </button>
+        <span class="what" [id]="'preset-' + preset.id">{{ preset.description }}</span>
+      </li>
+    }
+  </ul>
+  <p class="note">
+    A preset adds plain rules for every browser request. Rules above it match first. Remove the
+    rules to stop it.
+  </p>
+</div>

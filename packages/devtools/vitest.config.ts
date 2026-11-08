@@ -1,6 +1,10 @@
+import { join } from 'node:path';
 import { defineConfig } from 'vitest/config';
+import { inlineComponentResources } from './src/__tests__/inline-resources.ts';
 
 export default defineConfig({
+  // Panel components rendered in JIT get their template and style files inlined.
+  plugins: [inlineComponentResources(join(import.meta.dirname, '../../app/src'))],
   test: {
     // Node 25+ ships its own `localStorage` global, which is `undefined` without
     // `--localstorage-file` and hides the jsdom one the tests rely on.
