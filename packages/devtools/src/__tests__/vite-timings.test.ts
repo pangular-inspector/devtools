@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type ViteDevServer } from 'vite';
@@ -130,7 +130,8 @@ describe('timeViteModules', () => {
   });
 
   it('times the modules a real Vite dev server serves, for the module graph', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'pangular-timings-'));
+    // The real path: on Windows tmpdir() can be an 8.3 short name (RUNNER~1) that Vite resolves differently.
+    const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'pangular-timings-')));
     writeFileSync(join(root, 'main.ts'), "import { hello } from './hello.ts';\nhello();\n");
     writeFileSync(join(root, 'hello.ts'), 'export const hello = (): string => "hi";\n');
     const server = await createServer({
