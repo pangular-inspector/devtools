@@ -6,6 +6,7 @@ import {
   registerDeferLoad,
   type DeferInternals,
 } from '../defer-load.ts';
+import { setRedaction } from '../forms-privacy.ts';
 import type { DeferBlockInfo } from '../types.ts';
 
 const info = (overrides: Partial<DeferBlockInfo> = {}): DeferBlockInfo => ({
@@ -86,6 +87,27 @@ describe('loadDeferBlock', () => {
       state: 'complete',
       renderError: 'NG0100: changed after checked',
     });
+  });
+
+  it('masks tokens and secret values in the error it passes on', async () => {
+    setRedaction({ secretNames: ['ssn'] });
+    try {
+      const { root, innerAnchor, internals, ng } = app();
+      const jwt =
+        'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+      ng.applyChanges.mockImplementation(() => {
+        throw new Error(`Bearer abc.def.ghi failed for ${jwt} with ssn=123-45-6789`);
+      });
+      const result = await loadDeferBlock(ng, internals, { host: innerAnchor, block: info() }, [
+        root,
+      ]);
+      expect(result.renderError).toContain('[redacted]');
+      expect(result.renderError).not.toContain('abc.def.ghi');
+      expect(result.renderError).not.toContain(jwt);
+      expect(result.renderError).not.toContain('123-45-6789');
+    } finally {
+      setRedaction();
+    }
   });
 
   it('shows the @error block when the dependencies fail', async () => {

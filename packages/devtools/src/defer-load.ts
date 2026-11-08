@@ -1,3 +1,4 @@
+import { redactText } from './serialize.ts';
 import * as angularCore from '@angular/core';
 import { actionBlockedMessage } from './config.ts';
 import type { DeferBlockInfo } from './types.ts';
@@ -181,8 +182,9 @@ export async function loadDeferBlock(
     try {
       ng.applyChanges?.(component);
     } catch (error) {
-      // The block's own template can throw once it renders; the agent is told.
-      renderError ??= error instanceof Error ? error.message : String(error);
+      // The block's own template can throw once it renders; the agent is told,
+      // with the secrets a message can carry masked like every other page text.
+      renderError ??= redactText(error instanceof Error ? error.message : String(error));
     }
   }
   return {
