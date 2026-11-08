@@ -29,6 +29,7 @@ function page(extra: Partial<RouterPage> = {}): RouterPage {
   return {
     pageId: 'p1',
     reportedAt: 1,
+    changedAt: 1,
     snapshot: {
       url: '/users/42',
       queryParams: {},

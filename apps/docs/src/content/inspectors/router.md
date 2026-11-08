@@ -40,6 +40,8 @@ Every navigation as one story:
 
 Filter by URL, or check **Only problems** to keep the navigations that did not succeed and the ones in a loop. **Only problems** leaves out the navigations that **Probe in app** cancels, the way the problem count on the **Navigations** tab does. Each row has **Replay**, **Compare** (opens the [Compare view](#compare) with this navigation as the later one), **Copy repro** (a markdown repro) and **HTTP calls**. **Replay** is off for a navigation whose URL is redacted or not relative, and a note under the row says why. **Export JSON** saves the list.
 
+**Pause** holds the list while the app keeps navigating. A pill counts the navigations that arrived since, such as **2 new**. Press **Pause** again to show them. With **Follow newest** checked, the list scrolls its newest navigation into view as it arrives. The panel remembers **Follow newest** in `localStorage`.
+
 **HTTP calls** lists the `HttpClient` calls the [SSR & HTTP inspector](./ssr-http.md) recorded on the same page for that navigation, with method, URL, status and time, in two groups: **While it ran** (guards, resolvers, lazy loads) and **After it ended** (calls that started before the next navigation, at most 5 seconds after it ended, such as the ones the new page's components make). It needs the SSR & HTTP inspector and its HTTP setup. The **HTTP** row of each navigation counts the page's `fetch` and XHR requests from resource timing, which also works without that setup.
 
 **Clear** empties the list and its loop warnings for the page you are looking at, so you can test a flow from a clean list without reloading the app. Other tabs keep their navigations. A navigation still running stays in the list. With [`actions.router`](../getting-started/configuration.md#actions) set to `false`, **Clear** is off.
@@ -97,6 +99,8 @@ The parts that are the same are listed under the tables. Params and data are kep
 
 The live route config. The tab merges lazy children in once they load, and marks the active branch.
 
+The config is a tree grid, so a screen reader reads each route's level and whether it is expanded. The route rows share one `Tab` stop. The param fields and the **Go** and **Read lazy** buttons inside a row stay in the `Tab` order. On a row, up and down arrows move between routes, and `Home` and `End` jump to the first and last. Right arrow expands a collapsed route, or moves to its first child. Left arrow collapses an expanded route, or moves to its parent. The arrow before a path toggles it with the mouse. While a filter is set, the tree shows every matching route and can't be collapsed.
+
 - Filter the routes by path, component or declaring file. While the filter is set, the summary shows the count, for example "2 of 14 routes", and a screen reader announces it as you type. If nothing matches, click **Clear filters**.
 - **Test a URL** and click **Predict** to see which route matches it, or the nearest ones.
 - Click **What happens** for a card that predicts going to the URL from the live config. It does not navigate or run app code. The card shows:
@@ -152,7 +156,7 @@ If no check could run, the view says **No checks ran** and why: no page with a r
 
 ### Source route config
 
-The routes declared in your files: `*.routes.ts` and `*routing.module.ts` files, the files they lazy load, and Analog pages. Each row shows the path, the component or target, guards and resolvers, the title and the declaring file. Once the live config is available, the tab collapses this table. **Show table** opens it.
+The routes declared in your files: `*.routes.ts` and `*routing.module.ts` files, the files they lazy load, and Analog pages. Each row shows the path, the component or target, guards and resolvers, the title and the declaring file. The **Path**, **Component / Target**, **Title** and **Declared in** headers sort the table: ascending, then descending, then back to file order. Once the live config is available, the tab collapses this table. **Show table** opens it.
 
 Components rendered by the router show their route and outlet in the [Components tab](./components.md).
 

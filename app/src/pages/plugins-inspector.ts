@@ -16,6 +16,7 @@ import { hostPageId } from '../page-id';
 import { Select, type SelectOption } from '../ui/select';
 import { PluginSectionView, filteredCount } from './plugin-view';
 import { SearchField } from '../ui/search-field';
+import { AppState } from '../ui/app-state';
 
 /** One plugin as a page reported it (`rpc/plugins-register.ts`). */
 export interface PanelPluginEntry {
@@ -85,24 +86,23 @@ const STATUS_TONE: Record<PanelPluginEntry['status'], string> = {
 
 @Component({
   selector: 'app-plugins-inspector',
-  imports: [SearchField, Select, PluginSectionView],
+  imports: [AppState, SearchField, Select, PluginSectionView],
   template: `
     @if (!loaded()) {
-      <p class="state" role="status">Loading plugins…</p>
+      <app-state kind="loading">Loading plugins…</app-state>
     } @else if (failed()) {
-      <div class="state" role="alert">
-        <p>Can't read the plugins from the devtools server.</p>
-        <button type="button" class="small" (click)="retry()">Retry</button>
-      </div>
+      <app-state kind="error" (retry)="retry()">
+        Can't read the plugins from the devtools server.
+      </app-state>
     } @else if (!pluginIds().length) {
-      <div class="state" role="status">
-        <p>No plugin reports yet.</p>
-        <p class="muted">
+      <app-state kind="empty">
+        No plugin reports yet.
+        <p detail>
           A library adds a tab here with <code>registerPangularPlugin()</code> from
           <code>&#64;pangular-inspector/devtools/plugin</code>. Its view shows up once the app runs
           with the overlay loaded.
         </p>
-      </div>
+      </app-state>
     } @else {
       <p class="intro">
         Views that libraries report from the live page through the plugin API. The values come from

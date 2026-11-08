@@ -386,6 +386,8 @@ On Angular 20 and later, the page reads the tree about 250 ms after Angular runs
 
 While picking, presses and clicks in the app don't reach it, so menus and drag handles stay as they are.
 
+For an app on a device ([NativeScript](../getting-started/nativescript.md) or [Angular Native](../getting-started/angular-native.md)), the button reads **Pick component on device**. Tap a component on the simulator or device, and the tab selects the component that hosts the view you tapped. The tap doesn't reach the app.
+
 You can also pick with the keyboard, from the panel or with focus in the app:
 
 | Key         | What it does                                        |

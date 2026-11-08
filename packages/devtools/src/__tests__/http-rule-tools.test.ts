@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { PangularConfig } from '../config.ts';
 import { createPangular } from '../devframe.ts';
 import { httpRegistry, MAX_RULES, type HttpRule } from '../http-rules.ts';
-import { httpRulesText, removeHttpRule, upsertHttpRule } from '../rpc/http-rule-tools.ts';
+import {
+  addHttpRulePreset,
+  httpRulesText,
+  removeHttpRule,
+  upsertHttpRule,
+} from '../rpc/http-rule-tools.ts';
 import type { HttpState } from '../types.ts';
 import { answerText } from './tool-answer.ts';
 
@@ -135,6 +140,48 @@ describe('HTTP rule agent tools', () => {
     );
     expect(await tool('remove-http-rule', {})).toMatch(/^Pass `id`/);
     expect(httpRegistry().rules).toEqual([rule()]);
+  });
+
+  it('expands a preset into plain rules after the existing ones', async () => {
+    const { tool, state } = await boot();
+    httpRegistry().rules = [rule()];
+    const answer = await tool('set-http-rule', { preset: 'offline' });
+    expect(answer).toMatch(/^Added the Offline preset: Fails every browser request/);
+    const rules = httpRegistry().rules ?? [];
+    expect(rules).toHaveLength(2);
+    expect(rules[0]!.id).toBe('r1');
+    expect(rules[1]).toMatchObject({ pattern: '*', target: 'client', status: 0, enabled: true });
+    expect(answer).toContain(`\`${rules[1]!.id}\``);
+    expect((await state()).rules).toEqual(rules);
+
+    await tool('set-http-rule', { preset: 'slow-3g' });
+    await tool('set-http-rule', { preset: 'flaky' });
+    expect((httpRegistry().rules ?? []).slice(2)).toEqual([
+      expect.objectContaining({ pattern: '*', target: 'client', delayMs: 2000 }),
+      expect.objectContaining({ pattern: '*', target: 'client', status: 503, chance: 30 }),
+    ]);
+  });
+
+  it('refuses a preset mixed with rule arguments, an unknown one, or one past the limit', async () => {
+    const { tool } = await boot();
+    httpRegistry().rules = [rule()];
+    expect(await tool('set-http-rule', { preset: 'offline', pattern: '/api' })).toMatch(
+      /`preset` adds its own rules, so pass it alone, without `pattern`/,
+    );
+    expect(await tool('set-http-rule', { preset: 'offline', id: 'r1' })).toMatch(/without `id`/);
+    expect(await tool('set-http-rule', { preset: '4g' })).toMatch(
+      /`preset` must be one of `offline`, `slow-3g`, `flaky`/,
+    );
+    expect(ids()).toEqual(['r1']);
+    const full = Array.from({ length: MAX_RULES }, (_, i) => rule({ id: `f${i}` }));
+    expect('error' in addHttpRulePreset(full, { preset: 'flaky' }, () => 'x')).toBe(true);
+  });
+
+  it('refuses a preset when HTTP actions are off', async () => {
+    const { tool } = await boot({ actions: { http: false } });
+    // The write tool is dropped, so the call is an unknown tool or a refusal; nothing changes.
+    await tool('set-http-rule', { preset: 'offline' }).catch(() => '');
+    expect(httpRegistry().rules ?? []).toEqual([]);
   });
 
   it('keeps a JSON null mock body as the only effect of a rule', async () => {

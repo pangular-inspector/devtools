@@ -262,6 +262,28 @@ describe('snapshot agent tool', () => {
     expect(text).toContain('`q1`');
   });
 
+  it('adds a line with the HTTP lint findings to the HTTP section', async () => {
+    const { push, snapshot } = await boot();
+    const at = Date.now() - 5_000;
+    await push('push-http', {
+      pageId: 'tab1',
+      url: 'http://localhost:4200/trips',
+      payload: { entries: [] },
+      calls: [
+        httpCall('h1', '/api/trips', { at, cacheHit: false, faulted: false }),
+        httpCall('h2', '/api/trips', { at: at + 100, cacheHit: false, faulted: false }),
+      ],
+    });
+    const text = await snapshot({ sections: ['http'] });
+    expect(text).toContain('HTTP lint: 1 duplicate request. `lint-http` lists the calls');
+  });
+
+  it('leaves the HTTP lint line out when the lint finds nothing', async () => {
+    const { push, snapshot } = await boot();
+    await pushAll(push);
+    expect(await snapshot({ sections: ['http'] })).not.toContain('HTTP lint:');
+  });
+
   it('lists only the sections asked for, and refuses unknown ones', async () => {
     const { push, snapshot } = await boot();
     await pushAll(push);

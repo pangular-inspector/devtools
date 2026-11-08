@@ -275,7 +275,7 @@ Every tool answers with one plain text block, the answer as written: markdown fo
 
 ### Read and action tools
 
-Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-five tools act on the app, so the server does not mark them read-only:
+Each tool has a safety tier: `read`, `action` or `destructive`. The server marks `read` tools as read-only for your client, and `destructive` tools as destructive. Twenty-six tools act on the app, so the server does not mark them read-only:
 
 | Tool                       | Tier          | Reference                                                                         |
 | -------------------------- | ------------- | --------------------------------------------------------------------------------- |
@@ -291,6 +291,7 @@ Each tool has a safety tier: `read`, `action` or `destructive`. The server marks
 | `remove-http-rule`         | `action`      | [Fault rules](./tools.md#fault-rules)                                             |
 | `set-ssr-override`         | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides)     |
 | `remove-ssr-override`      | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides)     |
+| `refetch-transfer-state`   | `action`      | [TransferState and SSR overrides](./tools.md#transferstate-and-ssr-overrides)     |
 | `set-component-property`   | `action`      | [Edit a component](./tools.md#edit-a-component)                                   |
 | `set-signal`               | `action`      | [Edit a component](./tools.md#edit-a-component)                                   |
 | `load-defer-block`         | `action`      | [load-defer-block](./tools.md#load-defer-block)                                   |

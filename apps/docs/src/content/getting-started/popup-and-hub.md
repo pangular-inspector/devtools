@@ -251,6 +251,8 @@ On other tabs, `id` is ignored and the link opens the tab. `page` is the page id
 
 Without a hash, the panel opens the tab you used last in this browser tab. The Chrome extension and the popup reload the panel on every navigation, and the panel keeps its tab across those reloads. It saves the tab in `sessionStorage`, so another browser tab starts on the Dashboard. A hash wins over the saved tab, and a tab that is turned off falls back to the Dashboard.
 
+Each tab keeps its scroll position. The Timeline, SSR & HTTP, NgRx Store, TanStack Query, Forms and Capacitor tabs also keep their selected item. Switching tabs or reloading the panel restores both. The panel saves them in `sessionStorage` per view and inspected page. If storage is blocked, the panel keeps them in memory until it reloads.
+
 ### Limits
 
 A hash or a saved tab only works for a tab that exists when the panel opens. The Analog tab appears after the server confirms the app is an Analog app, so `#tab=analog` does not select it on load. Inside the Angular dock, the Store and Analog tabs live in their own docks.

@@ -16,7 +16,10 @@ import { explainSsrRequestText, listSsrRequestsText } from './rpc/ssr-tools.ts';
 import { listHttpCallsText } from './rpc/http-tools.ts';
 import { httpWaterfallText } from './rpc/http-waterfall.ts';
 import {
+  addHttpRulePreset,
+  HTTP_RULE_PRESET_IDS,
   httpRulesText,
+  presetChangeText,
   removeHttpRule,
   ruleChangeText,
   upsertHttpRule,
@@ -256,6 +259,12 @@ export function registerHttpAgentTools(env: RegisterHttpAgentToolsEnv) {
     },
     body: { description: 'Mock response body: JSON text or a JSON value. Alone it answers 200.' },
     enabled: { type: 'boolean', description: 'Default true.' },
+    preset: {
+      type: 'string',
+      enum: [...HTTP_RULE_PRESET_IDS],
+      description:
+        'Instead of the other arguments: add the plain rules of a built-in preset for every browser request. `offline` fails them with a network error, `slow-3g` holds them back 2000 ms, `flaky` fails 30% with 503.',
+    },
   };
   const newRuleId = () => `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const httpRuleChange = (change: RuleChange, verb: 'Added' | 'Updated' | 'Removed') => {
@@ -280,10 +289,24 @@ export function registerHttpAgentTools(env: RegisterHttpAgentToolsEnv) {
     id: 'pangular:set-http-rule',
     title: 'Set an HTTP mock rule',
     description:
-      'Add or replace (`id`) an HTTP fault or mock rule (dev only): `pattern` plus `status`, `delayMs` or `body`. Applies to every tab now and to SSR on the next load. Needs actions.http.',
-    inputSchema: { type: 'object', properties: ruleInput, required: ['pattern'] },
+      'Add or replace (`id`) an HTTP fault or mock rule (dev only): `pattern` plus `status`, `delayMs` or `body`, or `preset` alone to add the Offline, Slow 3G or Flaky rules. Applies to every tab now and to SSR on the next load. Needs actions.http.',
+    inputSchema: { type: 'object', properties: ruleInput },
     handler: async (args: SetHttpRuleArgs) => {
       const rules = registry.rules ?? [];
+      if (args.pattern === undefined && args.preset === undefined) {
+        return {
+          markdown: refusal(
+            `Pass \`pattern\` with \`status\`, \`delayMs\` or \`body\`, or \`preset\` alone (${HTTP_RULE_PRESET_IDS.map((id) => `\`${id}\``).join(', ')}).`,
+          ),
+        };
+      }
+      if (args.preset !== undefined) {
+        if (!config.actions.http) return { markdown: refusal(actionBlockedMessage('http')) };
+        const change = addHttpRulePreset(rules, args, newRuleId);
+        if ('error' in change) return { markdown: refusal(change.error) };
+        setHttpRules(change.rules);
+        return { markdown: presetChangeText(change) };
+      }
       const verb = typeof args.id === 'string' && args.id ? 'Updated' : 'Added';
       return httpRuleChange(upsertHttpRule(rules, args, newRuleId), verb);
     },

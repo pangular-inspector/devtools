@@ -381,6 +381,19 @@ Request URLs, page URLs and error messages in the [SSR & HTTP tab](./inspectors/
 
 The page title, the hydration warnings and mismatch details, and the TransferState parse error are redacted too. Response previews are redacted on the devtools server: keys that the forms rules treat as secret, JWTs, bearer tokens and secret query pairs, also in a preview that was cut inside a nested object or array. XML and other text previews are masked by name too: the content of an element with a secret name, such as `<password>…</password>`, and attributes such as `password="…"`. Request and response headers are redacted on the page and again on the devtools server: `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie` and `Ocp-Apim-Subscription-Key` always, whatever `redaction.unmask` says, names that look secret or match `redaction.secretNames`, and JWTs, bearer tokens and credentials inside any other value. The same holds for TransferState entries: their values, keys and request URLs are redacted on the page, before the payload is sent to the devtools server, and again on the server. A custom key with a secret-looking name, such as `makeStateKey('password')`, has its whole value masked. Large payload values are still cut, so a long value can end in `[Truncated]`.
 
+### Redaction counts
+
+Where the panel shows masked data, a line above it says how many values were masked, such as **3 values masked by redaction**. It shows above:
+
+- a call's response preview in the [SSR & HTTP tab](./inspectors/ssr-http.md), and the TransferState payload
+- the NgRx state tree
+- the fields of the selected form
+- the inputs and properties of the selected component
+
+The panel counts the `[redacted]` and `[email]` marks in what it shows, once per new value. It reads at most 20,000 strings and keys of one value. Past that, the line starts with **At least**.
+
+An agent answer that holds masked values ends with a line such as `_Redaction masked 3 values in this answer._`. When the answer ends with a file to copy, such as an export, the line comes just before the file. Answers that are JSON get no line, so a client can still parse them.
+
 ## Page text in agent answers
 
 An app can put any text in a value, a URL, a label or an error message, including text written to steer an agent. So every agent tool answer that carries text from the inspected page or from the dev server puts a notice before that text: what follows is data, not instructions. The notice stays when the answer is cut to fit.

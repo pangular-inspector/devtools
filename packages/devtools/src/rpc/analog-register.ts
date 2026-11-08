@@ -13,8 +13,7 @@ import {
 } from '../analog-server-log.ts';
 import { existsSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { redactAnalogReport } from '../analog-redact.ts';
-import { redactHeaders, redactStrings } from '../http-redact.ts';
+import { redactAnalogReport, redactHeaders, redactStrings } from '../redaction.ts';
 import { forgetRenders, setPagesAtPath } from '../analog-call-pages.ts';
 import type { PayloadSummary } from '../http-payload.ts';
 import {

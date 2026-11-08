@@ -846,6 +846,7 @@ const ACTION_SCENARIO_TOOLS = new Set([
   'remove-http-rule',
   'set-ssr-override',
   'remove-ssr-override',
+  'refetch-transfer-state',
   'set-component-property',
   'set-signal',
   'load-defer-block',
@@ -1875,6 +1876,26 @@ async function runActions(state) {
     write('set-http-rule', 'answer names the rule id', false, r.markdown.slice(0, 400));
   }
   await act('remove-http-rule', { id: 'no-such-rule' }, 'refusal');
+  r = await act('set-http-rule', { preset: 'offline' });
+  const presetId = r.markdown.match(/Rule `([\w-]+)`/)?.[1];
+  write(
+    'set-http-rule',
+    'preset adds the Offline rule',
+    /Added the Offline preset/.test(r.markdown) && !!presetId,
+    r.markdown.slice(0, 300),
+  );
+  if (presetId) await act('remove-http-rule', { id: presetId });
+  await act('set-http-rule', { preset: 'offline', pattern: '/x' }, 'refusal');
+
+  // TransferState refetch: the page renders its URL again on the server.
+  await app.go('/examples/ssr');
+  r = await act('refetch-transfer-state', {}, 'any');
+  write(
+    'refetch-transfer-state',
+    'the page answers with the payload the server sends now',
+    r.markdown.startsWith('Refetched'),
+    r.markdown.slice(0, 300),
+  );
 
   // SSR overrides. /about is prerendered, so an override there cannot apply;
   // the tool should say so.

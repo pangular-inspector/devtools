@@ -43,6 +43,8 @@ import {
   type TimelineLayer,
   type TimelineSources,
 } from './timeline-data';
+import { rememberSelection } from '../view-memory';
+import { AppState } from '../ui/app-state';
 
 /** How many rows the list renders, newest first. The chart always draws every event. */
 export const TIMELINE_LIST_CAP = 200;
@@ -55,7 +57,7 @@ const DRAG_THRESHOLD = 4;
 
 @Component({
   selector: 'app-timeline',
-  imports: [Select, RovingList, SearchField],
+  imports: [AppState, Select, RovingList, SearchField],
   template: `
     <p class="intro">
       Navigations, HTTP calls, NgRx actions, change detection cycles, form events and signal changes
@@ -63,12 +65,11 @@ const DRAG_THRESHOLD = 4;
       a range, and open an event in its own tab.
     </p>
     @if (loading()) {
-      <p class="state" role="status">Loading the timeline…</p>
+      <app-state kind="loading">Loading the timeline…</app-state>
     } @else if (failed()) {
-      <div class="state" role="alert">
-        <p>Can't read the timeline from the devtools server.</p>
-        <button type="button" class="small" (click)="retry()">Retry</button>
-      </div>
+      <app-state kind="error" (retry)="retry()">
+        Can't read the timeline from the devtools server.
+      </app-state>
     } @else {
       <div class="toolbar">
         <app-search-field
@@ -125,21 +126,18 @@ const DRAG_THRESHOLD = 4;
       </div>
 
       @if (!events().length) {
-        <div class="state" role="status">
-          <p>Nothing on the timeline yet.</p>
-          <p class="muted">
+        <app-state kind="empty">
+          Nothing on the timeline yet.
+          <p detail>
             Use the app with the overlay loaded. Navigations, HTTP calls, NgRx actions and form
             events show up as they happen. Record change detection on the Components tab, and pick a
             component on the Signals tab to follow its signals.
           </p>
-        </div>
+        </app-state>
       } @else if (!shown().length) {
-        <div class="state" role="status">
-          <p>No event matches the filters{{ range() ? ' in this range' : '' }}.</p>
-          <button type="button" class="small" (click)="clearFilters(); search.focus()">
-            Clear filters
-          </button>
-        </div>
+        <app-state kind="no-match" (clear)="clearFilters(); search.focus()">
+          No event matches the filters{{ range() ? ' in this range' : '' }}.
+        </app-state>
       } @else {
         <section class="chart-card" aria-labelledby="timeline-chart-heading">
           <div class="chart-head">
@@ -829,6 +827,7 @@ export class Timeline {
   });
 
   constructor() {
+    rememberSelection('timeline', this.selectedKey);
     effect(() => {
       const client = this.rpc();
       if (client) void this.load(client);

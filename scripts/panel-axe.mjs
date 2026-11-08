@@ -196,6 +196,65 @@ const errorGroup = (id, extra = {}) => ({
   owner: { id: 'c1-7', name: 'TripCard' },
   ...extra,
 });
+// The Routes tab with a nested live config and a few navigations, for the tree grid
+// and the Pause control of the Navigations view.
+const routeNode = (id, path, extra = {}) => ({
+  id,
+  path,
+  fullPath: path,
+  kind: 'component',
+  ...extra,
+});
+const ROUTER_SEED = {
+  pages: [
+    {
+      pageId: 'p1',
+      reportedAt: now,
+      generation: 1,
+      activeIds: ['trips', 'trip'],
+      snapshot: {
+        url: '/trips/42',
+        queryParams: {},
+        fragment: null,
+        root: { path: '', url: '', outlet: 'primary', params: {}, data: {}, children: [] },
+      },
+      config: [
+        routeNode('trips', 'trips', {
+          component: 'TripList',
+          title: 'Trips',
+          children: [
+            routeNode('trip', 'trips/:id', {
+              component: 'TripDetail',
+              guards: { canActivate: ['authGuard'] },
+              children: [routeNode('edit', 'trips/:id/edit', { component: 'TripEdit' })],
+            }),
+          ],
+        }),
+        routeNode('about', 'about', { component: 'About' }),
+        { id: 'home', path: '', fullPath: '', kind: 'redirect', redirectTo: 'trips' },
+      ],
+      navigations: [
+        {
+          id: 1,
+          url: '/trips',
+          trigger: 'imperative',
+          startedAt: now - 9_000,
+          endedAt: now - 8_960,
+          outcome: 'succeeded',
+        },
+        {
+          id: 2,
+          url: '/trips/42',
+          trigger: 'imperative',
+          startedAt: now - 4_000,
+          endedAt: now - 3_950,
+          outcome: 'succeeded',
+        },
+      ],
+    },
+  ],
+};
+
 const ERRORS_SEED = {
   pages: {
     tab1: {
@@ -576,6 +635,7 @@ const SEEDS = {
   'pangular:plugins': PLUGINS_SEED,
   'pangular:tanstack-query': QUERIES_SEED,
   'pangular:forms': FORMS_SEED,
+  'pangular:router': ROUTER_SEED,
 };
 
 /**
@@ -1203,6 +1263,30 @@ try {
         await check(capacitor, `${colorScheme} view=capacitor on a web page`);
       } catch (error) {
         failures.push(`${colorScheme} Capacitor: the seeded app did not show (${error.message})`);
+      }
+      const routes = await seeded.newPage();
+      routes.on('pageerror', (error) =>
+        failures.push(`${colorScheme} Routes: page error ${error.message}`),
+      );
+      await routes.goto(`${base}#tab=routes`);
+      await routes.locator('.status.connected').waitFor();
+      try {
+        await routes.locator('#router-tab-routes').click({ timeout: 15_000 });
+        const rows = routes.locator('table[role="treegrid"] tr.tree-row');
+        await rows.first().waitFor();
+        await check(routes, `${colorScheme} Routes config tree grid`);
+        await noOverflow(routes, `${colorScheme} Routes config tree grid`);
+        await rows.first().focus();
+        await routes.keyboard.press('ArrowLeft');
+        await routes.locator('table[role="treegrid"] tr.tree-row[aria-expanded="false"]').waitFor();
+        await check(routes, `${colorScheme} Routes config tree grid collapsed`);
+        await routes.locator('#router-tab-navigations').click();
+        await routes.locator('app-live-controls button').click();
+        await routes.locator('app-live-controls .pending').waitFor();
+        await check(routes, `${colorScheme} Routes navigations paused`);
+        await noOverflow(routes, `${colorScheme} Routes navigations paused`);
+      } catch (error) {
+        failures.push(`${colorScheme} Routes: the seeded config did not show (${error.message})`);
       }
       const errors = await seeded.newPage();
       errors.on('pageerror', (error) =>

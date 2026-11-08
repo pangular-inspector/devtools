@@ -47,6 +47,9 @@ import { StoreGlobal } from '../ui/store-global';
 import { reduxLiveStores, reduxLog, reduxPagesOf, type ReduxStoresPage } from './redux-stores';
 import { SearchField } from '../ui/search-field';
 import { Splitter, storedPaneSize } from '../ui/splitter';
+import { rememberSelection } from '../view-memory';
+import { AppState } from '../ui/app-state';
+import { LiveControls, LiveFeed, followNewest } from '../ui/live-feed';
 
 const KIND_COLORS: Record<string, string> = {
   action: '#f59e0b',
@@ -122,6 +125,8 @@ const CLASSIC_KINDS = new Set([
     EntryTabs,
     StoreSession,
     StoreStateTree,
+    AppState,
+    LiveControls,
   ],
   template: `
     <p class="page-intro">
@@ -161,22 +166,19 @@ const CLASSIC_KINDS = new Set([
       </div>
 
       @if (failed()) {
-        <div class="empty" role="alert">
-          <p class="empty-title">Could not load the live store state.</p>
-          <p class="hint">Check that the dev server with Pangular Inspector is still running.</p>
-          <button type="button" class="btn" (click)="retry()">Retry</button>
-        </div>
+        <app-state kind="error" (retry)="retry()">
+          Could not load the live store state.
+          <p detail>Check that the dev server with Pangular Inspector is still running.</p>
+        </app-state>
       } @else if (!stateLoaded()) {
-        <div class="empty" role="status">
-          <p class="empty-title">Loading…</p>
-        </div>
+        <app-state kind="loading">Loading the live stores…</app-state>
       } @else if (!page()) {
-        <div class="empty">
-          <p class="empty-title">No page is reporting store state yet.</p>
-          <p class="hint">
+        <app-state kind="empty">
+          No page is reporting store state yet.
+          <p detail>
             Open the app in a browser. Stores show up here as soon as the page creates them.
           </p>
-        </div>
+        </app-state>
       } @else if (!liveStores().length) {
         <app-angular-unavailable [page]="angularPage()" capability="injectorProviders" compact>
           The overlay finds stores through the injectors, so stores it can't reach from a component
@@ -512,6 +514,12 @@ const CLASSIC_KINDS = new Set([
                   {{ current.classic || current.redux ? 'Action log' : 'Change log' }}
                   <span class="pill">{{ storeLog().length }}</span>
                 </h4>
+                <div class="live-row">
+                  <app-live-controls
+                    [feed]="logFeed"
+                    [what]="current.classic || current.redux ? 'actions' : 'changes'"
+                  />
+                </div>
                 <app-limit-note
                   [dropped]="(current.redux ? reduxPage()?.dropped : page()?.dropped) ?? 0"
                   [max]="maxLog()"
@@ -1713,6 +1721,13 @@ const CLASSIC_KINDS = new Set([
       padding-top: 16px;
       border-top: 1px solid var(--border);
     }
+    .live-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin: 0 0 8px;
+    }
     .log-layout {
       display: grid;
       grid-template-columns: min(var(--log-list-size, 300px), 60%) auto minmax(0, 1fr);
@@ -2355,11 +2370,24 @@ export class StoreInspector {
     })),
   );
 
+  /** Pause holds the selected store's log as it is while the app keeps changing it. */
+  readonly logFeed = new LiveFeed<NgrxLogEntry>({
+    name: 'store-log',
+    source: () => {
+      const store = this.store();
+      return store ? this.logOf(store) : [];
+    },
+    key: (entry) => entry.seq,
+    newest: 'last',
+    scope: () => `${this.store()?.id ?? ''}:${this.logSession()}`,
+  });
+
   readonly storeLog = computed<NgrxLogEntry[]>(() => {
-    const store = this.store();
     const f = this.filter().trim().toLowerCase();
-    return (store ? this.logOf(store) : [])
+    return this.logFeed
+      .items()
       .filter((e) => !f || e.type.toLowerCase().includes(f) || this.storeMatches(f))
+      .slice()
       .reverse();
   });
 
@@ -2471,6 +2499,12 @@ export class StoreInspector {
   });
 
   constructor() {
+    rememberSelection('store', this.selectedStoreId);
+    // Newest first, so following the newest change keeps the log scrolled to the top.
+    followNewest(this.logFeed, () => {
+      const list = this.logList()?.nativeElement;
+      if (list) list.scrollTop = 0;
+    });
     effect(() => {
       const log = this.logList()?.nativeElement;
       if (log) this.logWindow.attach(log);

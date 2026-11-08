@@ -1,13 +1,29 @@
 // @vitest-environment jsdom
 import '@angular/compiler';
-import { Component, EventEmitter } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NetworkInspector } from '../../../../app/src/pages/network-inspector.ts';
 import { Select } from '../../../../app/src/ui/select.ts';
+import { LiveControls } from '../../../../app/src/ui/live-feed.ts';
+import { SortHeader } from '../../../../app/src/ui/sort-header.ts';
 import { initAngularTestBed } from './angular-version.ts';
 
 initAngularTestBed();
+
+// JIT sees signal inputs only through the metadata the AOT compiler would write.
+const signalInput = (name: string, alias = name, required = false) => [
+  { type: Input, args: [{ isSignal: true, alias, required }] },
+];
+(LiveControls as unknown as { propDecorators: unknown }).propDecorators = {
+  feed: signalInput('feed', 'feed', true),
+  what: signalInput('what', 'what', true),
+};
+// `sort` is a model(): an input plus a `sortChange` output on the same property.
+(SortHeader as unknown as { propDecorators: unknown }).propDecorators = {
+  column: signalInput('column', 'appSortHeader', true),
+  sort: [...signalInput('sort'), { type: Output, args: ['sortChange'] }],
+};
 
 class StubSelect {
   valueChange = new EventEmitter<string | null>();

@@ -1,24 +1,8 @@
 import type { NavigationRecord } from '../router.ts';
 import type { RouteNode } from '../router-config.ts';
 import { code } from './forms-tools.ts';
-
-export interface LoopHop {
-  id: number;
-  from: string;
-  to: string;
-  via: string;
-  by?: string;
-}
-
-export interface NavigationLoop {
-  kind: 'redirect' | 'burst' | 'config';
-  ids: number[];
-  cycle: string[];
-  hops: LoopHop[];
-  guards: string[];
-  bounces: number;
-  end: string;
-}
+import type { LoopHop, NavigationLoop } from '../router-types.ts';
+export type { LoopHop, NavigationLoop } from '../router-types.ts';
 
 interface Step {
   url: string;

@@ -15,10 +15,12 @@ import { SHARED_STYLES, type SourceRoute } from './router-types';
 import type { ComponentFocus } from '../types/component-focus.types';
 import { SourceLink } from '../ui/source-link';
 import { SearchField } from '../ui/search-field';
+import { AppState } from '../ui/app-state';
+import { SortHeader, sortRows, type SortState } from '../ui/sort-header';
 
 @Component({
   selector: 'app-route-inspector',
-  imports: [SearchField, LiveRoute, SourceLink],
+  imports: [SearchField, LiveRoute, SourceLink, AppState, SortHeader],
   template: `
     <p class="page-intro">
       The live route, every navigation, the route config the router uses, the router setup and a
@@ -65,35 +67,32 @@ import { SearchField } from '../ui/search-field';
         </div>
 
         @if (error()) {
-          <div class="empty" role="alert">
-            <p class="empty-title">Could not scan the route files.</p>
-            <p class="muted">
+          <app-state kind="error" [retrying]="loading()" (retry)="refresh()">
+            Could not scan the route files.
+            <p detail>
               @if (staticReport()) {
                 Run <code>pangular build</code> again to rebuild the report.
               } @else {
-                Check that the dev server is running, then refresh.
+                Check that the dev server is running, then retry.
               }
             </p>
-          </div>
+          </app-state>
         } @else if (loading() && routes().length === 0) {
-          <p class="muted empty" role="status">Scanning routes…</p>
+          <app-state kind="loading">Scanning routes…</app-state>
         } @else if (filtered().length === 0) {
           @if (routes().length) {
-            <div class="empty">
-              <p class="empty-title">No routes match the filter.</p>
-              <p class="muted">Search by path, component, guard, title or file name.</p>
-              <button type="button" class="small" (click)="filter.set(''); filterInput.focus()">
-                Clear filters
-              </button>
-            </div>
+            <app-state kind="no-match" (clear)="filter.set(''); filterInput.focus()">
+              No routes match the filter.
+              <p detail>Search by path, component, guard, title or file name.</p>
+            </app-state>
           } @else {
-            <div class="empty">
-              <p class="empty-title">No routes found.</p>
-              <p class="muted">
+            <app-state kind="empty">
+              No routes found.
+              <p detail>
                 Routes are read from <code>*.routes.ts</code> and <code>*routing.module.ts</code>
                 files, the files they lazy load, plus Analog pages. Add one and refresh.
               </p>
-            </div>
+            </app-state>
           }
         } @else {
           <p class="muted count">
@@ -109,15 +108,15 @@ import { SearchField } from '../ui/search-field';
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Path</th>
-                  <th scope="col">Component / Target</th>
+                  <th scope="col" appSortHeader="path" [(sort)]="sort">Path</th>
+                  <th scope="col" appSortHeader="target" [(sort)]="sort">Component / Target</th>
                   <th scope="col">Guards and resolvers</th>
-                  <th scope="col">Title</th>
-                  <th scope="col">Declared in</th>
+                  <th scope="col" appSortHeader="title" [(sort)]="sort">Title</th>
+                  <th scope="col" appSortHeader="file" [(sort)]="sort">Declared in</th>
                 </tr>
               </thead>
               <tbody>
-                @for (route of filtered(); track $index) {
+                @for (route of sorted(); track $index) {
                   <tr>
                     <td class="path">
                       {{ route.fullPath }}
@@ -275,6 +274,17 @@ export class RouteInspector {
         r.file.toLowerCase().includes(q),
     );
   });
+
+  /** The column the table is sorted by; `null` keeps the order of the source files. */
+  readonly sort = signal<SortState | null>(null);
+  readonly sorted = computed(() =>
+    sortRows(this.filtered(), this.sort(), {
+      path: (r) => r.fullPath,
+      target: (r) => r.component ?? r.redirectTo,
+      title: (r) => r.title,
+      file: (r) => `${r.file}:${r.line ?? 0}`,
+    }),
+  );
 
   constructor() {
     effect(() => {

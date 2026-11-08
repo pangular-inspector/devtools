@@ -9,39 +9,12 @@ import {
   type AnyRecord,
   type NavigationRecord,
   type RouterDebugApi,
-  type RouterSnapshot,
 } from './router.ts';
 import { ConfigTracker, activeIds, walkConfig, type RouteNode } from './router-config.ts';
 import { detectSetup, type RouterSetup } from './router-setup.ts';
-import type { NavigationLoop } from './rpc/router-loops.ts';
 
-/**
- * One Angular app on the page with its own Router, as the router report
- * lists it when a page bootstraps more than one (several
- * `bootstrapApplication` roots or micro-frontends). The first app, the one
- * the rest of the report describes, has only its id and name; every other
- * app carries its own route, navigations and config.
- */
-export interface RouterAppReport {
-  /** Stable for the life of its root element: its tag, with `-2`, `-3` ... for repeats. */
-  id: string;
-  /** The root component's class name, else the tag. */
-  name: string;
-  /** The root element's tag, such as `app-root`. */
-  selector: string;
-  /** The app the top level of the router report describes. */
-  primary?: true;
-  snapshot?: RouterSnapshot | null;
-  navigations?: NavigationRecord[];
-  dropped?: number;
-  generation?: number;
-  config?: RouteNode[];
-  configTruncated?: number;
-  activeIds?: string[];
-  setup?: RouterSetup;
-  /** Navigation loops in this app's history; the server adds them, the page never sends them. */
-  loops?: NavigationLoop[];
-}
+import type { RouterAppReport } from './router-types.ts';
+export type { RouterAppReport } from './router-types.ts';
 
 /** Most apps one page reports. */
 export const MAX_ROUTER_APPS = 8;

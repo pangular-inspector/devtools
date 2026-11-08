@@ -7,26 +7,8 @@ import {
   type AnyRecord,
   type NavigationRecord,
 } from './router.ts';
-
-/**
- * One `navigate` event of the browser's Navigation API (`window.navigation`):
- * a link, a form, back and forward, `history.pushState`, or the router's own
- * history update. Kept next to the router's navigations so history changes
- * the router did not make (the cause of `urlDrift`) show up.
- */
-export interface PlatformNavigation {
-  at: number;
-  /** `push`, `replace`, `reload` or `traverse`. */
-  type: string;
-  /** The destination as a path, with the origin left out and secrets masked. */
-  url: string;
-  userInitiated?: boolean;
-  hashChange?: boolean;
-  /** The router navigation it belongs to; left out when the router was not navigating. */
-  navigationId?: number;
-  result?: 'succeeded' | 'failed';
-  error?: string;
-}
+import type { PlatformNavigation } from './router-types.ts';
+export type { PlatformNavigation } from './router-types.ts';
 
 /** Most Navigation API events a page keeps. */
 export const MAX_PLATFORM_NAVIGATIONS = 30;

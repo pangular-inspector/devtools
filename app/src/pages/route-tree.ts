@@ -26,6 +26,7 @@ import { SourceLink } from '../ui/source-link';
 import { RoutePreviewCard } from './route-preview';
 import { plural } from '../format';
 import { SearchField } from '../ui/search-field';
+import { AppState } from '../ui/app-state';
 
 /** "3 of 12 routes": the filtered count, worded like the other panel pages. */
 export function routeCountText(matches: number, total: number): string {
@@ -37,6 +38,9 @@ interface NodeRow {
   depth: number;
   source?: string;
   at?: SourceRoute;
+  /** Has children the viewer can collapse; never while a filter flattens the tree. */
+  expandable: boolean;
+  expanded: boolean;
 }
 
 interface MatchResult {
@@ -55,7 +59,7 @@ interface TestedUrl {
 
 @Component({
   selector: 'app-route-tree',
-  imports: [SearchField, JsonPipe, RoutePreviewCard, SourceLink],
+  imports: [SearchField, JsonPipe, RoutePreviewCard, SourceLink, AppState],
   template: `
     <form class="test" (submit)="$event.preventDefault(); predict()">
       <label for="test-url">Test a URL</label>
@@ -132,7 +136,7 @@ interface TestedUrl {
             <span class="count">{{ countText() }}</span
             >.
           } @else {
-            {{ plural(rows().length, 'route') }}.
+            {{ plural(total(), 'route') }}.
           }
           Lazy routes show their children once loaded.
           @if (page().configTruncated; as left) {
@@ -144,38 +148,52 @@ interface TestedUrl {
     </div>
     <p class="visually-hidden" role="status">{{ filterAnnouncement() }}</p>
     @if (!page().config) {
-      <div class="empty">
-        <p class="empty-title">
-          {{ 'The page has not reported its route config yet.' }}
-        </p>
-        <p class="muted">
-          {{ 'It appears once the router initializes. Navigate in the app if it stays empty.' }}
-        </p>
-      </div>
+      <app-state kind="empty">
+        The page has not reported its route config yet.
+        <p detail>It appears once the router initializes. Navigate in the app if it stays empty.</p>
+      </app-state>
     } @else if (!rows().length) {
-      <div class="empty">
-        <p class="empty-title">No routes match the filter.</p>
-        <p class="muted">Try a shorter path or a component name.</p>
-        <button type="button" class="small" (click)="setFilter(''); filterInput.focus()">
-          Clear filters
-        </button>
-      </div>
+      <app-state kind="no-match" (clear)="setFilter(''); filterInput.focus()">
+        No routes match the filter.
+        <p detail>Try a shorter path or a component name.</p>
+      </app-state>
     } @else {
       <div class="table-scroll" role="region" aria-label="Live route config" tabindex="0">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Path</th>
-              <th scope="col">Target</th>
-              <th scope="col">Guards and resolvers</th>
-              <th scope="col">Title</th>
-              <th scope="col"><span class="visually-hidden">Actions</span></th>
+        <table #grid role="treegrid" aria-label="Routes">
+          <thead role="rowgroup">
+            <tr role="row">
+              <th role="columnheader" scope="col">Path</th>
+              <th role="columnheader" scope="col">Target</th>
+              <th role="columnheader" scope="col">Guards and resolvers</th>
+              <th role="columnheader" scope="col">Title</th>
+              <th role="columnheader" scope="col"><span class="visually-hidden">Actions</span></th>
             </tr>
           </thead>
-          <tbody>
-            @for (row of rows(); track row.node.id) {
-              <tr #rowEl [class.active]="isActive(row.node)">
-                <td class="path" [style.padding-left.px]="14 + row.depth * 16">
+          <tbody role="rowgroup">
+            @for (row of rows(); track row.node.id; let i = $index) {
+              <tr
+                #rowEl
+                role="row"
+                class="tree-row"
+                [class.active]="isActive(row.node)"
+                [attr.data-id]="row.node.id"
+                [attr.aria-level]="row.depth + 1"
+                [attr.aria-expanded]="row.expandable ? row.expanded : null"
+                [attr.tabindex]="row.node.id === focusRowId() ? 0 : -1"
+                (focus)="focusId.set(row.node.id)"
+                (keydown)="onRowKey($event, i)"
+              >
+                <td role="gridcell" class="path" [style.padding-left.px]="6 + row.depth * 16">
+                  @if (row.expandable) {
+                    <span
+                      class="twisty"
+                      [class.open]="row.expanded"
+                      aria-hidden="true"
+                      (click)="toggle(row.node.id)"
+                    ></span>
+                  } @else {
+                    <span class="twisty-space" aria-hidden="true"></span>
+                  }
                   {{ row.node.fullPath }}
                   @if (isActive(row.node)) {
                     <span class="tag">active</span>
@@ -193,7 +211,7 @@ interface TestedUrl {
                     /></span>
                   }
                 </td>
-                <td>
+                <td role="gridcell">
                   @if (row.node.redirectTo !== undefined) {
                     <span class="redirect"
                       >redirect <span aria-hidden="true">→</span>
@@ -206,7 +224,7 @@ interface TestedUrl {
                     }}
                   }
                 </td>
-                <td>
+                <td role="gridcell">
                   @for (guard of guardList(row.node); track $index) {
                     <span class="tag">{{ guard }}</span>
                   }
@@ -218,7 +236,7 @@ interface TestedUrl {
                     ><span class="visually-hidden">none</span>
                   }
                 </td>
-                <td>
+                <td role="gridcell">
                   @if (row.node.title) {
                     {{ row.node.title }}
                   } @else {
@@ -226,7 +244,7 @@ interface TestedUrl {
                     ><span class="visually-hidden">none</span>
                   }
                 </td>
-                <td class="actions">
+                <td role="gridcell" class="actions">
                   <div class="actions-inner">
                     @if (canNavigate(row.node)) {
                       @for (param of params(row.node); track param) {
@@ -270,8 +288,8 @@ interface TestedUrl {
                 </td>
               </tr>
               @if (rowResult()?.id === row.node.id) {
-                <tr class="row-result">
-                  <td colspan="5">
+                <tr role="row" class="row-result">
+                  <td role="gridcell" colspan="5">
                     <p id="route-tree-row-result">{{ rowResult()?.text }}</p>
                   </td>
                 </tr>
@@ -395,6 +413,65 @@ interface TestedUrl {
       font-size: 11.5px;
       overflow-wrap: anywhere;
     }
+    .tree-row {
+      cursor: default;
+    }
+    .tree-row:focus {
+      outline: none;
+    }
+    .tree-row:focus-visible td {
+      box-shadow:
+        inset 0 2px 0 var(--accent),
+        inset 0 -2px 0 var(--accent);
+    }
+    .tree-row:focus-visible td:first-child {
+      box-shadow:
+        inset 2px 0 0 var(--accent),
+        inset 0 2px 0 var(--accent),
+        inset 0 -2px 0 var(--accent);
+    }
+    .tree-row:focus-visible td:last-child {
+      box-shadow:
+        inset -2px 0 0 var(--accent),
+        inset 0 2px 0 var(--accent),
+        inset 0 -2px 0 var(--accent);
+    }
+    .twisty,
+    .twisty-space {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      margin-right: 2px;
+      vertical-align: -3px;
+    }
+    .twisty {
+      position: relative;
+      border-radius: var(--radius-sm);
+      color: var(--text-2);
+      cursor: pointer;
+    }
+    .twisty::before {
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      border-left: 5px solid currentColor;
+      content: '';
+      transition: transform 0.15s var(--ease);
+    }
+    .twisty.open::before {
+      transform: rotate(90deg);
+    }
+    .twisty:hover {
+      background: var(--surface-3);
+      color: var(--text);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .twisty::before {
+        transition: none;
+      }
+    }
     tr.active td {
       background: var(--accent-soft);
       color: var(--text-strong);
@@ -489,28 +566,113 @@ export class RouteTree {
 
   readonly active = computed(() => new Set(this.page().activeIds ?? []));
 
+  /** Routes whose children the viewer collapsed in the tree, per page. */
+  readonly collapsed = linkedSignal<string, ReadonlySet<string>>({
+    source: this.pageId,
+    computation: () => new Set(),
+  });
+  /** The row that holds the tree's one tab stop. */
+  readonly focusId = linkedSignal<string, string | null>({
+    source: this.pageId,
+    computation: () => null,
+  });
+  private readonly grid = viewChild<ElementRef<HTMLTableElement>>('grid');
+
   readonly rows = computed(() => {
     const needle = this.filter().toLowerCase();
     const sources = this.sources();
+    const collapsed = this.collapsed();
     const rows: NodeRow[] = [];
     const visit = (nodes: RouteNode[], depth: number) => {
       for (const node of nodes) {
         const found = sourceOf(node, sources);
         const source = found && sourceLocation(found);
+        const expandable = !needle && !!node.children?.length;
+        const expanded = expandable && !collapsed.has(node.id);
         if (
           !needle ||
           node.fullPath.toLowerCase().includes(needle) ||
           !!node.component?.toLowerCase().includes(needle) ||
           !!source?.toLowerCase().includes(needle)
         ) {
-          rows.push({ node, depth, source, at: found });
+          rows.push({ node, depth, source, at: found, expandable, expanded });
         }
-        if (node.children) visit(node.children, depth + 1);
+        if (node.children && (needle || expanded)) visit(node.children, depth + 1);
       }
     };
     visit(this.page().config ?? [], 0);
     return rows;
   });
+
+  /** The focused row while it is shown, else the first row. */
+  readonly focusRowId = computed(() => {
+    const rows = this.rows();
+    const id = this.focusId();
+    return rows.some((row) => row.node.id === id) ? id : (rows[0]?.node.id ?? null);
+  });
+
+  toggle(id: string, open?: boolean) {
+    this.collapsed.update((set) => {
+      const next = new Set(set);
+      const shut = open === undefined ? !next.has(id) : !open;
+      if (shut) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  /** Arrow keys, Home and End move between rows; Left and Right collapse, expand and walk the levels. */
+  onRowKey(event: KeyboardEvent, index: number) {
+    if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+    const rows = this.rows();
+    const row = rows[index];
+    if (!row) return;
+    let target: number | null = null;
+    switch (event.key) {
+      case 'ArrowDown':
+        target = Math.min(rows.length - 1, index + 1);
+        break;
+      case 'ArrowUp':
+        target = Math.max(0, index - 1);
+        break;
+      case 'Home':
+        target = 0;
+        break;
+      case 'End':
+        target = rows.length - 1;
+        break;
+      case 'ArrowRight':
+        if (row.expandable && !row.expanded) this.toggle(row.node.id, true);
+        else if (row.expanded && rows[index + 1]?.depth === row.depth + 1) target = index + 1;
+        break;
+      case 'ArrowLeft':
+        if (row.expandable && row.expanded) {
+          this.toggle(row.node.id, false);
+        } else {
+          for (let i = index - 1; i >= 0; i--) {
+            if (rows[i]!.depth < row.depth) {
+              target = i;
+              break;
+            }
+          }
+        }
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    if (target !== null) this.focusRow(rows[target]!.node.id);
+  }
+
+  private focusRow(id: string) {
+    this.focusId.set(id);
+    const rows = this.grid()?.nativeElement.querySelectorAll<HTMLElement>('tr.tree-row') ?? [];
+    Array.from(rows)
+      .find((row) => row.dataset['id'] === id)
+      ?.focus();
+  }
 
   readonly total = computed(() => {
     const count = (nodes: RouteNode[]): number =>
@@ -542,8 +704,9 @@ export class RouteTree {
   }
 
   guardList(node: RouteNode) {
-    return Object.entries(node.guards ?? {}).flatMap(([kind, names]) =>
-      names.map((name) => `${kind} ${name}`),
+    return Object.entries(node.guards ?? {}).flatMap(
+      ([kind, names]: [string, string[] | undefined]) =>
+        (names ?? []).map((name) => `${kind} ${name}`),
     );
   }
 

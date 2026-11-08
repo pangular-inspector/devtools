@@ -21,6 +21,7 @@ async function settle(fixture: ComponentFixture<unknown>) {
 const page: RouterPage = {
   pageId: 'p1',
   reportedAt: 1,
+  changedAt: 1,
   snapshot: null,
   navigations: [],
   config: [{ id: '0', path: 'account', fullPath: '/account', kind: 'component', component: 'A' }],

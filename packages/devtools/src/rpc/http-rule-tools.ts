@@ -1,5 +1,6 @@
 import { HTTP_RULE_CHANCE, isFailingRuleStatus, isHttpRuleStatus } from '../config.ts';
-import { redactPreview } from '../http-redact.ts';
+import { HTTP_RULE_PRESETS, presetRules } from '../http-data.ts';
+import { redactPreview } from '../redaction.ts';
 import {
   MAX_DELAY_MS,
   MAX_RULES,
@@ -27,6 +28,63 @@ export interface SetHttpRuleArgs {
   body?: unknown;
   chance?: unknown;
   enabled?: unknown;
+  preset?: unknown;
+}
+
+/** The ids `preset` takes, as the panel's preset buttons offer them. */
+export const HTTP_RULE_PRESET_IDS: readonly string[] = HTTP_RULE_PRESETS.map((p) => p.id);
+
+export type PresetChange =
+  | { rules: HttpRule[]; added: HttpRule[]; preset: (typeof HTTP_RULE_PRESETS)[number] }
+  | { error: string };
+
+/** Rule arguments that `preset` can't be combined with: it brings its own. */
+const RULE_FIELDS = [
+  'id',
+  'pattern',
+  'method',
+  'target',
+  'status',
+  'delayMs',
+  'body',
+  'chance',
+  'enabled',
+] as const;
+
+/**
+ * Expands a preset (Offline, Slow 3G, Flaky) into plain rules added after the
+ * current ones, as the panel's preset buttons do. The rules then show, change
+ * and go away like any other rule.
+ */
+export function addHttpRulePreset(
+  rules: readonly HttpRule[],
+  args: SetHttpRuleArgs,
+  newId: () => string,
+): PresetChange {
+  const ids = HTTP_RULE_PRESET_IDS.map(code).join(', ');
+  const preset = HTTP_RULE_PRESETS.find((p) => p.id === args.preset);
+  if (!preset) return { error: `\`preset\` must be one of ${ids}.` };
+  const mixed = RULE_FIELDS.filter((field) => args[field] !== undefined);
+  if (mixed.length) {
+    return {
+      error: `\`preset\` adds its own rules, so pass it alone, without ${mixed.map(code).join(', ')}. Change a rule it added afterwards with its \`id\`.`,
+    };
+  }
+  const draft = presetRules(preset.id, newId);
+  if (rules.length + draft.length > MAX_RULES) {
+    return {
+      error: `There are already ${rules.length} rules and the preset adds ${draft.length}; the limit is ${MAX_RULES}. Remove one with \`remove-http-rule\`.`,
+    };
+  }
+  const saved = sanitizeRules([...rules, ...draft]);
+  const added = saved.filter((rule) => draft.some((d) => d.id === rule.id));
+  return { rules: saved, added, preset };
+}
+
+/** The answer after a preset added its rules. */
+export function presetChangeText(change: Extract<PresetChange, { added: HttpRule[] }>): string {
+  const ids = change.added.map((rule) => code(rule.id)).join(', ');
+  return `Added the ${change.preset.label} preset: ${change.preset.description} Rule${change.added.length === 1 ? '' : 's'} ${ids}, after the existing ones, so earlier rules match first. Remove ${change.added.length === 1 ? 'it' : 'them'} with \`remove-http-rule\` to stop it.\n\n${httpRulesText(change.rules, true)}`;
 }
 
 export type RuleChange = { rules: HttpRule[]; rule: HttpRule } | { error: string };

@@ -1,18 +1,7 @@
 import type { GuardRun } from './router.ts';
 import { clip } from './text.ts';
-
-/**
- * A navigation whose target came from a query param of the URL it was
- * started from or redirected away from, such as a guard that sends
- * `/login?returnUrl=/admin` to `/admin`. A target an attacker can choose is
- * an open redirect risk once the app passes it on without an allow list.
- */
-export interface QueryRedirect {
-  /** The query param the target was read from. */
-  param: string;
-  /** Who navigated: the guard or resolver, the error handler, or the calling code. */
-  by: string;
-}
+import type { QueryRedirect } from './router-types.ts';
+export type { QueryRedirect } from './router-types.ts';
 
 /** Query param names that usually hold a URL to go to next. */
 const RETURN_PARAM = /return|redirect|next|url|back|continue|goto|target|dest/i;

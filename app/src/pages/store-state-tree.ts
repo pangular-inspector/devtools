@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { short } from './store-types';
 import { SearchField } from '../ui/search-field';
+import { RedactionCount } from '../ui/redaction-count';
 
 /** The serializer's type marker: a tagged value shows as one leaf. */
 const TYPE = '@type';
@@ -112,8 +113,9 @@ export function stateRows(
  */
 @Component({
   selector: 'app-state-tree',
-  imports: [SearchField],
+  imports: [SearchField, RedactionCount],
   template: `
+    <app-redaction-count [value]="value()" />
     <div class="tree-tools">
       <app-search-field
         class="tree-search"

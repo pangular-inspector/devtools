@@ -25,6 +25,7 @@ describe('RouteTimeline phase colors', () => {
     const page: RouterPage = {
       pageId: 'p1',
       reportedAt: 1,
+      changedAt: 1,
       snapshot: null,
       navigations: [
         {

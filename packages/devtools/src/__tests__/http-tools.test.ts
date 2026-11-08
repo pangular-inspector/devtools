@@ -237,7 +237,7 @@ describe('redirected calls', () => {
   it('flags a call answered from another URL, with the target redacted', async () => {
     const { redirectOf } = await import('../http-redirect.ts');
     const { sanitizeCalls } = await import('../http-rules.ts');
-    const { redactCall } = await import('../http-redact.ts');
+    const { redactCall } = await import('../redaction.ts');
     expect(
       redirectOf('http://localhost:3000/api/products/2?delay=200', 'http://localhost:3000/'),
     ).toEqual({

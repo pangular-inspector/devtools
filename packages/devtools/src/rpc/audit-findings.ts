@@ -1,15 +1,16 @@
 // The audit: one ranked list of findings over what the inspectors already
 // collected. Every check here reuses an inspector's own function (cdHints,
-// isRetained, lintRoutes, lintFormsFor, lintPipes, serverCallFor) and only
-// turns its result into a finding, so the audit and the inspector's own tool
-// always agree.
+// isRetained, lintRoutes, lintFormsFor, lintPipes, serverCallFor,
+// pageHttpLint) and only turns its result into a finding, so the audit and
+// the inspector's own tool always agree.
 
 import { cdHints } from '../cd-data.ts';
 import type { AxeImpact, AxeReport } from '../axe-runner.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { redactText } from '../serialize.ts';
 import { clip } from '../text.ts';
-import type { ComponentPage, HttpState } from '../types.ts';
+import type { ComponentPage, HttpPage, HttpState } from '../types.ts';
+import { pageHttpLint } from './http-lint.ts';
 import type { CdState } from './cd-tools.ts';
 import type { ErrorsState } from './errors-tools.ts';
 import { lintFormsFor } from './forms-explain.ts';
@@ -548,6 +549,55 @@ function endpoint(url: string): string {
   }
 }
 
+/**
+ * The page's HTTP lint (`lint-http`) as findings: duplicate GETs, waterfalls
+ * and server calls the browser made again. A repeated server call that the
+ * transfer cache check already reported as `fetched-twice` is not added twice.
+ */
+function httpLintFindings(
+  state: HttpState,
+  page: HttpPage,
+  found: readonly AuditFinding[],
+): AuditFinding[] {
+  const area = 'http';
+  const tool = 'pangular:lint-http';
+  const args = { page: page.pageId };
+  const byId = new Map(page.calls.map((call) => [call.id, call]));
+  const about = (id: string | undefined) => {
+    const call = id ? byId.get(id) : undefined;
+    return call ? `${call.method} ${redactUrl(endpoint(call.url))}` : undefined;
+  };
+  const out: AuditFinding[] = [];
+  for (const finding of pageHttpLint(state, page).findings) {
+    const message = finding.message.replace(/`/g, "'");
+    if (finding.kind === 'duplicate') {
+      out.push(
+        make(area, 'duplicate-request', 'warning', message, tool, {
+          subject: about(finding.callIds[0]),
+          args,
+        }),
+      );
+    } else if (finding.kind === 'waterfall') {
+      const first = about(finding.callIds[0]);
+      out.push(
+        make(area, 'request-waterfall', 'info', message, tool, {
+          subject: first ? `${finding.callIds.length} calls from ${first}` : undefined,
+          args,
+        }),
+      );
+    } else {
+      // Built through make() first, so its key is normalized like the cache check's.
+      const made = make(area, 'fetched-twice', 'warning', message, tool, {
+        subject: about(finding.callIds[1]),
+        args,
+      });
+      if (found.some((f) => f.key === made.key)) continue;
+      out.push(made);
+    }
+  }
+  return out;
+}
+
 function http(state: HttpState | undefined, pageId: string): Collected {
   const area = 'http';
   const tool = 'pangular:list-http-calls';
@@ -613,6 +663,7 @@ function http(state: HttpState | undefined, pageId: string): Collected {
       }
     }
   }
+  findings.push(...httpLintFindings(state, page, findings));
   return {
     findings: merge(findings),
     source: { area, state: 'ok' },

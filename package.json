@@ -41,6 +41,7 @@
     "e2e:extension": "node scripts/e2e-extension.mjs",
     "e2e:resilience": "node scripts/e2e-resilience.mjs",
     "extension:build": "pnpm devtools:build && rm -rf extension/ui && cp -r dist/devtools-ui extension/ui",
+    "extension:build:firefox": "pnpm extension:build && node scripts/extension-firefox.mjs",
     "extension:zip": "pnpm extension:build && node scripts/extension-zip.mjs",
     "analog:dev": "pnpm --filter analog-demo dev",
     "docs:dev": "nx serve pangular-inspector-docs",

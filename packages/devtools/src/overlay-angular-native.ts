@@ -22,6 +22,8 @@ import {
   showOutline,
   type AngularNativeNode,
 } from './overlay-angular-native-views.ts';
+import { angularNativeSurface } from './overlay-angular-native-surface.ts';
+import { clearNativeHighlight, registerNativePick, showNativeHighlight } from './native-pick.ts';
 import { serializeNamed } from './serialize.ts';
 import {
   collectSignalGraph,
@@ -201,6 +203,8 @@ async function startSession(
   if (!redaction) throw new Error('[pangular] Could not read the redaction config');
   setRedaction(redaction);
   const tree = angularNativeTree(getRoot, angularDebugApi);
+  // The highlight box and the tap catcher go through the engine the app renders with.
+  const surface = angularNativeSurface(getRoot);
   if (!on.ngrx) uninstallReduxDevtoolsHook();
   const diagnostics = attachNativeDiagnostics(my, pageId, {
     getNg: angularDebugApi,
@@ -376,6 +380,7 @@ async function startSession(
       const wanted = typeof request === 'string' ? { selector: request } : request;
       if (wanted?.pageId && wanted.pageId !== pageId) return;
       clearOutline();
+      clearNativeHighlight();
       if (!wanted) return;
       const host =
         typeof wanted.id === 'string'
@@ -383,9 +388,26 @@ async function startSession(
           : typeof wanted.selector === 'string'
             ? hostBySelector(tree, wanted.selector)
             : null;
-      if (host) showOutline(host, wanted.durationMs);
+      if (!host) return;
+      // A box in its own layer; the outline style on the view is the fallback.
+      if (!showNativeHighlight(surface, host, wanted.durationMs)) {
+        showOutline(host, wanted.durationMs);
+      }
     },
   });
+
+  // Tap-to-pick: the panel's Pick button catches the next tap on the device.
+  const stopPick = on.components
+    ? registerNativePick(my.rpc, pageId, {
+        getNg: angularDebugApi,
+        tree,
+        surface,
+        picked: (id) => {
+          componentTarget = id;
+          void pushTree(true).catch(() => {});
+        },
+      })
+    : null;
 
   my.rpc.register({
     name: 'select-signal-component',
@@ -418,6 +440,8 @@ async function startSession(
 
   return () => {
     clearInterval(interval);
+    stopPick?.();
+    clearNativeHighlight();
     clearOutline();
     restoreSignalHook?.();
     ngrx?.stop();
