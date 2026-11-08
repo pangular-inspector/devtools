@@ -444,14 +444,58 @@ describe('StoreInspector before the shared state arrives', () => {
     await settle(fixture);
     const text = () => (fixture.nativeElement as HTMLElement).textContent ?? '';
 
-    const status = (fixture.nativeElement as HTMLElement).querySelector('.empty[role="status"]');
-    expect(status?.textContent).toContain('Loading…');
+    const status = (fixture.nativeElement as HTMLElement).querySelector(
+      'app-state[data-kind="loading"][role="status"]',
+    );
+    expect(status?.textContent).toContain('Loading the live stores…');
     expect(text()).not.toContain('No page is reporting store state yet.');
 
     value = { pages: [] };
     push(value);
     await settle(fixture);
-    expect(text()).not.toContain('Loading…');
+    expect(text()).not.toContain('Loading the live stores…');
     expect(text()).toContain('No page is reporting store state yet.');
+  });
+});
+
+describe('StoreInspector live controls', () => {
+  it('holds the action log while paused and shows the new actions on resume', async () => {
+    let push: (next: unknown) => void = () => {};
+    const rpc = {
+      call: () => Promise.resolve([]),
+      callEvent: () => Promise.resolve(),
+      sharedState: (key: string) =>
+        key === 'ngrx-store'
+          ? Promise.resolve({
+              value: () => ({ pages: [pageWith([entry(1), entry(2)])] }),
+              on: (_: string, listener: (next: unknown) => void) => {
+                push = listener;
+                return () => {};
+              },
+            })
+          : Promise.reject(new Error('unknown state')),
+    };
+    const client = { connectionMeta: {}, scope: () => ({ rpc }) } as unknown as DevframeRpcClient;
+    const fixture = TestBed.createComponent(StoreInspector);
+    fixture.componentRef.setInput('rpc', client);
+    document.body.append(root(fixture));
+    await settle(fixture);
+    const seqs = () =>
+      [...root(fixture).querySelectorAll('.log-item .seq')].map((e) => e.textContent!.trim());
+    expect(seqs()).toEqual(['#2', '#1']);
+
+    const pause = root(fixture).querySelector<HTMLButtonElement>('app-live-controls button')!;
+    expect(
+      root(fixture).querySelector('app-live-controls [role="group"]')!.getAttribute('aria-label'),
+    ).toBe('Live actions');
+    pause.click();
+    push({ pages: [pageWith([entry(1), entry(2), entry(3)])] });
+    await settle(fixture);
+    expect(seqs()).toEqual(['#2', '#1']);
+    expect(root(fixture).querySelector('.pending')!.textContent!.trim()).toBe('1 new');
+
+    pause.click();
+    await settle(fixture);
+    expect(seqs()).toEqual(['#3', '#2', '#1']);
   });
 });

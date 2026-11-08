@@ -39,6 +39,7 @@ import {
   type FormSetupError,
   type WebMcpPage,
 } from './forms-types';
+import { rememberSelection } from '../view-memory';
 import { RedactionCount } from '../ui/redaction-count';
 
 type Tab = 'fields' | 'schema' | 'timeline' | 'submit' | 'lint';
@@ -695,6 +696,8 @@ export class FormsInspector {
   });
 
   constructor() {
+    rememberSelection('forms', this.selectedId);
+    rememberSelection('forms', this.selectedLabel, 'label');
     effect(() => {
       const client = this.rpc();
       if (client) this.load(client);

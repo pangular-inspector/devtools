@@ -61,3 +61,52 @@ describe('pages with a splitter', () => {
     expect(page('store-inspector.ts')).toContain("storedPaneSize('store-log', 300)");
   });
 });
+
+describe('pages use the shared state component', () => {
+  it('has no hand-written Retry alert left in the pages that moved to app-state', async () => {
+    const sources = await pageSources();
+    const moved = [
+      'timeline.ts',
+      'errors-inspector.ts',
+      'capacitor-inspector.ts',
+      'plugins-inspector.ts',
+      'audit-inspector.ts',
+      'query-inspector.ts',
+      'store-inspector.ts',
+      'network-inspector.ts',
+      'live-route.ts',
+      'route-lint.ts',
+      'route-tree.ts',
+      'route-timeline.ts',
+      'route-inspector.ts',
+    ];
+    for (const file of moved) {
+      const source = sources.get(file) ?? '';
+      expect(source, file).toContain('<app-state');
+      expect(source, file).not.toMatch(/role="alert"[^]{0,400}?>\s*(Retry|Try again)\s*<\/button>/);
+      expect(source, file).not.toMatch(/class="state"[^>]*role="status"/);
+    }
+  });
+
+  it('gives every error state a Retry', async () => {
+    const states = [...(await pageSources())].flatMap(([file, source]) =>
+      [...source.matchAll(/<app-state\s[^>]*kind="error"[^>]*>/g)].map((match) => ({
+        file,
+        tag: match[0],
+      })),
+    );
+    expect(states.length).toBeGreaterThan(10);
+    for (const { file, tag } of states) expect(tag, file).toMatch(/\(retry\)=/);
+  });
+
+  it('gives every no-match state a Clear filters action', async () => {
+    const states = [...(await pageSources())].flatMap(([file, source]) =>
+      [...source.matchAll(/<app-state\s[^>]*kind="no-match"[^>]*>/g)].map((match) => ({
+        file,
+        tag: match[0],
+      })),
+    );
+    expect(states.length).toBeGreaterThan(3);
+    for (const { file, tag } of states) expect(tag, file).toMatch(/\(clear\)=/);
+  });
+});

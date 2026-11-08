@@ -51,6 +51,7 @@ import { panelAuth } from './auth-token';
 import { AuthCode } from './ui/auth-code';
 import { clearHighlightsOnHide, forgetDevframeConnection, panelCacheOptions, rpcTry } from './rpc';
 import { EditorOpener } from './ui/source-link';
+import { ViewMemory, restoreScroll } from './view-memory';
 import { viewAccent } from './view-accents';
 import {
   HUB_ALL_TOOLS,
@@ -483,7 +484,7 @@ function readView(): View | null {
       </span>
     </header>
     <!-- In the Tab order, so keyboard users can scroll content that has nothing focusable. -->
-    <main #main tabindex="0" [attr.aria-label]="mainLabel()">
+    <main #main tabindex="0" [attr.aria-label]="mainLabel()" (scroll)="rememberScroll()">
       <p class="background-note" role="status">{{ backgroundNote() }}</p>
       <p class="sr-only" role="status">{{ connectedNote() }}</p>
       @if (tab() === 'settings') {
@@ -1218,9 +1219,30 @@ export class App implements OnInit, OnDestroy {
   private readonly themeService = inject(ThemeService);
   private navObserver?: ResizeObserver;
   readonly navFade = signal({ start: false, end: false });
+  private readonly memory = inject(ViewMemory);
+  private stopScrollRestore: (() => void) | null = null;
+  /** True while a tab scrolls back, so the clamped positions on the way don't replace the saved one. */
+  private restoringScroll = false;
 
   constructor() {
     inject(EditorOpener).use(this.rpc);
+    this.memory.useView(() => this.tabScope());
+    // Each tab comes back where it was scrolled to, after a switch and after a reload.
+    afterRenderEffect(() => {
+      const tab = this.tab();
+      const main = this.main()?.nativeElement;
+      if (!main || !this.rpc()) return;
+      untracked(() => {
+        this.stopScrollRestore?.();
+        this.restoringScroll = true;
+        this.stopScrollRestore = restoreScroll(
+          main,
+          this.memory.read<number>(`${tab}:scroll`) ?? 0,
+          undefined,
+          () => (this.restoringScroll = false),
+        );
+      });
+    });
     afterNextRender(() => {
       const nav = this.nav()?.nativeElement;
       if (!nav || typeof ResizeObserver === 'undefined') return;
@@ -1824,6 +1846,13 @@ export class App implements OnInit, OnDestroy {
 
   private tabScope() {
     return this.view() ?? 'panel';
+  }
+
+  /** Saves the scroll position of the tab shown. */
+  rememberScroll() {
+    if (this.restoringScroll) return;
+    const main = this.main()?.nativeElement;
+    if (main) this.memory.write(`${this.tab()}:scroll`, Math.round(main.scrollTop));
   }
 
   private async watchAngularNative(client: DevframeRpcClient) {

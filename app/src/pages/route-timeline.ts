@@ -1,4 +1,12 @@
-import { Component, computed, input, linkedSignal, output } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  input,
+  linkedSignal,
+  output,
+} from '@angular/core';
 import type { DevframeRpcClient } from 'devframe/client';
 import { actionAllowed, actionBlockedMessage, panelConfig } from '../devtools-config';
 import { LimitNote } from '../ui/limit-note';
@@ -18,12 +26,14 @@ import {
   type TimelineCall,
 } from './router-types';
 import { SearchField } from '../ui/search-field';
+import { AppState } from '../ui/app-state';
+import { LiveControls, LiveFeed, followNewest } from '../ui/live-feed';
 
 const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
 
 @Component({
   selector: 'app-route-timeline',
-  imports: [SearchField, LimitNote],
+  imports: [SearchField, LimitNote, AppState, LiveControls],
   template: `
     <div class="toolbar">
       <app-search-field
@@ -48,6 +58,7 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
         />
         Record each guard and resolver
       </label>
+      <app-live-controls [feed]="feed" what="navigations" />
       <button type="button" class="small export" (click)="exportJson()">Export JSON</button>
       <button
         type="button"
@@ -133,7 +144,7 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
     @if (items().length) {
       <div class="meta-row">
         <span class="muted count"
-          >{{ items().length }} of {{ plural(page().navigations.length, 'navigation') }}</span
+          >{{ items().length }} of {{ plural(feed.items().length, 'navigation') }}</span
         >
         <div class="legend" aria-hidden="true">
           @for (phase of phases; track phase) {
@@ -397,22 +408,19 @@ const PHASES = ['recognize', 'guards', 'resolve', 'activate'] as const;
         }
       </ol>
     } @else {
-      @if (page().navigations.length) {
-        <div class="empty">
-          <p class="empty-title">No navigations match the current filters.</p>
-          <p class="muted">
-            {{ plural(page().navigations.length, 'navigation is', 'navigations are') }} hidden.
-            Clear the filters to see them.
+      @if (feed.items().length) {
+        <app-state kind="no-match" (clear)="clearFilters(); filterInput.focus()">
+          No navigations match the current filters.
+          <p detail>
+            {{ plural(feed.items().length, 'navigation is', 'navigations are') }} hidden. Clear the
+            filters to see them.
           </p>
-          <button type="button" class="small" (click)="clearFilters(); filterInput.focus()">
-            Clear filters
-          </button>
-        </div>
+        </app-state>
       } @else {
-        <div class="empty">
-          <p class="empty-title">No navigations since Pangular Inspector connected.</p>
-          <p class="muted">Earlier ones are not visible. Click a link in the app to record one.</p>
-        </div>
+        <app-state kind="empty">
+          No navigations since Pangular Inspector connected.
+          <p detail>Earlier ones are not visible. Click a link in the app to record one.</p>
+        </app-state>
       }
     }
   `,
@@ -753,9 +761,26 @@ export class RouteTimeline {
     return byId;
   });
 
+  /** Pause holds the navigations as they are while the app keeps navigating. */
+  readonly feed = new LiveFeed<NavigationRecord>({
+    name: 'router-timeline',
+    source: () => this.page().navigations,
+    key: (nav) => nav.id,
+    newest: 'last',
+    scope: this.pageId,
+  });
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  constructor() {
+    // Newest first, so following the newest navigation brings the top of the list into view.
+    followNewest(this.feed, () =>
+      this.host.nativeElement.querySelector('.navs > li')?.scrollIntoView?.({ block: 'nearest' }),
+    );
+  }
+
   readonly items = computed(() => {
     const needle = this.filter().toLowerCase();
-    return [...this.page().navigations]
+    return [...this.feed.items()]
       .reverse()
       .filter(
         (nav) =>

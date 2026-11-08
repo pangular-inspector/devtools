@@ -57,7 +57,7 @@ function clearButton(fixture: ComponentFixture<unknown>): HTMLButtonElement {
 function status(fixture: ComponentFixture<unknown>): string {
   return (
     [...el(fixture).querySelectorAll('[role="status"]')]
-      .find((e) => !e.closest('app-search-field'))
+      .find((e) => !e.closest('app-search-field, app-live-controls'))
       ?.textContent?.trim() ?? ''
   );
 }

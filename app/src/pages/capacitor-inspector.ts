@@ -41,6 +41,8 @@ import {
   type CapacitorSummary,
 } from './capacitor-types';
 import { SearchField } from '../ui/search-field';
+import { rememberSelection } from '../view-memory';
+import { AppState } from '../ui/app-state';
 
 const GUIDE_URL = 'https://pangular-inspector.dev/inspectors/capacitor/#web-calls';
 /** The summary strip is a live region; it changes at most this often. */
@@ -55,15 +57,22 @@ const FILTER_LABELS: Record<CallFilter, string> = {
 
 @Component({
   selector: 'app-capacitor-inspector',
-  imports: [SearchField, LimitNote, Select, CapacitorCallDetail, CapacitorIonic, CapacitorState],
+  imports: [
+    AppState,
+    SearchField,
+    LimitNote,
+    Select,
+    CapacitorCallDetail,
+    CapacitorIonic,
+    CapacitorState,
+  ],
   template: `
     @if (!loaded()) {
-      <p class="state" role="status">Loading Capacitor data…</p>
+      <app-state kind="loading">Loading Capacitor data…</app-state>
     } @else if (failed()) {
-      <div class="state" role="alert">
-        <p>Can't read the Capacitor data from the devtools server.</p>
-        <button type="button" class="small" (click)="retry()">Retry</button>
-      </div>
+      <app-state kind="error" (retry)="retry()">
+        Can't read the Capacitor data from the devtools server.
+      </app-state>
     } @else if (page(); as page) {
       <p class="intro">
         Plugin calls, plugins and listeners of a Capacitor app, as its WebView reports them. Values
@@ -401,9 +410,10 @@ const FILTER_LABELS: Record<CallFilter, string> = {
         }
       </section>
     } @else {
-      <p class="state" role="status">
-        No Capacitor app reports to this server. Start the overlay in the app, then use it.
-      </p>
+      <app-state kind="empty">
+        No Capacitor app reports to this server.
+        <p detail>Start the overlay in the app, then use it.</p>
+      </app-state>
     }
   `,
   styles: `
@@ -902,6 +912,7 @@ export class CapacitorInspector {
   private messageFlip = false;
 
   constructor() {
+    rememberSelection('capacitor', this.selectedCallId);
     effect(() => {
       const client = this.rpc();
       if (client) void this.load(client);

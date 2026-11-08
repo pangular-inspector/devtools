@@ -321,6 +321,85 @@ describe('App tab bar', () => {
   });
 });
 
+describe('App scroll memory', () => {
+  it('brings each tab back to where it was scrolled', async () => {
+    connection.answers = [true];
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+
+    const main = host(fixture).querySelector<HTMLElement>('main')!;
+    // jsdom has no layout, so scrollTop is a plain value here.
+    let top = 0;
+    Object.defineProperty(main, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => (top = value),
+    });
+    const buttons = () => [...host(fixture).querySelectorAll<HTMLButtonElement>('nav button')];
+    // An earlier test can leave another tab in the URL.
+    buttons()[0].click();
+    await settle(fixture);
+
+    main.scrollTop = 240;
+    main.dispatchEvent(new Event('scroll'));
+    buttons()[1].click();
+    await settle(fixture);
+    expect(main.scrollTop).toBe(0);
+
+    main.scrollTop = 80;
+    main.dispatchEvent(new Event('scroll'));
+    buttons()[0].click();
+    await settle(fixture);
+    expect(main.scrollTop).toBe(240);
+
+    buttons()[1].click();
+    await settle(fixture);
+    expect(main.scrollTop).toBe(80);
+    fixture.destroy();
+  });
+});
+
+describe('App scroll memory while content loads', () => {
+  it('keeps the saved position when the restore is clamped by short content', async () => {
+    connection.answers = [true];
+    const fixture = TestBed.createComponent(App);
+    document.body.appendChild(host(fixture));
+    await settle(fixture);
+
+    const main = host(fixture).querySelector<HTMLElement>('main')!;
+    let top = 0;
+    let max = 1000;
+    Object.defineProperty(main, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => (top = Math.max(0, Math.min(value, max))),
+    });
+    const buttons = () => [...host(fixture).querySelectorAll<HTMLButtonElement>('nav button')];
+    buttons()[0].click();
+    await settle(fixture);
+    main.scrollTop = 240;
+    main.dispatchEvent(new Event('scroll'));
+    buttons()[1].click();
+    await settle(fixture);
+
+    // The first tab comes back before its content has grown: the restore stops at 50.
+    max = 50;
+    buttons()[0].click();
+    await settle(fixture);
+    expect(main.scrollTop).toBe(50);
+    main.dispatchEvent(new Event('scroll'));
+
+    buttons()[1].click();
+    await settle(fixture);
+    max = 1000;
+    buttons()[0].click();
+    await settle(fixture);
+    expect(main.scrollTop).toBe(240);
+    fixture.destroy();
+  });
+});
+
 describe('App counts launcher setting', () => {
   it('sends the stored counts launcher to the popup once the panel connects', async () => {
     localStorage.setItem('pangular-pref:pill', 'true');
