@@ -281,6 +281,8 @@ The panel's devframe client caches the functions listed in `PANEL_CACHED_RPC` in
 2. Import and add it to `app/src/app.ts` (imports array, tabs array, template switch).
 3. Add a card to `app/src/pages/dashboard.ts`.
 
+A page over 1,500 lines fails `pnpm lint`. Split a large page into a folder next to it, as `app/src/pages/network/` does for the SSR & HTTP tab. Each section is a component that attaches to the page's existing `<section>` element, so the DOM stays the same. State the sections share lives in services the page provides, and shared styles are SCSS mixins in `app/src/styles/`, such as `_network.scss`.
+
 ### Add an agent tool
 
 Add `agent: { description }` to an RPC function, or call `ctx.agent.registerTool()` in the devframe setup. List the tool on the [Tools](../agents/tools.md) page.
