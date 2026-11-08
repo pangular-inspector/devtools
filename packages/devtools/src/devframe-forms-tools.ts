@@ -217,7 +217,7 @@ export function registerFormsAgentTools(env: RegisterFormsAgentToolsEnv): {
       if (!state.forms.length) return { markdown: noForms };
       const elsewhere = unknownFormPage(args);
       if (elsewhere) return elsewhere;
-      let target = { form: args?.form, path: args?.path, page: args?.page };
+      let target = onDefaultFormPage({ form: args?.form, path: args?.path, page: args?.page });
       if (args?.selector) {
         const located = await requestFormAction(
           { action: 'locate', selector: args.selector, page: args.page },
