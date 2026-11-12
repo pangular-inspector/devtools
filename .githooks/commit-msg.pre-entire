@@ -1,0 +1,3 @@
+#!/bin/sh
+node "$(git rev-parse --show-toplevel)/scripts/commit-message.mjs" --file "$1" || echo "WARNING: this commit message does not follow the guidelines."
+exit 0
