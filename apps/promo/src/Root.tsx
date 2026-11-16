@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import { AbsoluteFill, Composition, Sequence } from 'remotion';
+import { AbsoluteFill, Composition, Html5Audio, Sequence, staticFile } from 'remotion';
 import { Grain } from './components/atmosphere';
 import { Agent } from './scenes/agent';
 import { Finale } from './scenes/finale';
@@ -93,6 +93,8 @@ export function Promo() {
         </Sequence>
       ))}
       <Grain />
+      {/* The original score from music/compose.py, timed to the scenes above. */}
+      <Html5Audio src={staticFile('music/score.m4a')} />
     </AbsoluteFill>
   );
 }
