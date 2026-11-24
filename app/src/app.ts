@@ -36,6 +36,7 @@ import { CapacitorInspector } from './pages/capacitor-inspector';
 import { ErrorsInspector } from './pages/errors-inspector';
 import { PerformanceInspector } from './pages/performance-inspector';
 import { BuildInspector } from './pages/build-inspector';
+import { WebMcpInspector, type WebMcpFocus } from './pages/webmcp-inspector';
 import { PluginsInspector, pluginsReporting } from './pages/plugins-inspector';
 import { AuditInspector } from './pages/audit-inspector';
 import { Timeline } from './pages/timeline';
@@ -117,6 +118,12 @@ const TAB_VIEW: Partial<Record<Tab, View>> = {
   analog: 'analog',
   capacitor: 'capacitor',
 };
+/**
+ * The tabs a deep link can select an item on: the ones `PANEL_LINK_ITEMS`
+ * lists, and the WebMCP tab, which selects a call by its id.
+ */
+const LINK_ITEM_TABS = new Set<string>(Object.keys(PANEL_LINK_ITEMS));
+
 const VIEW_TABS: Partial<Record<View, Tab[]>> = {
   'angular-native': ['components', 'signals', 'injectors', 'store', 'queries', 'pipes', 'errors'],
 };
@@ -229,6 +236,7 @@ function readView(): View | null {
     ErrorsInspector,
     PerformanceInspector,
     BuildInspector,
+    WebMcpInspector,
     PluginsInspector,
     AuditInspector,
     Timeline,
@@ -619,6 +627,14 @@ function readView(): View | null {
             }
             @case ('build') {
               <app-build-inspector [rpc]="rpc()" />
+            }
+            @case ('webmcp') {
+              <app-webmcp-inspector
+                [rpc]="rpc()"
+                [focus]="webmcpFocus()"
+                (focusHandled)="webmcpFocus.set(null)"
+                (open)="openLink($event)"
+              />
             }
             @case ('errors') {
               <app-errors-inspector
@@ -1661,12 +1677,13 @@ export class App implements OnInit, OnDestroy {
     const tab = link.tab as Tab;
     if (!this.availableTabs().some((t) => t.id === tab)) return false;
     if (this.tab() !== tab) this.switchTab(tab);
-    if (link.id && Object.hasOwn(PANEL_LINK_ITEMS, tab)) {
+    if (link.id && LINK_ITEM_TABS.has(tab)) {
       const pageId = link.page;
       if (tab === 'components') this.componentFocus.set({ id: link.id, pageId });
       else if (tab === 'injectors') this.injectorFocus.set({ componentId: link.id, pageId });
       else if (tab === 'signals') this.signalFocus.set({ componentId: link.id, pageId });
       else if (tab === 'forms') this.formFocus.set({ id: link.id });
+      else if (tab === 'webmcp') this.webmcpFocus.set({ id: link.id, page: pageId });
     }
     history.replaceState(history.state, '', panelLinkHash(link));
     return true;
@@ -1738,9 +1755,12 @@ export class App implements OnInit, OnDestroy {
     } else if (tab === 'signals') {
       this.signalFocus.set({ componentId: link.id, pageId: link.page });
     } else if (tab === 'forms') this.formFocus.set({ id: link.id });
+    else if (tab === 'webmcp') this.webmcpFocus.set({ id: link.id, page: link.page });
   }
 
   formFocus = signal<{ id: string } | null>(null);
+  /** A WebMCP call a deep link (such as a Timeline event) selects. */
+  webmcpFocus = signal<WebMcpFocus | null>(null);
   // Belongs to the Components tab that received it, so leaving the tab drops it.
   readonly componentFocus = linkedSignal<Tab, ComponentFocus | null>({
     source: this.tab,

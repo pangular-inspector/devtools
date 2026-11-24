@@ -101,6 +101,12 @@ import { Component, input } from '@angular/core';
           <path d="m3.3 7 8.7 5 8.7-5" />
           <path d="M12 22V12" />
         }
+        @case ('webmcp') {
+          <!-- A tool (wrench) a browser agent can call. -->
+          <path
+            d="M14.7 6.3a4 4 0 0 0 5 5L21 13a6 6 0 0 1-7.8 1.6l-6.4 6.4a2.1 2.1 0 0 1-3-3l6.4-6.4A6 6 0 0 1 11.8 3.8l1.6 1.3a4 4 0 0 0 1.3 1.2Z"
+          />
+        }
         @case ('plugins') {
           <path
             d="M10 3h4v3a2 2 0 1 0 4 0V5h1a2 2 0 0 1 2 2v4h-2a2 2 0 1 0 0 4h2v4a2 2 0 0 1-2 2h-4v-2a2 2 0 1 0-4 0v2H7a2 2 0 0 1-2-2v-4H4a2 2 0 1 1 0-4h1V7a2 2 0 0 1 2-2h3Z"
