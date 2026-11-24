@@ -2,6 +2,13 @@ import { watchWebMcp, type WebMcpWatcher } from '../forms-webmcp.ts';
 
 type Tool = { name: string; execute: (args: unknown) => Promise<unknown> };
 
+/** `navigator` with the fake WebMCP context the tests install. */
+export type WithModelContext = Navigator & {
+  modelContext?: { registerTool(tool: Tool & Record<string, unknown>): Promise<void> | void };
+};
+
+const nav = navigator as WithModelContext;
+
 /**
  * A fake `navigator.modelContext` with a watcher on it. `call(run)` registers
  * a tool whose `execute` runs `run`, and calls it through the watcher's
@@ -9,13 +16,13 @@ type Tool = { name: string; execute: (args: unknown) => Promise<unknown> };
  */
 export async function fakeWebMcpCall(run: () => unknown) {
   const tools = new Map<string, Tool>();
-  (navigator as any).modelContext = {
+  nav.modelContext = {
     registerTool: async (tool: Tool) => {
       tools.set(tool.name, tool);
     },
   };
   const watcher: WebMcpWatcher = watchWebMcp(() => {});
-  await (navigator as any).modelContext.registerTool({
+  await nav.modelContext.registerTool({
     name: 'agent_tool',
     description: '',
     inputSchema: { type: 'object', properties: {} },
@@ -31,7 +38,7 @@ export async function fakeWebMcpCall(run: () => unknown) {
     caused: () => watcher.report().calls[0]?.caused,
     stop() {
       watcher.stop();
-      delete (navigator as any).modelContext;
+      delete nav.modelContext;
     },
   };
 }

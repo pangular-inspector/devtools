@@ -39,6 +39,8 @@ export interface WebMcpCallEntry {
   formId?: string;
   /** Started from the panel's Try this tool, not by an agent. */
   tried?: boolean;
+  /** Whether the tool claimed `readOnlyHint: true` when it was called. */
+  readOnly?: boolean;
 }
 
 /** One tool the app registered with `modelContext.registerTool()`. */
@@ -123,7 +125,7 @@ const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const FORM_WRITES = new Set(['value', 'submit', 'reset']);
 const MAX_EFFECTS = 100;
 
-type AnyRecord = Record<string, any>;
+type AnyRecord = Record<string, unknown>;
 
 function record(value: unknown): AnyRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as AnyRecord) : {};
@@ -140,7 +142,7 @@ function finite(value: unknown): value is number {
 /** The page entries of a shared state that keeps them as an array or a record. */
 function pagesOf(state: unknown): AnyRecord[] {
   const pages = record(state)['pages'];
-  return Array.isArray(pages) ? pages : Object.values(record(pages));
+  return (Array.isArray(pages) ? pages : Object.values(record(pages))).map(record);
 }
 
 function pageIn(state: unknown, pageId: string): AnyRecord | undefined {
@@ -185,8 +187,14 @@ export function traceCall(
   const caused = new Set((call.caused ?? []).map((effect) => `${effect.layer}:${effect.key}`));
   const effects: WebMcpEffect[] = [];
 
-  const consider = (effect: Omit<WebMcpEffect, 'certainty'>, tied: boolean): void => {
-    if (!finite(effect.at)) return;
+  // `at` comes from another inspector's state, so it is checked here.
+  const consider = (
+    candidate: Omit<WebMcpEffect, 'certainty' | 'at'> & { at: unknown },
+    tied: boolean,
+  ): void => {
+    const { at } = candidate;
+    if (!finite(at)) return;
+    const effect = { ...candidate, at };
     if (tied && effect.at >= call.at - 1 && effect.at <= causedEnd) {
       effects.push({ ...effect, certainty: 'caused' });
     } else if (!userInput && effect.at >= call.at && effect.at <= duringEnd) {
@@ -223,7 +231,15 @@ export function traceCall(
         at: entry['timestamp'],
         title: String(title ?? 'action'),
         ...(entry['storeId'] ? { detail: String(entry['storeId']) } : {}),
-        change: 'write',
+        // A method call or action that changed nothing is logged with an empty diff. An event
+        // always has one: the stores it changes log their own entries.
+        change:
+          entry['source'] !== 'event' &&
+          Array.isArray(entry['diff']) &&
+          !entry['diff'].length &&
+          !entry['diffTruncated']
+            ? 'none'
+            : 'write',
         tab: 'store',
       },
       caused.has(`ngrx:${entry['seq']}`),
@@ -232,7 +248,7 @@ export function traceCall(
 
   const router = pageIn(sources.router, pageId);
   const navigations = list(router?.['navigations']).filter((nav) => finite(nav['startedAt']));
-  navigations.sort((a, b) => a['startedAt'] - b['startedAt']);
+  navigations.sort((a, b) => Number(a['startedAt']) - Number(b['startedAt']));
   let previousPath: string | undefined;
   for (const nav of navigations) {
     const target = nav['finalUrl'] ?? nav['url'];
@@ -263,7 +279,7 @@ export function traceCall(
     const formId = event['formId'];
     // Form ids end with `@<pageId>`.
     if (typeof formId !== 'string' || formId.split('@')[1] !== pageId) continue;
-    // A form event made while a tool ran is tagged `agent` by the forms collector.
+    // The forms collector notes the events a call made; `origin: 'agent'` alone names no call.
     consider(
       {
         layer: 'forms',
@@ -271,11 +287,11 @@ export function traceCall(
         at: event['timestamp'],
         title: `${event['type']} ${event['path'] || 'form'}`,
         ...(event['outcome'] ? { detail: String(event['outcome']) } : {}),
-        change: FORM_WRITES.has(event['type']) ? 'write' : 'none',
+        change: FORM_WRITES.has(String(event['type'])) ? 'write' : 'none',
         tab: 'forms',
         id: formId,
       },
-      event['origin'] === 'agent' || caused.has(`forms:${formId}:${event['seq']}`),
+      caused.has(`forms:${formId}:${event['seq']}`),
     );
   }
 
@@ -302,13 +318,15 @@ export function traceCall(
   }
 
   effects.sort((a, b) => a.at - b.at || a.layer.localeCompare(b.layer));
-  const kept = effects.slice(0, MAX_EFFECTS);
+  // The claim recorded with the call, so the verdict stays once the tool is gone or replaced.
+  const readOnly = call.readOnly ?? claimsReadOnly(options.tool);
   let verdict: WebMcpTrace['verdict'];
-  if (claimsReadOnly(options.tool)) {
-    if (kept.some((effect) => effect.change === 'write')) verdict = 'warning';
-    else if (kept.some((effect) => effect.change === 'signal' && !effect.framework)) {
+  // Every effect counts, not only the ones shown.
+  if (readOnly) {
+    if (effects.some((effect) => effect.change === 'write')) verdict = 'warning';
+    else if (effects.some((effect) => effect.change === 'signal' && !effect.framework)) {
       verdict = 'info';
     }
   }
-  return { effects: kept, ...(verdict ? { verdict } : {}), userInput };
+  return { effects: effects.slice(0, MAX_EFFECTS), ...(verdict ? { verdict } : {}), userInput };
 }

@@ -47,7 +47,7 @@ import {
   signalSubmitBlockers,
   wrapSubmitAction,
 } from './forms-submit.ts';
-import { shareWebMcp } from './forms-webmcp.ts';
+import { noteWebMcpEffect, shareWebMcp, webMcpCallNow } from './forms-webmcp.ts';
 import { FORMLESS_FORM_ACTIONS } from './config.ts';
 import { tapConsole } from './console-tap.ts';
 import { createDeltaChannel } from './delta-channel.ts';
@@ -305,6 +305,11 @@ export function attachForms(
     const event: FormEvent = { ...input, seq: ++eventSeq };
     if (event.detail) event.detail = redactFormText(event.formId, event.detail);
     if (infer) event.origin ??= originNow(event.formId);
+    // An event made while a tool call runs belongs to that call (a merged value keeps this seq).
+    if (event.origin === 'agent') {
+      const callId = webMcpCallNow();
+      if (callId !== undefined) noteWebMcpEffect(callId, 'forms', `${event.formId}:${event.seq}`);
+    }
     const key = `${event.formId}:${event.path}`;
     if (pendingCaller?.formId === event.formId && !event.caller && event.origin !== 'devtools') {
       event.caller = redactFormText(event.formId, pendingCaller.text);

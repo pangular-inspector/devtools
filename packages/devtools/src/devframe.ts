@@ -228,14 +228,18 @@ const pangular = defineDevframe({
       pageTools,
       seenAt: heartbeats.seenAt,
       serverPlugins: info?.serverPlugins,
-      // Called only when an agent asks, after every state below exists.
-      webMcpSources: () => ({
-        ...(on.http ? { http: http.httpState.value() } : {}),
-        ...(on.ngrx ? { ngrx: ngrxStoreState.value() } : {}),
-        ...(on.router ? { router: router.routerState.value() } : {}),
-        ...(on.forms ? { forms: formsState.value() } : {}),
-        ...(on.signals ? { signals: signalGraphState.value() } : {}),
-      }),
+      // Called only when an agent asks, after every state below exists. A layer whose
+      // inspector or agent tools are off gives the agent nothing.
+      webMcpSources: () => {
+        const shown = (key: PangularInspector) => on[key] && config.agent.tools[key];
+        return {
+          ...(shown('http') ? { http: http.httpState.value() } : {}),
+          ...(shown('ngrx') ? { ngrx: ngrxStoreState.value() } : {}),
+          ...(shown('router') ? { router: router.routerState.value() } : {}),
+          ...(shown('forms') ? { forms: formsState.value() } : {}),
+          ...(shown('signals') ? { signals: signalGraphState.value() } : {}),
+        };
+      },
     });
     const { errorsInspector, leaksInspector } = inspectors;
 

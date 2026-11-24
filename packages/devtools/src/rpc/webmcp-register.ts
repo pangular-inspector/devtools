@@ -1,4 +1,5 @@
 import { createSharedState } from 'devframe/utils/shared-state';
+import type { AgentRegistrar, Register } from '../devframe-env.ts';
 import { redactMessage, redactUrl } from '../router.ts';
 import { serialize } from '../serialize.ts';
 import {
@@ -19,7 +20,7 @@ import { trackPageSessions } from './page-sessions.ts';
 import type { PageTtl } from './page-ttl.ts';
 import { PAGE_ARGUMENT, byRecency, pageArgument, unknownPageText } from './pages.ts';
 
-type AnyRecord = Record<string, any>;
+type AnyRecord = Record<string, unknown>;
 
 export interface WebMcpPage extends WebMcpReport {
   reportedAt: number;
@@ -38,6 +39,10 @@ const MAX_TOOLS = 40;
 const MAX_CALLS = 1000;
 const MAX_LINES = 50;
 const VALUE_LIMITS = { depth: 6, keys: 50, items: 50, text: 1000, budget: 400 };
+
+function oneOf<T extends string>(list: readonly T[], value: unknown): value is T {
+  return (list as readonly unknown[]).includes(value);
+}
 
 function record(value: unknown): AnyRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as AnyRecord) : {};
@@ -78,11 +83,12 @@ function toTool(value: unknown): WebMcpPageTool | null {
   const required = strings(tool['required'], 40);
   const error = text(tool['error'], 300);
   const formId = text(tool['formId'], 200);
+  const { status, seen } = tool;
   return {
     name,
     description: text(tool['description'], 500) ?? '',
-    status: STATUSES.includes(tool['status']) ? tool['status'] : 'registered',
-    seen: SEEN.includes(tool['seen']) ? tool['seen'] : 'register',
+    status: oneOf(STATUSES, status) ? status : 'registered',
+    seen: oneOf(SEEN, seen) ? seen : 'register',
     ...(error ? { error } : {}),
     ...(notes ? { annotations: notes } : {}),
     ...(inputs ? { inputs } : {}),
@@ -96,24 +102,26 @@ function toTool(value: unknown): WebMcpPageTool | null {
 function toCall(value: unknown): WebMcpCallEntry | null {
   const call = record(value);
   const tool = text(call['tool'], 200);
-  if (!tool || !finite(call['id']) || !finite(call['at'])) return null;
+  // `at` must make a valid date: the answer prints it with `toISOString()`.
+  if (!tool || !finite(call['id']) || !validTime(call['at'])) return null;
   const caused: WebMcpEffectKey[] = (Array.isArray(call['caused']) ? call['caused'] : [])
     .slice(0, 100)
     .flatMap((item: unknown) => {
-      const effect = record(item);
-      return LAYERS.includes(effect['layer']) && typeof effect['key'] === 'string'
-        ? [{ layer: effect['layer'] as WebMcpEffectLayer, key: effect['key'].slice(0, 300) }]
+      const { layer, key } = record(item);
+      return oneOf(LAYERS, layer) && typeof key === 'string'
+        ? [{ layer, key: key.slice(0, 300) }]
         : [];
     });
   const detail = text(call['detail'], 300);
   const formId = text(call['formId'], 200);
+  const { outcome } = call;
   // The page masks values already; the server masks again with its own secret names.
   return {
     id: call['id'],
     tool,
     at: call['at'],
     ...(finite(call['ms']) && call['ms'] >= 0 ? { ms: call['ms'] } : {}),
-    outcome: OUTCOMES.includes(call['outcome']) ? call['outcome'] : 'done',
+    outcome: oneOf(OUTCOMES, outcome) ? outcome : 'done',
     ...(call['args'] !== undefined ? { args: serialize(call['args'], VALUE_LIMITS) } : {}),
     ...(call['result'] !== undefined ? { result: serialize(call['result'], VALUE_LIMITS) } : {}),
     ...(detail ? { detail } : {}),
@@ -121,7 +129,15 @@ function toCall(value: unknown): WebMcpCallEntry | null {
     ...(caused.length ? { caused } : {}),
     ...(formId ? { formId } : {}),
     ...(call['tried'] === true ? { tried: true } : {}),
+    ...(call['readOnly'] === true ? { readOnly: true } : {}),
   };
+}
+
+/** The largest time a `Date` holds, in ms either side of the epoch. */
+const MAX_TIME = 8.64e15;
+
+function validTime(value: unknown): value is number {
+  return finite(value) && Math.abs(value) <= MAX_TIME;
 }
 
 /** Reads a `push-webmcp` report; `null` when it is not one. */
@@ -273,6 +289,7 @@ export function webMcpCallsText(
   }
   for (const call of calls) {
     const tool = page.tools.find((t) => t.name === call.tool);
+    const readOnly = call.readOnly ?? claimsReadOnly(tool);
     const trace = traceCall(call, page.pageId, sources, { tool, now });
     const when = new Date(call.at).toISOString();
     lines.push(
@@ -290,7 +307,7 @@ export function webMcpCallsText(
       );
     } else if (trace.verdict === 'info') {
       lines.push(`- Note: the tool claims \`readOnlyHint\` and this call wrote app signals.`);
-    } else if (!claimsReadOnly(tool) && tool) {
+    } else if (!readOnly && tool) {
       lines.push('- The tool does not claim `readOnlyHint`.');
     }
     if (trace.userInput) {
@@ -315,14 +332,20 @@ export function webMcpCallsText(
 }
 
 interface Scoped {
-  rpc: { sharedState(name: string, options: AnyRecord): Promise<AnyRecord> };
+  rpc: { sharedState(name: string, options: AnyRecord): Promise<unknown> };
+}
+
+/** The parts of devframe's shared state this inspector uses. */
+interface SharedWebMcp {
+  value(): WebMcpState;
+  mutate(change: (draft: WebMcpState) => void): void;
 }
 
 export interface WebMcpHost {
   my: Scoped;
   rpcHost: unknown;
-  register(definition: AnyRecord): void;
-  agent: { registerTool(tool: AnyRecord): void };
+  register: Register;
+  agent: AgentRegistrar;
   owns(pageId: unknown): pageId is string;
   mayForget(pageId: unknown): pageId is string;
   ttl: PageTtl;
@@ -341,17 +364,17 @@ export interface WebMcpRegistration {
  * and `webmcp-calls` agent tools.
  */
 export async function registerWebMcp(host: WebMcpHost): Promise<WebMcpRegistration> {
-  const shared = await host.my.rpc.sharedState('webmcp', {
+  const shared = (await host.my.rpc.sharedState('webmcp', {
     sharedState: createSharedState<WebMcpState>({
       initialValue: { pages: {} },
       enablePatches: true,
     }),
-  });
-  const state = () => shared['value']() as WebMcpState;
+  })) as SharedWebMcp;
+  const state = () => shared.value();
   const drop = (pageIds: readonly string[]) => {
     const present = pageIds.filter((id) => state().pages[id]);
     if (!present.length) return;
-    shared['mutate']((draft: WebMcpState) => {
+    shared.mutate((draft) => {
       for (const id of present) delete draft.pages[id];
     });
   };
@@ -365,7 +388,7 @@ export async function registerWebMcp(host: WebMcpHost): Promise<WebMcpRegistrati
       const page = toWebMcpPage(message);
       if (!page || !host.owns(page.pageId)) return;
       sessions.bind(page.pageId);
-      shared['mutate']((draft: WebMcpState) => {
+      shared.mutate((draft) => {
         draft.pages[page.pageId] = page;
       });
     },

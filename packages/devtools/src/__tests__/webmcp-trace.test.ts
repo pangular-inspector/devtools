@@ -73,7 +73,8 @@ describe('traceCall', () => {
     const trace = traceCall(call(), 'p1', sources, { now: T + 10_000 });
     const keys = trace.effects.map((e) => `${e.layer}:${e.key}:${e.certainty}:${e.change}`);
     expect(keys).toEqual([
-      'forms:f@p1:4:caused:write',
+      // `origin: 'agent'` alone ties a form event to no call.
+      'forms:f@p1:4:during:write',
       'http:c1:during:none',
       // A navigation that only changes the query string does not count as a change.
       'router:2:during:none',
@@ -101,7 +102,8 @@ describe('traceCall', () => {
   });
 
   it('leaves out untied effects when the user was active', () => {
-    const trace = traceCall(call({ userInput: true }), 'p1', sources, { now: T + 10_000 });
+    const tied = call({ userInput: true, caused: [{ layer: 'forms', key: 'f@p1:4' }] });
+    const trace = traceCall(tied, 'p1', sources, { now: T + 10_000 });
     expect(trace.userInput).toBe(true);
     expect(trace.effects.map((e) => e.key)).toEqual(['f@p1:4']);
   });
@@ -123,6 +125,49 @@ describe('traceCall', () => {
     expect(traceCall(call(), 'p1', angularOnly, { tool: readOnly }).verdict).toBeUndefined();
     // A tool that does not claim to only read gets no verdict.
     expect(traceCall(call(), 'p1', sources, {}).verdict).toBeUndefined();
+  });
+
+  it('keeps the read-only claim recorded with the call once the tool is gone', () => {
+    expect(traceCall(call({ readOnly: true }), 'p1', sources).verdict).toBe('warning');
+    // A replacement tool that claims to only read does not change an older call's verdict.
+    expect(traceCall(call({ readOnly: false }), 'p1', sources, { tool: readOnly }).verdict).toBe(
+      undefined,
+    );
+  });
+
+  it('warns about a write past the effects it lists', () => {
+    const reads = Array.from({ length: 120 }, (_, i) => ({
+      id: `r${i}`,
+      method: 'GET',
+      at: T + 1,
+    }));
+    const many = {
+      http: {
+        pages: [{ pageId: 'p1', calls: [...reads, { id: 'w', method: 'POST', at: T + 90 }] }],
+      },
+    };
+    const trace = traceCall(call(), 'p1', many, { tool: readOnly });
+    expect(trace.effects).toHaveLength(100);
+    expect(trace.effects.some((e) => e.key === 'w')).toBe(false);
+    expect(trace.verdict).toBe('warning');
+  });
+
+  it('counts an NgRx entry with an empty diff as no change, and keeps it listed', () => {
+    const ngrx = {
+      ngrx: {
+        pages: [
+          {
+            pageId: 'p1',
+            log: [
+              { seq: 1, type: 'noop', timestamp: T + 5, diff: [] },
+              { seq: 2, source: 'event', type: '[Search] Opened', timestamp: T + 6, diff: [] },
+            ],
+          },
+        ],
+      },
+    };
+    const trace = traceCall(call(), 'p1', ngrx, { tool: readOnly });
+    expect(trace.effects.map((e) => `${e.key}:${e.change}`)).toEqual(['1:none', '2:write']);
   });
 
   it('uses the time now as the end of a call that still runs', () => {

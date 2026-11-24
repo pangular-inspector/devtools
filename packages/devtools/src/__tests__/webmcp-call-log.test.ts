@@ -16,18 +16,30 @@ type Tool = {
   execute: (args: unknown) => unknown;
 };
 
+interface FakeContext {
+  registerTool(tool: Tool): Promise<void>;
+}
+
+interface FakeZone {
+  get(key: string): unknown;
+  run<T>(fn: () => T): T;
+}
+
+const nav = navigator as Navigator & { modelContext?: FakeContext };
+const global = globalThis as { Zone?: { readonly current: FakeZone & { fork: unknown } } };
+
 const watchers: WebMcpWatcher[] = [];
 afterEach(() => {
   watchers.splice(0).forEach((w) => w.stop());
-  delete (navigator as any).modelContext;
-  delete (globalThis as any).Zone;
+  delete nav.modelContext;
+  delete global.Zone;
 });
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function fakeContext() {
   const tools = new Map<string, Tool>();
-  (navigator as any).modelContext = {
+  nav.modelContext = {
     registerTool: vi.fn(async (tool: Tool) => {
       tools.set(tool.name, tool);
     }),
@@ -42,7 +54,7 @@ function watch() {
 }
 
 async function register(tool: Tool) {
-  await (navigator as any).modelContext.registerTool(tool);
+  await nav.modelContext!.registerTool(tool);
   await tick();
 }
 
@@ -63,7 +75,7 @@ describe('the WebMCP call log', () => {
     const [call] = report.calls;
     expect(call).toMatchObject({ tool: 'login', outcome: 'done' });
     expect(call!.args).toEqual({ email: 'a@b.c', password: '[redacted]' });
-    expect((call!.result as any).token).toBe('[redacted]');
+    expect((call!.result as { token?: unknown }).token).toBe('[redacted]');
     expect(typeof call!.ms).toBe('number');
   });
 
@@ -75,7 +87,7 @@ describe('the WebMCP call log', () => {
     for (let i = 0; i < 3; i++) await tools.get('ping')!.execute({ i });
     await tick();
     const report = watcher.report();
-    expect(report.calls.map((call) => (call.args as any).i)).toEqual([1, 2]);
+    expect(report.calls.map((call) => (call.args as { i?: number }).i)).toEqual([1, 2]);
     expect(report.dropped).toBe(1);
   });
 
@@ -115,11 +127,11 @@ describe('the WebMCP call log', () => {
   });
 
   it('runs execute in a forked zone when Zone.js is there, so later work stays tied', async () => {
-    let current: any = { get: () => undefined };
+    let current: FakeZone = { get: () => undefined, run: (fn) => fn() };
     const fork = vi.fn((spec: { properties: Record<string, unknown> }) => {
-      const zone = {
+      const zone: FakeZone = {
         get: (key: string) => spec.properties[key],
-        run: (fn: () => unknown) => {
+        run: (fn) => {
           const previous = current;
           current = zone;
           try {
@@ -131,7 +143,7 @@ describe('the WebMCP call log', () => {
       };
       return zone;
     });
-    (globalThis as any).Zone = {
+    global.Zone = {
       get current() {
         return { ...current, fork };
       },
@@ -143,7 +155,7 @@ describe('the WebMCP call log', () => {
       name: 'slow',
       description: 'Slow',
       execute: () => {
-        const zone = (globalThis as any).Zone.current;
+        const zone = global.Zone!.current;
         // Work the zone resumes later still sees the call's zone.
         later = () => zone.run(() => noteWebMcpEffect(webMcpCallNow(), 'ngrx', '7'));
         return 'ok';
@@ -165,12 +177,47 @@ describe('the WebMCP call log', () => {
     await tick();
     expect(watcher.report().calls[0]!.userInput).toBe(true);
   });
+
+  it('keeps a call marked once the user was active, however much input follows', async () => {
+    const tools = fakeContext();
+    const watcher = watch();
+    await register({ name: 'ping', description: 'Ping', execute: () => 'pong' });
+    let resolve: (value: string) => void = () => {};
+    await register({
+      name: 'slow',
+      description: 'Slow',
+      execute: () => new Promise<string>((done) => (resolve = done)),
+    });
+    void tools.get('slow')!.execute({});
+    document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+    resolve('ok');
+    await tick();
+    const now = Date.now();
+    const later = vi.spyOn(Date, 'now').mockReturnValue(now + 60_000);
+    for (let i = 0; i < 80; i++) document.dispatchEvent(new KeyboardEvent('keydown'));
+    later.mockRestore();
+    expect(watcher.report().calls[0]!.userInput).toBe(true);
+  });
+
+  it('records the read-only claim with each call', async () => {
+    const tools = fakeContext();
+    const watcher = watch();
+    await register({
+      name: 'look',
+      description: 'Look',
+      annotations: { readOnlyHint: true },
+      execute: () => 'seen',
+    });
+    await tools.get('look')!.execute({});
+    await tick();
+    expect(watcher.report().calls[0]!.readOnly).toBe(true);
+  });
 });
 
 describe('shareWebMcp', () => {
   it('replaces registerTool once for every collector and stops with the last one', async () => {
     fakeContext();
-    const original = (navigator as any).modelContext.registerTool;
+    const original = nav.modelContext!.registerTool;
     const first = vi.fn();
     const second = vi.fn();
     const a = shareWebMcp(first);
@@ -180,8 +227,8 @@ describe('shareWebMcp', () => {
     expect(first).toHaveBeenCalled();
     expect(second).toHaveBeenCalled();
     a.release();
-    expect((navigator as any).modelContext.registerTool).not.toBe(original);
+    expect(nav.modelContext!.registerTool).not.toBe(original);
     b.release();
-    expect((navigator as any).modelContext.registerTool).toBe(original);
+    expect(nav.modelContext!.registerTool).toBe(original);
   });
 });

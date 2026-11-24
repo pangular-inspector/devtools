@@ -14,6 +14,7 @@ import {
 } from '../ngrx-shared.ts';
 import { mergeNgrxReport, nameStore, ngrxStateOf, type NgrxPages } from '../rpc/ngrx-tools.ts';
 import { angularAtLeast, STANDALONE } from './angular-version.ts';
+import { watchWebMcp } from '../forms-webmcp.ts';
 import { fakeWebMcpCall } from './webmcp-testing.ts';
 
 /**
@@ -215,6 +216,53 @@ describe('ngrx collector', () => {
       const log = collector.logSince(0);
       const entry = log.find((e) => e.type === 'patchState')!;
       expect(trace.caused()).toEqual([{ layer: 'ngrx', key: String(entry.seq) }]);
+    } finally {
+      trace.stop();
+    }
+  });
+
+  it('does not tie an earlier write to the tool call whose method flushes it', async () => {
+    const { store, collector } = setup();
+    collector.collect();
+    type Tool = { name: string; description: string; execute: (args: unknown) => unknown };
+    const tools = new Map<string, Tool>();
+    const context = { registerTool: (tool: Tool) => void tools.set(tool.name, tool) };
+    const nav = navigator as Navigator & { modelContext?: typeof context };
+    nav.modelContext = context;
+    const watcher = watchWebMcp(() => {});
+    try {
+      context.registerTool({
+        name: 'agent_tool',
+        description: '',
+        execute: () => store.setQuery('agent'),
+      });
+      // Pending until a microtask, then flushed by the method the tool calls in the same tick.
+      patchState(store, { saved: ['x'] });
+      tools.get('agent_tool')!.execute({});
+      await Promise.resolve();
+      const log = collector.logSince(0);
+      const external = log.find((e) => e.type === 'patchState')!;
+      const method = log.find((e) => e.type === 'setQuery')!;
+      const caused = watcher.report().calls[0]?.caused ?? [];
+      expect(caused).toContainEqual({ layer: 'ngrx', key: String(method.seq) });
+      expect(caused).not.toContainEqual({ layer: 'ngrx', key: String(external.seq) });
+    } finally {
+      watcher.stop();
+      delete nav.modelContext;
+    }
+  });
+
+  it('drops the call of a reused action object dispatched again outside it', async () => {
+    const { store, collector } = fakeClassic({ n: 0 }, (state, action) =>
+      action.type === 'bump' ? { n: state.n + 1 } : state,
+    );
+    const action = { type: 'bump' };
+    const trace = await fakeWebMcpCall(() => store.dispatch(action));
+    try {
+      store.dispatch(action);
+      const [first, second] = collector.logSince(0);
+      expect(trace.caused()).toEqual([{ layer: 'ngrx', key: String(first.seq) }]);
+      expect(second).toBeDefined();
     } finally {
       trace.stop();
     }

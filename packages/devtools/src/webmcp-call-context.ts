@@ -44,7 +44,7 @@ export function untrackWebMcpCall(id: number): void {
 
 function zoneCallId(): unknown {
   try {
-    const zone = (globalThis as Record<string, any>)['Zone'];
+    const zone = (globalThis as { Zone?: { current?: { get?: (key: string) => unknown } } }).Zone;
     return zone?.current?.get?.(WEBMCP_ZONE_KEY);
   } catch {
     return undefined;

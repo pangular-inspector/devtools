@@ -58,6 +58,20 @@ describe('toWebMcpPage', () => {
     expect(page.dropped).toBe(3);
   });
 
+  it('drops a call whose time makes no valid date', () => {
+    const page = toWebMcpPage({
+      pageId: 'p1',
+      tools: [],
+      calls: [
+        { id: 1, tool: 't', at: 1e16, outcome: 'done' },
+        { id: 2, tool: 't', at: T, outcome: 'done', readOnly: true },
+      ],
+    })!;
+    expect(page.calls.map((call) => call.id)).toEqual([2]);
+    expect(page.calls[0]!.readOnly).toBe(true);
+    expect(() => webMcpCallsText({ pages: { p1: page } }, {})).not.toThrow();
+  });
+
   it('refuses a report without a page id', () => {
     expect(toWebMcpPage({ tools: [] })).toBeNull();
   });
