@@ -152,7 +152,7 @@ When the page's server mounts the hub (`/__devframes/`), the button opens the wh
 | Dock           | Shows                                                                                                                                                                |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | All tools      | The full panel, with every tab in one tab bar (`/__devframes/pangular/`)                                                                                             |
-| Angular        | Dashboard, Timeline, Audit, Components, Routes, Signals, Injectors, Forms, Pipes, SSR & HTTP, and Errors                                                             |
+| Angular        | Dashboard, Timeline, Audit, Components, Routes, Signals, Injectors, Forms, Pipes, SSR & HTTP, Errors and WebMCP                                                      |
 | NgRx           | The Store tab                                                                                                                                                        |
 | Analog         | The Analog tab, or a notice in apps that do not use Analog                                                                                                           |
 | Angular Native | Components, Signals, Injectors, Store, Queries, Pipes and Errors for a connected [Angular Native](./angular-native.md) app, or a setup notice when none is connected |
@@ -230,6 +230,7 @@ The URL hash selects a tab. Open `/__devframes/pangular/#tab=signals` to land on
 | Pipes      | `#tab=pipes`      |
 | SSR & HTTP | `#tab=network`    |
 | Errors     | `#tab=errors`     |
+| WebMCP     | `#tab=webmcp`     |
 | Analog     | `#tab=analog`     |
 | Capacitor  | `#tab=capacitor`  |
 | Settings   | `#tab=settings`   |
@@ -244,6 +245,7 @@ A link can also select an item on its tab, on one page: `#tab=<tab>&id=<id>&page
 | Injectors  | The element injector of a component, by the component's id |
 | Signals    | The signal graph of a component, by the component's id     |
 | Forms      | A form, by its id                                          |
+| WebMCP     | A WebMCP tool call, by its call id                         |
 
 On other tabs, `id` is ignored and the link opens the tab. `page` is the page id from `list-pages`. Without it, the tab looks on the page it shows. If the item is not on the page, the tab says so. The [`open-in-panel`](../agents/tools.md#open-in-panel) agent tool builds these links and switches the panels that are open to them.
 

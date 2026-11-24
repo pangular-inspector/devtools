@@ -55,7 +55,8 @@
     "./internal/config": "./src/config.ts",
     "./internal/types": "./src/panel-types.ts",
     "./internal/http-data": "./src/http-data.ts",
-    "./internal/redaction-count": "./src/redaction-count.ts"
+    "./internal/redaction-count": "./src/redaction-count.ts",
+    "./internal/webmcp-trace": "./src/webmcp-trace.ts"
   },
   "publishConfig": {
     "main": "./dist/devframe.mjs",

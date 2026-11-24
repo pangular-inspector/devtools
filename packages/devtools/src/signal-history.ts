@@ -2,6 +2,7 @@ import { queueMicrotaskOutside } from './outside-angular.ts';
 import { isLocatedNode, rawValueOf } from './signal-locator.ts';
 import { appFrames, captureStack } from './signal-stack.ts';
 import type { SignalChange, SignalGraphNode } from './types.ts';
+import { noteWebMcpEffect, webMcpCallNow } from './webmcp-call-context.ts';
 
 export const MAX_CHANGES = 50;
 const MAX_TRACKS = 500;
@@ -34,7 +35,7 @@ interface Track {
   kind: string;
   changes: SignalChange[];
   /** Writes since the last flush, serialized off Angular's set path. */
-  pending: { epoch: number; value: unknown; at: number; stack?: string }[];
+  pending: { epoch: number; value: unknown; at: number; stack?: string; webMcpCall?: number }[];
 }
 
 export interface SignalHistoryOptions {
@@ -86,6 +87,8 @@ export function createSignalHistory(
   const sent = new Map<string, number>();
   // Lives as long as the entry is kept, so it shares the history caps.
   const raws = new WeakMap<SignalChange, RawEntry>();
+  /** The WebMCP tool call that made a write, until the write's graph node is known. */
+  const webMcpWrites = new WeakMap<SignalChange, number>();
   const located = options.located ?? isLocatedNode;
   /** Nodes the last snapshot gave a locator, whose entries keep raw values. */
   const restorable = new Set<string>();
@@ -99,7 +102,8 @@ export function createSignalHistory(
     for (const track of dirty) {
       const node = options.restorable ? track.ref.deref() : undefined;
       const keepWrites = !!node && located(node);
-      for (const { stack, ...write } of track.pending) {
+      const nodeId = nodeOfTrack.get(track.id);
+      for (const { stack, webMcpCall, ...write } of track.pending) {
         let change: SignalChange;
         try {
           change = { ...write, value: serialize(write.value, track.label), source: 'write' };
@@ -110,7 +114,12 @@ export function createSignalHistory(
         if (frames.length) change.stack = frames;
         if (keepWrites) raws.set(change, { value: write.value, label: track.label });
         append(track.changes, change);
-        notify(nodeOfTrack.get(track.id), track.label, change, { value: write.value });
+        if (webMcpCall !== undefined) {
+          // The key needs the graph node id; a track not bound yet waits for `collect`.
+          if (nodeId === undefined) webMcpWrites.set(change, webMcpCall);
+          else noteWebMcpEffect(webMcpCall, 'signals', `${nodeId}:${change.epoch}`);
+        }
+        notify(nodeId, track.label, change, { value: write.value });
       }
       track.pending = [];
     }
@@ -177,12 +186,16 @@ export function createSignalHistory(
     // Angular's set path, and a burst of writes serializes only the entries the list keeps.
     // Taking a stack is the costly part, so it happens only while stacks are on.
     const stack = options.stacks?.() ? captureStack() : undefined;
-    track.pending.push({
+    const write: Track['pending'][number] = {
       epoch: node.version ?? 0,
       value: node.value,
       at: now(),
       ...(stack ? { stack } : {}),
-    });
+    };
+    // The WebMCP tool call this write belongs to, read at the write: the flush runs later.
+    const webMcpCall = webMcpCallNow();
+    if (webMcpCall !== undefined) write.webMcpCall = webMcpCall;
+    track.pending.push(write);
     if (track.pending.length > MAX_CHANGES) track.pending.shift();
     dirty.add(track);
     if (!flushQueued) {
@@ -254,6 +267,11 @@ export function createSignalHistory(
         if (change.epoch > node.epoch) break;
         if (change.epoch <= lastEpoch) continue;
         append(list, change);
+        const webMcpCall = webMcpWrites.get(change);
+        if (webMcpCall !== undefined) {
+          webMcpWrites.delete(change);
+          noteWebMcpEffect(webMcpCall, 'signals', `${node.id}:${change.epoch}`);
+        }
         total += lastEpoch >= 0 ? change.epoch - lastEpoch : 1;
         lastEpoch = change.epoch;
       }

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { EventType, applyRouterEvent, type NavigationRecord } from '../router.ts';
+import { EventType, applyRouterEvent, noteFailedCall, type NavigationRecord } from '../router.ts';
 import { configSignature, type RouteNode } from '../router-config.ts';
 import { instrument, runAction } from '../router-actions.ts';
 import { lintRoutes } from '../rpc/router-config-tools.ts';
 import { explainNavigationText, type RouterPage, type RouterState } from '../rpc/router-tools.ts';
+import { fakeWebMcpCall } from './webmcp-testing.ts';
 
 function node(fullPath: string, extra: Partial<RouteNode> = {}): RouteNode {
   const path = extra.path ?? fullPath.split('/').pop() ?? '';
@@ -110,6 +111,28 @@ describe('router events', () => {
       router,
     );
     expect(navigations.map((nav) => nav.trigger)).toEqual(['popstate', 'unknown']);
+  });
+
+  it('ties a navigation a WebMCP tool call started, and a call that failed, to that call', async () => {
+    const navigations: NavigationRecord[] = [];
+    const router = { url: '/', routerState: { snapshot: null } };
+    const start = (id: number, url: string) =>
+      applyRouterEvent(navigations, { type: EventType.NavigationStart, id, url }, 0, router);
+    start(1, '/home');
+    const trace = await fakeWebMcpCall(() => {
+      start(2, '/orders');
+      noteFailedCall(navigations, '/bad url', new Error('no match'), 0);
+    });
+    try {
+      start(3, '/later');
+      const failed = navigations.find((nav) => nav.id < 0)!;
+      expect(trace.caused()).toEqual([
+        { layer: 'router', key: '2' },
+        { layer: 'router', key: String(failed.id) },
+      ]);
+    } finally {
+      trace.stop();
+    }
   });
 
   it('links a guard redirect from a cancel with no code, as Angular 12 to 14 send it', () => {

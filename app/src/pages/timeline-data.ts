@@ -8,9 +8,10 @@ import type { FormEvent } from './forms-types';
 import { pageOf } from './forms-types';
 import type { NavigationRecord, RouterPage } from './router-types';
 import type { NgrxLogEntry, NgrxPage } from './store-types';
+import { callRow, outcomeText, toolOf, traceRow, webMcpPages } from './webmcp-data';
 
 /** One source of events on the timeline. Each has its own lane and toggle. */
-export type TimelineLayer = 'router' | 'http' | 'ngrx' | 'cd' | 'forms' | 'signals';
+export type TimelineLayer = 'router' | 'http' | 'ngrx' | 'cd' | 'forms' | 'signals' | 'webmcp';
 
 export interface TimelineLayerInfo {
   id: TimelineLayer;
@@ -72,6 +73,14 @@ export const TIMELINE_LAYERS: readonly TimelineLayerInfo[] = [
     tabLabel: 'Signals',
     inspector: 'signals',
     state: 'signal-graph',
+  },
+  {
+    id: 'webmcp',
+    label: 'WebMCP',
+    tab: 'webmcp',
+    tabLabel: 'WebMCP',
+    inspector: 'webmcp',
+    state: 'webmcp',
   },
 ];
 
@@ -402,13 +411,62 @@ function signalEvents(state: unknown): TimelineEvent[] {
   return events;
 }
 
-const READERS: Record<TimelineLayer, (state: unknown) => TimelineEvent[]> = {
+/**
+ * One span per WebMCP tool call. A call of a tool that claims `readOnlyHint`
+ * and changed data outside signals is marked, with the same trace the WebMCP
+ * tab shows, so it reads the other sources too.
+ */
+function webmcpEvents(state: unknown, sources: TimelineSources): TimelineEvent[] {
+  const pages = webMcpPages(state);
+  const trace = {
+    http: sources.http,
+    ngrx: sources.ngrx,
+    router: sources.router,
+    forms: sources.forms,
+    signals: sources.signals,
+  };
+  const events: TimelineEvent[] = [];
+  for (const page of pages) {
+    for (const call of page.calls) {
+      if (!finite(call?.at) || typeof call.tool !== 'string') continue;
+      const row = callRow(call, page.pageId);
+      const tone: TimelineTone | undefined =
+        call.outcome === 'threw' || call.outcome === 'failed'
+          ? 'danger'
+          : toolOf(pages, row)?.annotations?.['readOnlyHint'] === true &&
+              traceRow(row, pages, trace).verdict === 'warning'
+            ? 'warn'
+            : undefined;
+      const took = finite(call.ms) ? call.ms : undefined;
+      events.push({
+        key: `webmcp:${page.pageId}:${call.id}`,
+        layer: 'webmcp',
+        pageId: page.pageId,
+        at: call.at,
+        ...(took !== undefined ? { ms: took } : {}),
+        title: `${call.tool} call`,
+        detail: [outcomeText(call.outcome), took !== undefined ? ms(took) : '']
+          .filter(Boolean)
+          .join(' · '),
+        ...(tone ? { tone } : {}),
+        link: { tab: 'webmcp', id: row.id, ...(page.pageId ? { page: page.pageId } : {}) },
+      });
+    }
+  }
+  return events;
+}
+
+const READERS: Record<
+  TimelineLayer,
+  (state: unknown, sources: TimelineSources) => TimelineEvent[]
+> = {
   router: routerEvents,
   http: httpEvents,
   ngrx: ngrxEvents,
   cd: cdEvents,
   forms: formsEvents,
   signals: signalEvents,
+  webmcp: webmcpEvents,
 };
 
 /**
@@ -419,7 +477,7 @@ export function mergeTimeline(sources: TimelineSources): TimelineEvent[] {
   const events: TimelineEvent[] = [];
   for (const layer of TIMELINE_LAYERS) {
     const state = sources[layer.id];
-    if (state !== undefined && state !== null) events.push(...READERS[layer.id](state));
+    if (state !== undefined && state !== null) events.push(...READERS[layer.id](state, sources));
   }
   const order = new Map(TIMELINE_LAYERS.map((layer, index) => [layer.id, index]));
   events.sort(
@@ -456,6 +514,7 @@ export function timelinePages(sources: TimelineSources, events: TimelineEvent[])
     name(page?.pageId, page?.title || page?.url);
   for (const page of pagesOf<RouterPage>(sources.router)) name(page?.pageId, page?.snapshot?.url);
   for (const page of pagesOf<NgrxPage>(sources.ngrx)) name(page?.pageId, page?.title || page?.url);
+  for (const page of webMcpPages(sources.webmcp)) name(page.pageId, page.title || page.url);
   for (const event of events) name(event.pageId, '');
   return [...labels].map(([pageId, label]) => ({ pageId, label: label || pageId }));
 }

@@ -60,9 +60,9 @@ const DRAG_THRESHOLD = 4;
   imports: [AppState, Select, RovingList, SearchField],
   template: `
     <p class="intro">
-      Navigations, HTTP calls, NgRx actions, change detection cycles, form events and signal changes
-      from the live page on one time axis. Turn layers on and off, drag across the chart to look at
-      a range, and open an event in its own tab.
+      Navigations, HTTP calls, NgRx actions, change detection cycles, form events, signal changes
+      and WebMCP tool calls from the live page on one time axis. Turn layers on and off, drag across
+      the chart to look at a range, and open an event in its own tab.
     </p>
     @if (loading()) {
       <app-state kind="loading">Loading the timeline…</app-state>

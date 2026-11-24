@@ -36,7 +36,6 @@
     "inspect-route": "router",
     "inspect-signals": "signals",
     "inspect-transfer-state": "http",
-    "refetch-transfer-state": "http",
     "lint-forms": "forms",
     "lint-http": "http",
     "lint-routes": "router",
@@ -74,6 +73,7 @@
     "record-guards": "router",
     "record-pipes": "pipes",
     "redux-inspect-stores": "ngrx",
+    "refetch-transfer-state": "http",
     "remove-http-rule": "http",
     "remove-ssr-override": "http",
     "router": "router",
@@ -101,7 +101,9 @@
     "track-subscriptions": "components",
     "wait-for": "components",
     "watch-signal": "signals",
-    "web-vitals": "performance"
+    "web-vitals": "performance",
+    "webmcp-calls": "webmcp",
+    "webmcp-tools": "webmcp"
   },
   "ACTION_TOOLS": {
     "forms": ["fill-form", "run-form-action"],
@@ -251,7 +253,9 @@
     "track-subscriptions",
     "wait-for",
     "watch-signal",
-    "web-vitals"
+    "web-vitals",
+    "webmcp-calls",
+    "webmcp-tools"
   ],
   "agentTags": {
     "analog-explain-render-modes": ["analog"],

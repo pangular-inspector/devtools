@@ -661,6 +661,9 @@ const READ_PLAN = [
   ['plugin_travel_bookings', null, () => ({})],
   ['audit', null, () => ({ limit: 20 })],
   ['startup-timing', null, () => ({ limit: 5 })],
+  ['webmcp-tools', null, () => ({})],
+  ['webmcp-calls', null, () => ({ limit: 5 })],
+  ['webmcp-calls', null, () => ({ tool: 'search-trips' })],
 
   ['list-components', '/destinations', () => ({ depth: 4 })],
   ['list-components', '/destinations', () => ({ filter: 'DestinationCard' })],

@@ -4,7 +4,7 @@ description: Every agent tool the devtools expose, grouped by inspector, with wh
 ---
 
 <ngmd-hero title="Tools" logo="https://cdn.simpleicons.org/modelcontextprotocol/71717A" gradient>
-  One hundred and eighteen tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
+  One hundred and twenty tools, grouped by inspector. Each one answers a question you would otherwise answer by clicking through the panel.
 </ngmd-hero>
 
 # Tools
@@ -1061,6 +1061,17 @@ These tools read what the app loads. See [Build](../inspectors/build.md).
 | `chunk-sizes`  | The chunks of the last production build: initial or lazy, size, gzip size, and with `stats.json` the entry point.                                                                                                                                                                                                                                     | `limit`           |
 
 `module-graph` needs the Vite plugin, in the dev server's process; it reads nothing on the stdio MCP server. Sizes are transformed, unminified code, for modules the browser requested. `chunk-sizes` reads the build output on disk, so it works anywhere the project is, and says how to build when there is none. `limit` defaults to 20 for `module-graph` (at most 200) and 30 for `chunk-sizes` (at most 500).
+
+## WebMCP
+
+These tools read the [WebMCP](../inspectors/webmcp.md) tools your page registers for browser agents with `modelContext.registerTool()`, Signal Forms tools included, and the calls made to them. Reads: page.
+
+| Tool           | What it answers                                                                                                                                                                                                                                             | Arguments       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `webmcp-tools` | Each tool's name, description, status, the annotations the page claims (`readOnlyHint`), inputs and the form it belongs to. Says whether the page has `modelContext`.                                                                                       | none            |
+| `webmcp-calls` | Calls newest first: masked arguments and result, outcome and duration, and the HTTP requests, NgRx actions, navigations, form changes and signal writes each call caused or probably caused. Warns when a `readOnlyHint` tool changed data outside signals. | `tool`, `limit` |
+
+`tool` keeps the calls of one tool. `limit` sets how many calls to list, from 1 to 50 (default 10). An effect is caused when a collector saw it start while the call ran, or in its Zone.js zone, and probably caused when it started between the call's start and 500 ms after its end with no user input. If the user was active during a call, only caused effects are listed. A tool without `readOnlyHint: true` may change data, and the answer says so. When a tool that claims `readOnlyHint` only wrote your app's signals, the answer adds a note instead of a warning. Signal writes are seen only for the component the Signals tab inspects. When older calls were dropped at [`limits.webmcpCalls`](../getting-started/configuration.md#limits), the answer says how many. Names, descriptions and values come from the page, so both answers start with the untrusted-data notice.
 
 ## Audit
 

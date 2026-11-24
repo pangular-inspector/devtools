@@ -106,6 +106,7 @@ type PangularInspector =
   | 'capacitor'
   | 'errors'
   | 'plugins'
+  | 'webmcp'
   | 'performance'
   | 'build';
 
@@ -134,6 +135,7 @@ interface PangularConfig {
     cdCycles?: number;
     cdSlowMs?: number;
     capacitorCalls?: number;
+    webmcpCalls?: number;
     idleAfterMs?: number;
   };
   popup?: {hotkey?: string | false};
@@ -222,9 +224,10 @@ Values outside the bounds are clamped to the nearest one.
 | `limits.cdCycles`       | `200`   | 10 to 2000  | Change detection cycles kept per page while recording.                                                                             |
 | `limits.cdSlowMs`       | `16`    | 1 to 1000   | A [change detection](../inspectors/components.md#change-detection) cycle longer than this, in ms, counts as slow.                  |
 | `limits.capacitorCalls` | `200`   | 10 to 2000  | [Capacitor](../inspectors/capacitor.md) plugin calls kept per page and on the server.                                              |
+| `limits.webmcpCalls`    | `100`   | 10 to 1000  | [WebMCP](../inspectors/webmcp.md) tool calls kept per page.                                                                        |
 | `limits.idleAfterMs`    | `60000` | 0 to 600000 | How long pages keep sending after an agent's last call while no panel is open. `0` keeps them sending.                             |
 
-When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log, the change detection recording and the Capacitor plugin calls. The `explain-navigation`, `list-form-changes` and `change-detection` agent tools add the same note, and the `pangular:ngrx-store` resource reports a `dropped` count per page.
+When a timeline reaches its limit, the oldest entries are dropped. The timeline then shows a note above the list, such as "Showing the latest 200 HTTP calls. 12 older entries were dropped." with the limit to raise. This applies to the **SSR & HTTP** timeline, the router navigation timeline, the forms timeline, the NgRx change log, the change detection recording and the Capacitor plugin calls. The `explain-navigation`, `list-form-changes`, `change-detection` and `webmcp-calls` agent tools add the same note, and the `pangular:ngrx-store` resource reports a `dropped` count per page.
 
 On Angular 20 and later, the page reads the app about 250 ms after Angular runs change detection, and again every 4 seconds in case it missed a change. `refreshMs` doesn't change that. The page polls every `refreshMs` instead when it can't follow change detection, such as until the app bootstraps. The Analog inspector also reads the page every `refreshMs`. At any value, the page sends a small heartbeat every 10 seconds instead of data that didn't change, so the server never drops a page that is still open. If the server lost the page (it restarted, or the page went quiet for more than 30 seconds), the page sends all of its data again.
 

@@ -56,6 +56,7 @@ const PANGULAR_INSPECTORS: readonly [
   'analog',
   'capacitor',
   'errors',
+  'webmcp',
   'plugins',
   'performance',
   'build',
@@ -78,6 +79,7 @@ const PANGULAR_LIMITS: {
   readonly cdCycles: {readonly default: 200; readonly min: 10; readonly max: 2000};
   readonly cdSlowMs: {readonly default: 16; readonly min: 1; readonly max: 1000};
   readonly capacitorCalls: {readonly default: 200; readonly min: 10; readonly max: 2000};
+  readonly webmcpCalls: {readonly default: 100; readonly min: 10; readonly max: 1000};
   readonly idleAfterMs: {readonly default: 60000; readonly min: 0; readonly max: 600000};
 };
 ```
@@ -160,6 +162,8 @@ interface PangularConfig {
     cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
+    /** WebMCP tool calls kept per page. Default 100. */
+    webmcpCalls?: number;
     /**
      * How long, in ms, pages keep sending the component tree, injectors,
      * change detection and forms after an agent's last call when no panel is

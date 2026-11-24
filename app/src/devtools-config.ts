@@ -59,6 +59,7 @@ const TAB_INSPECTOR: Partial<Record<Tab, PangularInspector>> = {
   analog: 'analog',
   capacitor: 'capacitor',
   errors: 'errors',
+  webmcp: 'webmcp',
   plugins: 'plugins',
   performance: 'performance',
   build: 'build',

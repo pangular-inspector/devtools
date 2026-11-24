@@ -16,6 +16,7 @@ export type Tab =
   | 'settings'
   | 'errors'
   | 'plugins'
+  | 'webmcp'
   | 'performance'
   | 'build';
 

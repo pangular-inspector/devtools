@@ -10,6 +10,7 @@ import {
 } from '../signal-history.ts';
 import { setRawValue } from '../signal-locator.ts';
 import type { SignalGraphNode } from '../types.ts';
+import { fakeWebMcpCall } from './webmcp-testing.ts';
 
 const identity = (v: unknown) => v;
 
@@ -42,6 +43,31 @@ describe('createSignalHistory', () => {
     setRawValue(next, 't2');
     const out = h.collect([next]);
     expect(out['a'].filter((c) => c.source === 'write')).toHaveLength(2);
+  });
+
+  it('ties a write a WebMCP tool call made to that call, by node id and epoch', async () => {
+    const h = createSignalHistory(identity);
+    const count: RawSignalNode = { debugName: 'count', kind: 'signal', value: 0, version: 0 };
+    const name: RawSignalNode = { debugName: 'name', kind: 'signal', value: '', version: 0 };
+    // `count` is bound to graph node `a` before the call; `name` is not bound yet.
+    write(h.onWrite, count, 1);
+    h.collect([graphNode('a', 'count', 1, 1)]);
+    const trace = await fakeWebMcpCall(() => {
+      write(h.onWrite, count, 2);
+      write(h.onWrite, name, 'Ada');
+    });
+    try {
+      write(h.onWrite, count, 3);
+      // The write to a bound node is tied when it is flushed, the other once a snapshot binds it.
+      const out = h.collect([graphNode('a', 'count', 3, 3), graphNode('b', 'name', 1, 'Ada')]);
+      expect(out['b'].map((c) => [c.epoch, c.source])).toEqual([[1, 'write']]);
+      expect(trace.caused()).toEqual([
+        { layer: 'signals', key: 'a:2' },
+        { layer: 'signals', key: 'b:1' },
+      ]);
+    } finally {
+      trace.stop();
+    }
   });
 
   it('records the first snapshot as initial', () => {

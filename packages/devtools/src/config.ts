@@ -11,6 +11,7 @@ export const PANGULAR_INSPECTORS = [
   'analog',
   'capacitor',
   'errors',
+  'webmcp',
   'plugins',
   'performance',
   'build',
@@ -64,6 +65,7 @@ export const PANGULAR_LIMITS = {
   cdCycles: { default: 200, min: 10, max: 2000 },
   cdSlowMs: { default: 16, min: 1, max: 1000 },
   capacitorCalls: { default: 200, min: 10, max: 2000 },
+  webmcpCalls: { default: 100, min: 10, max: 1000 },
   idleAfterMs: { default: 60_000, min: 0, max: 600_000 },
 } as const;
 
@@ -240,6 +242,8 @@ export interface PangularConfig {
     cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
+    /** WebMCP tool calls kept per page. Default 100. */
+    webmcpCalls?: number;
     /**
      * How long, in ms, pages keep sending the component tree, injectors,
      * change detection and forms after an agent's last call when no panel is
@@ -455,6 +459,7 @@ export const PANEL_TABS = [
   { id: 'errors', label: 'Errors', inspector: 'errors' },
   { id: 'performance', label: 'Performance', inspector: 'performance' },
   { id: 'build', label: 'Build', inspector: 'build' },
+  { id: 'webmcp', label: 'WebMCP', inspector: 'webmcp' },
   { id: 'capacitor', label: 'Capacitor', inspector: 'capacitor' },
   { id: 'plugins', label: 'Plugins', inspector: 'plugins' },
 ] as const satisfies readonly { id: string; label: string; inspector?: PangularInspector }[];
@@ -485,6 +490,7 @@ export const PANEL_LINK_ITEMS: Partial<Record<PanelTab, string>> = {
   injectors: "a component's element injector, by the component's id",
   signals: "a component's signal graph, by the component's id",
   forms: 'a form, by its id',
+  webmcp: 'a WebMCP tool call, by its id',
 };
 
 /** Where a deep link into the panel points: a tab, and an item on one page. */
@@ -1530,6 +1536,10 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   // Reads the build output on disk, so it works without a page.
   'chunk-sizes': { kind: 'tool', inspectors: ['build'] },
 
+  // webmcp
+  'webmcp-tools': { kind: 'tool', inspectors: ['webmcp'], page: true },
+  'webmcp-calls': { kind: 'tool', inspectors: ['webmcp'], page: true },
+
   // plugins
   'list-plugins': { kind: 'tool', inspectors: ['plugins'], page: true },
   'inspect-plugin': { kind: 'tool', inspectors: ['plugins'], page: true },
@@ -1774,6 +1784,8 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'push-performance': 'performance',
   'forget-performance-page': 'performance',
   'get-build-graph': 'build',
+  'push-webmcp': 'webmcp',
+  'forget-webmcp-page': 'webmcp',
   'push-analog': 'analog',
   'forget-analog-page': 'analog',
   'analog-clear-calls': 'analog',
@@ -1837,6 +1849,7 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   errors: 'errors',
   'server-errors': 'errors',
   performance: 'performance',
+  webmcp: 'webmcp',
   startup: 'injectors',
   plugins: 'plugins',
 };
@@ -2087,6 +2100,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   analog: 'Analog',
   capacitor: 'Capacitor',
   errors: 'Errors',
+  webmcp: 'WebMCP',
   plugins: 'Plugins',
   performance: 'Performance',
   build: 'Build',
@@ -2112,6 +2126,7 @@ const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
   cdCycles: (value) => `${value} change detection cycles`,
   cdSlowMs: (value) => `slow cycles over ${value} ms`,
   capacitorCalls: (value) => `${value} Capacitor plugin calls`,
+  webmcpCalls: (value) => `${value} WebMCP tool calls`,
   idleAfterMs: (value) =>
     value ? `idle ${value / 1000} s after the last agent call` : 'never idle',
 };
@@ -2638,103 +2653,8 @@ export function angularUnavailableText(
   return `${head}; this page runs Angular ${runs}.`;
 }
 
-// `@defer` block notes. They live here, in an entry without imports, so the
-// defer-blocks agent tool and the panel's Defer blocks list word them the same.
-
-/** How long a block may sit on its placeholder before the notes call it stuck. */
-export const STUCK_PLACEHOLDER_MS = 10_000;
-
-/** The fields of a `@defer` block the notes read (`DeferBlockInfo` in `types.ts`). */
-export interface DeferNoteBlock {
-  state: string;
-  hydration: string;
-  hydrateNever?: boolean;
-  triggers: string[];
-  /** Page clock, ms since epoch, when the state or hydration state last changed. */
-  since: number;
-  /** Page clock, ms since epoch, when the overlay saw the block hydrate. */
-  hydratedAt?: number;
-}
-
-/**
- * The hydration state of a block as the panel and the defer-blocks tool word
- * it. A block that is `hydrated` without a `hydratedAt` hydrated before the
- * overlay attached, so no one saw it happen.
- */
-export function deferHydrationLabel(
-  block: Pick<DeferNoteBlock, 'hydration' | 'hydratedAt'>,
-): string {
-  if (block.hydration === 'hydrated' && block.hydratedAt === undefined) {
-    return 'hydrated before inspection';
-  }
-  return block.hydration;
-}
-
-export interface DeferNote {
-  kind: 'failed' | 'stuck' | 'waiting' | 'hydrate-never' | 'dehydrated';
-  /** The words the agent tool prints. */
-  text: string;
-  /** The short badge the panel shows. */
-  label: string;
-  /** For `stuck` and `waiting`: the age in seconds that `label` ends with. */
-  seconds?: number;
-}
-
-/** Triggers that wait for the user, so a long wait on the placeholder is normal. */
-const USER_TRIGGER = /^on (viewport|interaction|hover)\b/;
-
-/**
- * Whether a block waits only for the user: every main trigger (not `prefetch`
- * or `hydrate`) is `on viewport`, `on interaction` or `on hover`.
- */
-function waitsForUser(triggers: string[]): boolean {
-  const main = triggers.filter((trigger) => !/^(prefetch|hydrate) /.test(trigger));
-  return main.length > 0 && main.every((trigger) => USER_TRIGGER.test(trigger));
-}
-
-/**
- * What stands out about a block: it failed, it sat on its placeholder for
- * {@link STUCK_PLACEHOLDER_MS} or more (`waiting` when only the user can
- * trigger it), or its server HTML is not hydrated. `pageNow` is the page's
- * clock, the one `since` is on.
- */
-export function deferNotes(block: DeferNoteBlock, pageNow: number): DeferNote[] {
-  const notes: DeferNote[] = [];
-  // A page that sent no time (`since` 0) gets no age, so no stuck or waiting note.
-  const age = block.since > 0 ? Math.max(0, Math.round((pageNow - block.since) / 1000)) : 0;
-  if (block.state === 'error')
-    notes.push({ kind: 'failed', text: 'failed to load', label: 'failed' });
-  if (
-    (block.state === 'placeholder' || block.state === 'initial') &&
-    age * 1000 >= STUCK_PLACEHOLDER_MS
-  ) {
-    notes.push(
-      waitsForUser(block.triggers)
-        ? {
-            kind: 'waiting',
-            text: `waiting for its trigger for ${age}s`,
-            label: `waiting ${age}s`,
-            seconds: age,
-          }
-        : {
-            kind: 'stuck',
-            text: `on its placeholder for ${age}s`,
-            label: `stuck ${age}s`,
-            seconds: age,
-          },
-    );
-  }
-  if (block.hydrateNever) {
-    notes.push({
-      kind: 'hydrate-never',
-      text: 'hydrate never: the server HTML stays static',
-      label: 'hydrate never',
-    });
-  } else if (block.hydration === 'dehydrated') {
-    notes.push({ kind: 'dehydrated', text: 'still dehydrated', label: 'dehydrated' });
-  }
-  return notes;
-}
+// `@defer` block notes, shared by the defer-blocks agent tool and the panel.
+export * from './defer-notes.ts';
 
 /** Whether the one-time code is off, accepted, or locked after too many wrong codes. */
 export type OneTimeCodeState = 'off' | 'accepting' | 'locked';

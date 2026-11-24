@@ -54,8 +54,11 @@ These tabs read the running page through Angular's debug API. They need a develo
   <ngmd-card icon="shield" title="Errors" link="/inspectors/errors" cta="Errors">
     Errors from Angular's <code>ErrorHandler</code>, uncaught errors, unhandled rejections and the console, with NG0xxx codes explained.
   </ngmd-card>
+  <ngmd-card icon="sparkles" title="WebMCP" link="/inspectors/webmcp" cta="WebMCP">
+    The tools your page registers for browser agents, every call to them, and what each call changed in the app.
+  </ngmd-card>
   <ngmd-card icon="compass" title="Timeline" link="/inspectors/timeline" cta="Timeline">
-    Navigations, HTTP calls, NgRx actions, change detection, form events and signal changes on one time axis.
+    Navigations, HTTP calls, NgRx actions, change detection, form events, signal changes and WebMCP tool calls on one time axis.
   </ngmd-card>
   <ngmd-card icon="search" title="Audit" link="/inspectors/audit" cta="Audit">
     One ranked list of what the inspectors found, an axe pass over the app, and a before and after comparison of a change.

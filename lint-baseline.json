@@ -12,7 +12,7 @@
     "eslint(no-setter-return)": 1
   },
   "app/src/app.ts": {
-    "pangular(max-lines)": 1980
+    "pangular(max-lines)": 1913
   },
   "app/src/pages/store-types.ts": {
     "typescript(no-explicit-any)": 1
@@ -208,7 +208,7 @@
     "unicorn(prefer-string-starts-ends-with)": 1
   },
   "packages/devtools/src/config.ts": {
-    "pangular(max-lines)": 2778
+    "pangular(max-lines)": 2698
   },
   "packages/devtools/src/console-tap.ts": {
     "unicorn(no-useless-spread)": 1
@@ -261,7 +261,7 @@
     "unicorn(no-useless-spread)": 2
   },
   "packages/devtools/src/ngrx-collector.ts": {
-    "pangular(max-lines)": 1954,
+    "pangular(max-lines)": 1911,
     "typescript(no-explicit-any)": 1,
     "unicorn(no-useless-fallback-in-spread)": 1,
     "unicorn(no-useless-spread)": 3

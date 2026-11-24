@@ -1,14 +1,29 @@
 import { redactFormText } from './forms.ts';
-import { redactText, serialize } from './serialize.ts';
+import { TRUNCATED, redactText, serialize } from './serialize.ts';
 import { childPath } from './forms-path.ts';
 import { tokenName, type DebugNg } from './injector-tree.ts';
+import {
+  WEBMCP_GRACE_MS,
+  type WebMcpCallEntry,
+  type WebMcpEffectKey,
+  type WebMcpOutcome,
+  type WebMcpPageTool,
+} from './webmcp-trace.ts';
+import {
+  WEBMCP_ZONE_KEY,
+  enterWebMcpCall,
+  trackWebMcpCall,
+  untrackWebMcpCall,
+} from './webmcp-call-context.ts';
+
+export { noteWebMcpEffect, webMcpCallNow } from './webmcp-call-context.ts';
 
 /** Longest a tried WebMCP tool may take to answer. */
 export const RUN_TIMEOUT_MS = 10_000;
 
 type AnyRecord = Record<string, any>;
 
-export type WebMcpOutcome = 'running' | 'submitted' | 'failed' | 'done' | 'threw';
+export type { WebMcpOutcome };
 
 export interface WebMcpCall {
   at: number;
@@ -73,6 +88,15 @@ export interface WebMcpWatcher {
     forms: WebMcpForm[],
     ng?: DebugNg,
   ): { forms: Map<object, WebMcpTool>; page?: WebMcpPage };
+  /** Every tool and the page-wide call log, for the `webmcp` collector. */
+  report(): {
+    modelContext: boolean;
+    tools: WebMcpPageTool[];
+    calls: WebMcpCallEntry[];
+    dropped: number;
+  };
+  /** How many calls the page-wide log keeps (`limits.webmcpCalls`). */
+  setMaxCalls(max: number): void;
   stop(): void;
 }
 
@@ -84,9 +108,75 @@ interface ToolRecord {
   error?: string;
   schema?: AnyRecord;
   shape?: string;
+  annotations?: Record<string, unknown>;
+  registeredAt?: number;
+  /** The form `describe` linked it to. */
+  formId?: string;
   calls: (WebMcpCall & { started: number })[];
   /** Calls the tool: the wrapped `execute`, or the browser's testing API for a listed tool. */
   execute?: (args: unknown) => unknown;
+}
+
+/** A call in the page-wide log; values are masked when it is reported. */
+interface LogEntry {
+  id: number;
+  record: ToolRecord;
+  at: number;
+  started: number;
+  ms?: number;
+  outcome: WebMcpOutcome;
+  args?: unknown;
+  result?: unknown;
+  detail?: string;
+  caused: WebMcpEffectKey[];
+  /** Started from the panel's Try this tool, not by an agent. */
+  tried?: boolean;
+  /** The tool's `readOnlyHint` claim when it was called. */
+  readOnly: boolean;
+  /** The form the call's values were masked for, kept once the form is gone. */
+  formId?: string;
+  /** The user pressed a key or the pointer while the call ran or within the grace after it. */
+  userInput?: boolean;
+}
+
+const DEFAULT_MAX_LOG = 100;
+/** About 4 KB of JSON per value. */
+const MAX_VALUE_CHARS = 4096;
+const VALUE_LIMITS = { depth: 6, keys: 50, items: 50, text: 1000, budget: 400 };
+let nextCallId = 0;
+
+function zoneApi(): AnyRecord | undefined {
+  return read(() => (globalThis as AnyRecord)['Zone'] as AnyRecord | undefined, undefined);
+}
+
+/** A value as it may leave the page: masked, and cut to about 4 KB. */
+function captureValue(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  const safe = read(() => serialize(value, VALUE_LIMITS), TRUNCATED);
+  const text = read(() => JSON.stringify(safe) ?? '', '');
+  return text.length > MAX_VALUE_CHARS ? `${text.slice(0, MAX_VALUE_CHARS)}… ${TRUNCATED}` : safe;
+}
+
+/** `value` with a form's masked field values hidden too. */
+function maskForForm(value: unknown, formId: string | undefined): unknown {
+  if (value === undefined || !formId) return value;
+  if (typeof value === 'string') return redactFormText(formId, value);
+  return read(() => {
+    const text = JSON.stringify(value);
+    const masked = redactFormText(formId, text);
+    return masked === text ? value : JSON.parse(masked);
+  }, '[Unreadable]');
+}
+
+function annotationsOf(tool: AnyRecord): Record<string, unknown> | undefined {
+  const value = read(() => tool['annotations'], undefined);
+  if (!value || typeof value !== 'object') return undefined;
+  const out: Record<string, unknown> = {};
+  for (const [key, hint] of Object.entries(value).slice(0, 20)) {
+    if (typeof hint === 'boolean' || typeof hint === 'number') out[key.slice(0, 60)] = hint;
+    else if (typeof hint === 'string') out[key.slice(0, 60)] = redactText(hint.slice(0, 200));
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 interface Shape {
@@ -267,6 +357,24 @@ function messageOf(error: unknown): string {
   return String((error as Error)?.message ?? error ?? 'error').slice(0, 300);
 }
 
+/**
+ * Runs a tool's `execute` in a zone forked from the current one when the app
+ * uses Zone.js, so work it starts later (after an `await`, in a timer) is
+ * still tied to the call. The fork only adds a property; everything else
+ * goes to the parent zone as before.
+ */
+function inCallZone<T>(id: number, run: () => T): T {
+  const zone = read(
+    () =>
+      zoneApi()?.['current']?.fork?.({
+        name: 'pangular-webmcp-call',
+        properties: { [WEBMCP_ZONE_KEY]: id },
+      }) as AnyRecord | undefined,
+    undefined,
+  );
+  return zone && typeof zone['run'] === 'function' ? (zone['run'](run) as T) : run();
+}
+
 export function watchWebMcp(onChange: () => void): WebMcpWatcher {
   const records: ToolRecord[] = [];
   const links = new WeakMap<object, ToolRecord>();
@@ -287,6 +395,36 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
   let restore: (() => void) | null = null;
   // True while `run` calls a tool, so the call is marked as tried and not counted as the agent's.
   let trying = false;
+  const log: LogEntry[] = [];
+  let maxLog = DEFAULT_MAX_LOG;
+  let dropped = 0;
+  // Marks the calls the user was active during (or just after), so a call's time window can
+  // leave out what the user did. Latched, so it holds however much input follows.
+  const onInput = () => {
+    const now = Date.now();
+    for (const entry of log) {
+      if (
+        !entry.userInput &&
+        (entry.ms === undefined || now <= entry.at + entry.ms + WEBMCP_GRACE_MS)
+      ) {
+        entry.userInput = true;
+      }
+    }
+  };
+  const INPUT_EVENTS = ['pointerdown', 'keydown'] as const;
+  if (typeof addEventListener === 'function') {
+    for (const type of INPUT_EVENTS) {
+      addEventListener(type, onInput, { capture: true, passive: true });
+    }
+  }
+
+  const trimLog = () => {
+    while (log.length > maxLog) {
+      const old = log.shift()!;
+      untrackWebMcpCall(old.id);
+      dropped++;
+    }
+  };
 
   const add = (record: ToolRecord) => {
     records.push(record);
@@ -317,12 +455,31 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
         wrote.add(record);
         ran.add(record);
       }
+      const entry: LogEntry = {
+        id: ++nextCallId,
+        record,
+        at: call.at,
+        started: call.started,
+        outcome: 'running',
+        args: captureValue(args),
+        caused: [],
+        ...(tried ? { tried } : {}),
+        readOnly: record.annotations?.['readOnlyHint'] === true,
+      };
+      log.push(entry);
+      trackWebMcpCall(entry);
+      trimLog();
       const previous = current;
       current = record;
-      const settle = (outcome: WebMcpOutcome, detail?: string) => {
+      const previousEntry = enterWebMcpCall(entry);
+      const settle = (outcome: WebMcpOutcome, detail?: string, value?: unknown) => {
         call.outcome = outcome;
         call.ms = Math.round(performance.now() - call.started);
         if (detail) call.detail = detail.slice(0, 300);
+        entry.outcome = outcome;
+        entry.ms = call.ms;
+        if (detail) entry.detail = redactText(detail.slice(0, 300));
+        if (value !== undefined) entry.result = captureValue(value);
         if (!tried) {
           const left = (running.get(record) ?? 1) - 1;
           if (left > 0) running.set(record, left);
@@ -332,19 +489,26 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
       };
       let out: unknown;
       try {
-        out = execute.call(this, args, ...rest);
+        out = inCallZone(entry.id, () => execute.call(this, args, ...rest));
       } catch (error) {
         settle('threw', messageOf(error));
         throw error;
       } finally {
         current = previous;
+        enterWebMcpCall(previousEntry);
       }
       Promise.resolve(out).then(
         (value) => {
           const text = resultText(value);
           if (text.startsWith('Form submission failed')) {
-            settle('failed', text.replace(/^Form submission failed:\n?/, ''));
-          } else settle(text.startsWith('Form submitted successfully') ? 'submitted' : 'done');
+            settle('failed', text.replace(/^Form submission failed:\n?/, ''), value);
+          } else {
+            settle(
+              text.startsWith('Form submitted successfully') ? 'submitted' : 'done',
+              '',
+              value,
+            );
+          }
         },
         (error) => settle('threw', messageOf(error)),
       );
@@ -365,6 +529,8 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
         status: 'registering',
         seen: 'register',
         schema: parseSchema(read(() => tool['inputSchema'], undefined)),
+        annotations: annotationsOf(tool),
+        registeredAt: Date.now(),
         calls: [],
       });
       record.shape = record.schema && shapeKey(record.schema);
@@ -419,6 +585,7 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
               seen: 'list',
               schema,
               shape: schema && shapeKey(schema),
+              annotations: annotationsOf(tool),
               calls: [],
               execute: testingExecute(name),
             });
@@ -620,6 +787,7 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
         taken.add(blocked[0]);
       }
       const unlinked: WebMcpTool[] = [];
+      for (const record of records) record.formId = owner.get(record)?.formId;
       for (const record of records) {
         const form = owner.get(record);
         if (form) out.set(form.root, toTool(record, form, shapes.get(form)));
@@ -630,11 +798,101 @@ export function watchWebMcp(onChange: () => void): WebMcpWatcher {
         page: { modelContext: !!context, provided, tools: unlinked.slice(0, MAX_LIST) },
       };
     },
+    report() {
+      lookUp();
+      const tools: WebMcpPageTool[] = records.slice(0, MAX_LIST).map((record) => {
+        const redact = (text: string) =>
+          record.formId ? redactFormText(record.formId, text) : redactText(text);
+        const schema = record.schema;
+        return {
+          name: record.name,
+          description: redact(record.description),
+          status: record.status,
+          seen: record.seen,
+          ...(record.error ? { error: redact(record.error) } : {}),
+          ...(record.annotations ? { annotations: record.annotations } : {}),
+          ...(schema ? { inputs: schemaInputs(schema), required: schemaRequired(schema) } : {}),
+          ...(record.formId ? { formId: record.formId } : {}),
+          ...(records.filter((r) => r.name === record.name).length > 1 ? { duplicate: true } : {}),
+          ...(record.registeredAt ? { registeredAt: record.registeredAt } : {}),
+        };
+      });
+      const calls: WebMcpCallEntry[] = log.map((entry) => {
+        // Once linked, a call keeps its form, so its values stay masked after the form is gone.
+        entry.formId ??= entry.record.formId;
+        const formId = entry.formId;
+        if (formId) {
+          // Masked in place: a form's masks only grow, and the stored copy needs no form later.
+          entry.args = maskForForm(entry.args, formId);
+          entry.result = maskForForm(entry.result, formId);
+          if (entry.detail) entry.detail = redactFormText(formId, entry.detail);
+        }
+        const userInput = entry.userInput === true;
+        return {
+          id: entry.id,
+          tool: entry.record.name,
+          at: entry.at,
+          ...(entry.ms !== undefined ? { ms: entry.ms } : {}),
+          outcome: entry.outcome,
+          ...(entry.args !== undefined ? { args: entry.args } : {}),
+          ...(entry.result !== undefined ? { result: entry.result } : {}),
+          ...(entry.detail ? { detail: entry.detail } : {}),
+          ...(userInput ? { userInput: true } : {}),
+          ...(entry.caused.length ? { caused: entry.caused.slice() } : {}),
+          ...(formId ? { formId } : {}),
+          ...(entry.tried ? { tried: true } : {}),
+          ...(entry.readOnly ? { readOnly: true } : {}),
+        };
+      });
+      return { modelContext: !!context, tools, calls, dropped };
+    },
+    setMaxCalls(max) {
+      maxLog = Math.max(1, Math.floor(max));
+      trimLog();
+    },
     stop() {
       restore?.();
       restore = null;
+      for (const entry of log) untrackWebMcpCall(entry.id);
       if (typeof removeEventListener === 'function') {
         removeEventListener('unhandledrejection', onRejection);
+        for (const type of INPUT_EVENTS) removeEventListener(type, onInput, { capture: true });
+      }
+    },
+  };
+}
+
+let shared: { watcher: WebMcpWatcher; listeners: Set<() => void> } | null = null;
+
+/**
+ * The one watcher of the page, shared by the forms and `webmcp` collectors:
+ * `registerTool` is replaced once, and each collector hears every change.
+ * The watcher stops when the last one releases it.
+ */
+export function shareWebMcp(listener: () => void): {
+  watcher: WebMcpWatcher;
+  release(): void;
+} {
+  if (!shared) {
+    const listeners = new Set<() => void>();
+    const watcher = watchWebMcp(() => {
+      // A copy: a listener may release itself while the set is walked.
+      for (const run of Array.from(listeners)) run();
+    });
+    shared = { watcher, listeners };
+  }
+  const own = shared;
+  own.listeners.add(listener);
+  let released = false;
+  return {
+    watcher: own.watcher,
+    release() {
+      if (released) return;
+      released = true;
+      own.listeners.delete(listener);
+      if (!own.listeners.size && shared === own) {
+        own.watcher.stop();
+        shared = null;
       }
     },
   };

@@ -22,7 +22,15 @@ vi.mock('devframe/client', () => ({ connectDevframe: () => new Promise(() => {})
 
 const { Timeline, TIMELINE_LIST_CAP } = await import('../pages/timeline');
 
-const ALL_LAYERS = new Set<TimelineLayer>(['router', 'http', 'ngrx', 'cd', 'forms', 'signals']);
+const ALL_LAYERS = new Set<TimelineLayer>([
+  'router',
+  'http',
+  'ngrx',
+  'cd',
+  'forms',
+  'signals',
+  'webmcp',
+]);
 
 /** One page of each source, with events spread over a few seconds. */
 function sources(): TimelineSources {
@@ -293,6 +301,66 @@ describe('timeline data', () => {
     const bins = binTimeline(events, { start: 0, end: 10_000 }, 1);
     expect(bins.find((bin) => bin.layer === 'router')!.tone).toBe('danger');
     expect(nearestEvent(events, 'router', 4_000)!.title).toBe('Navigation to /admin');
+  });
+});
+
+describe('the WebMCP lane', () => {
+  const tool = (name: string, annotations?: Record<string, unknown>) => ({
+    name,
+    description: '',
+    status: 'registered',
+    seen: 'register',
+    ...(annotations ? { annotations } : {}),
+  });
+  const webmcp = {
+    pages: {
+      p1: {
+        pageId: 'p1',
+        title: 'Trips',
+        modelContext: true,
+        tools: [tool('search', { readOnlyHint: true }), tool('book')],
+        calls: [
+          { id: 1, tool: 'search', at: 1_990, ms: 40, outcome: 'done' },
+          { id: 2, tool: 'book', at: 6_000, ms: 5, outcome: 'threw', detail: 'Boom' },
+          { id: 3, tool: 'search', at: 7_000, outcome: 'running' },
+          { id: 4, tool: 'book', at: 8_000, ms: 3, outcome: 'done' },
+        ],
+      },
+    },
+  };
+
+  it('draws one span per call, linked to the call on the WebMCP tab', () => {
+    const events = mergeTimeline({ ...sources(), webmcp }).filter((e) => e.layer === 'webmcp');
+    expect(events.map((event) => event.title)).toEqual([
+      'search call',
+      'book call',
+      'search call',
+      'book call',
+    ]);
+    expect(events[0]).toMatchObject({
+      key: 'webmcp:p1:1',
+      pageId: 'p1',
+      at: 1_990,
+      ms: 40,
+      detail: 'done · 40 ms',
+      link: { tab: 'webmcp', id: '1', page: 'p1' },
+    });
+    expect(events[2].detail).toBe('running');
+    expect(events[2].ms).toBeUndefined();
+  });
+
+  it('marks a call that threw, and a read-only tool that changed data', () => {
+    const events = mergeTimeline({ ...sources(), webmcp }).filter((e) => e.layer === 'webmcp');
+    // The read-only search ran while the page posted to /api/seats.
+    expect(events.map((event) => event.tone)).toEqual(['warn', 'danger', undefined, undefined]);
+    // Without that HTTP call the same search reads only.
+    const quiet = mergeTimeline({ webmcp }).filter((e) => e.layer === 'webmcp');
+    expect(quiet[0].tone).toBeUndefined();
+  });
+
+  it('names a page from its WebMCP report', () => {
+    const events = mergeTimeline({ webmcp });
+    expect(timelinePages({ webmcp }, events)).toEqual([{ pageId: 'p1', label: 'Trips' }]);
   });
 });
 

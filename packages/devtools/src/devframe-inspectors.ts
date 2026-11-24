@@ -17,6 +17,8 @@ import { registerReduxStores } from './rpc/redux-stores-register.ts';
 import { registerServerErrors } from './rpc/server-errors-register.ts';
 import { registerStartup } from './rpc/startup-register.ts';
 import { registerBuild } from './rpc/build-register.ts';
+import { registerWebMcp } from './rpc/webmcp-register.ts';
+import type { WebMcpTraceSources } from './webmcp-trace.ts';
 import { guardHandler } from './rpc/tool-input.ts';
 import type {
   AgentRegistrar,
@@ -44,6 +46,8 @@ export interface InspectorsEnv {
   /** When a page last beat (`rpc/page-heartbeats.ts`). */
   seenAt: (pageId: string) => number | undefined;
   serverPlugins: readonly PangularServerPlugin[] | undefined;
+  /** The shared states the WebMCP call trace joins; read only when an agent asks. */
+  webMcpSources: () => WebMcpTraceSources;
 }
 
 /** Errors, performance, build, leaks, startup, Ionic, plugins, Redux stores and TanStack Query. */
@@ -63,6 +67,7 @@ export async function registerInspectors(env: InspectorsEnv) {
     pageTools,
     seenAt,
     serverPlugins,
+    webMcpSources,
   } = env;
   const on = config.inspectors;
   const limits = config.limits;
@@ -93,6 +98,19 @@ export async function registerInspectors(env: InspectorsEnv) {
       })
     : null;
   if (on.build) registerBuild({ register, agent, root: ctx.cwd });
+  // The WebMCP trace joins what the HTTP, NgRx, router, forms and signals collectors report.
+  const webMcpInspector = on.webmcp
+    ? await registerWebMcp({
+        my,
+        rpcHost: ctx.rpc,
+        register,
+        agent,
+        owns,
+        mayForget,
+        ttl: liveTtl,
+        sources: webMcpSources,
+      })
+    : null;
   const leaksInspector = on.components
     ? await registerLeaks({
         my,
@@ -184,6 +202,7 @@ export async function registerInspectors(env: InspectorsEnv) {
     perfInspector,
     leaksInspector,
     startupInspector,
+    webMcpInspector,
     ionicInspector,
     pluginsInspector,
     reduxStores,

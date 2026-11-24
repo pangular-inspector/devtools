@@ -1,15 +1,13 @@
 import { queueMicrotaskOutside } from './outside-angular.ts';
 import * as angularCore from '@angular/core';
-import { isRedactedKey, REDACTED, withRedactionScope } from './forms-privacy.ts';
+import { REDACTED, withRedactionScope } from './forms-privacy.ts';
 import { documentTree, type HostTree } from './host-tree.ts';
 import { className, tokenName } from './injector-tree.ts';
 import {
   devtoolsProblem,
   diff,
-  joinStatePath,
   dispatchProblem,
   NGRX_BURST_WINDOW_MS,
-  NGRX_DIFF_MORE_CAP,
   NGRX_LOOP_BURST,
   NGRX_MAX_STATS,
   NGRX_TRACE_FRAMES,
@@ -19,7 +17,6 @@ import {
   type NgrxActionStat,
   type NgrxClassicStoreInfo,
   type NgrxDevtoolsRequest,
-  type NgrxDiffEntry,
   type NgrxActionOrigin,
   type NgrxLogEntry,
   type NgrxRequest,
@@ -31,9 +28,13 @@ import {
 import { registeredPatchState, registeredWatchState } from './ngrx-register.ts';
 import { historyRequest, type HistorySource } from './ngrx-history.ts';
 import { markSecretWriter, safeArgs, touchesSecret } from './ngrx-args.ts';
-import { SliceCache } from './ngrx-slice-cache.ts';
+import { MAX_DIFF, SMALL, snapshotDiff, truncated, type Snapshot } from './ngrx-snapshot-diff.ts';
 import { ReportMemo, ReportVersion } from './ngrx-report-memo.ts';
 import { appFrames, captureStack } from './signal-stack.ts';
+import { noteWebMcpEffect, webMcpCallNow } from './webmcp-call-context.ts';
+
+/** The WebMCP call each action was dispatched in; `null` when it was dispatched outside one. */
+const webMcpActions = new WeakMap<object, number | null>();
 
 /**
  * Angular's `untracked` (16.0+), read at runtime: a named import of it fails
@@ -89,6 +90,9 @@ interface Tracked {
   writable: boolean;
   depth: number;
   pendingBefore: Record<PropertyKey, unknown> | null;
+  /** The WebMCP tool call that made the write `pendingBefore` waits to log. */
+  /** The WebMCP call the pending writes were made in; `null` for none. */
+  pendingWebMcpCall?: number | null;
   lastNoop: Map<string, number>;
   undo: (() => void)[];
   /**
@@ -152,8 +156,6 @@ interface Classic {
   stop: () => void;
 }
 
-type Snapshot = Record<PropertyKey, unknown>;
-
 type Method = (this: unknown, ...args: unknown[]) => unknown;
 
 /**
@@ -166,9 +168,7 @@ type Saved =
   | { kind: 'event' };
 
 const MAX_LOG = 200;
-const MAX_DIFF = 50;
 const NOOP_GAP_MS = 1000;
-const SMALL = { depth: 4, maxKeys: 20, maxString: 300, budget: 400 };
 /** A computed that threw when read, and what the report shows for it. */
 const UNREADABLE = Symbol('unreadable');
 const COULD_NOT_READ = { '@type': 'Error', message: 'Could not read' } as const;
@@ -236,67 +236,6 @@ function envScope<H extends object>(ng: NgrxDebugNg<H>, injector: AnyRecord): st
   if (read(() => injector['scopes']?.has?.('platform'), false)) return 'platform';
   const source = read(() => ng.ɵgetInjectorMetadata?.(injector)?.source, undefined);
   return typeof source === 'string' && source ? source : 'environment';
-}
-
-/** The kept diff rows, and how many more changes were counted past them. */
-interface Changes {
-  diff: NgrxDiffEntry[];
-  more: number;
-}
-
-/** `diffTruncated` for an entry, set only when changes were left out. */
-function truncated(more: number): { diffTruncated?: number } {
-  return more > 0 ? { diffTruncated: Math.min(more, NGRX_DIFF_MORE_CAP) } : {};
-}
-
-const slices = new SliceCache();
-
-function snapshotDiff(before: Snapshot, after: Snapshot, keys: PropertyKey[]): Changes {
-  const out: NgrxDiffEntry[] = [];
-  const overflow = { more: 0 };
-  for (const key of keys) {
-    if (out.length >= MAX_DIFF && overflow.more >= NGRX_DIFF_MORE_CAP) break;
-    if (before[key] === after[key]) continue;
-    // Quoted the way the state tree writes a child path, as in `["first name"]`.
-    const root = typeof key === 'string' ? joinStatePath('', key) : String(key);
-    if (typeof key === 'string' && isRedactedKey(key)) {
-      if (out.length < MAX_DIFF) {
-        out.push({ path: root, op: 'change', before: REDACTED, after: REDACTED });
-      } else overflow.more++;
-      continue;
-    }
-    const counted = overflow.more;
-    const found = diff(
-      slices.before(key, before[key]),
-      slices.after(key, after[key]),
-      MAX_DIFF - out.length,
-      undefined,
-      overflow,
-      root,
-    );
-    if (!found.length && overflow.more === counted) {
-      out.push(
-        ...referenceDiff(
-          before[key],
-          after[key],
-          root,
-          SMALL,
-          MAX_DIFF - out.length,
-          undefined,
-          overflow,
-        ),
-      );
-      continue;
-    }
-    for (const entry of found) {
-      out.push({
-        ...entry,
-        ...('before' in entry ? { before: serialize(entry.before, SMALL) } : {}),
-        ...('after' in entry ? { after: serialize(entry.after, SMALL) } : {}),
-      });
-    }
-  }
-  return { diff: out, more: overflow.more };
 }
 
 function syncValue(observable: AnyRecord | null | undefined): unknown {
@@ -494,8 +433,12 @@ export function createNgrxCollector<H extends object = Element>(
   /** With `ngrx.trace`: where the event flowing through `Dispatcher.dispatch()` was dispatched. */
   let currentEventTrace: string[] | undefined;
 
-  const append = (entry: Omit<NgrxLogEntry, 'seq'>, keep: Saved) => {
+  const append = (entry: Omit<NgrxLogEntry, 'seq'>, keep: Saved, webMcpCall?: number | null) => {
     const full = { ...entry, seq: ++seq };
+    // A change logged later (a microtask, the actions stream) passes the call it started in,
+    // or `null` when it started outside one; `undefined` means the change happens now.
+    const callId = webMcpCall === undefined ? webMcpCallNow() : (webMcpCall ?? undefined);
+    if (callId !== undefined) noteWebMcpEffect(callId, 'ngrx', String(full.seq));
     log.push(full);
     count(full);
     saved.set(full.seq, keep);
@@ -547,6 +490,7 @@ export function createNgrxCollector<H extends object = Element>(
     durationMs?: number,
     method?: unknown,
     trace?: string[],
+    webMcpCall?: number | null,
   ) => {
     const after = snapshot(t);
     const changes = snapshotDiff(before, after, t.stateKeys);
@@ -594,6 +538,7 @@ export function createNgrxCollector<H extends object = Element>(
         ...withTrace(trace),
       },
       { kind: 'signal', tracked: t, before, after },
+      webMcpCall,
     );
   };
 
@@ -612,12 +557,11 @@ export function createNgrxCollector<H extends object = Element>(
     t.pendingBefore = snapshot(t);
     // Under onWrite: the wrapped set or update.
     t.pendingTrace = traceNow(2);
+    t.pendingWebMcpCall = webMcpCallNow() ?? null;
     queueMicrotaskOutside(() => {
       const before = t.pendingBefore;
-      const trace = t.pendingTrace;
       t.pendingBefore = null;
-      t.pendingTrace = undefined;
-      if (before) finish(t, 'patchState', undefined, before, false, undefined, undefined, trace);
+      if (before) finishPending(t, before);
     });
   };
 
@@ -629,10 +573,18 @@ export function createNgrxCollector<H extends object = Element>(
   const flushPending = (t: Tracked) => {
     const before = t.pendingBefore;
     if (!before) return;
-    const trace = t.pendingTrace;
     t.pendingBefore = null;
+    finishPending(t, before);
+  };
+
+  /** Logs the writes `pendingBefore` held, with their stack and the WebMCP call that made them. */
+  const finishPending = (t: Tracked, before: Snapshot) => {
+    const trace = t.pendingTrace;
+    // Captured with the writes: a flush from inside a later tool call must not claim them.
+    const webMcpCall = t.pendingWebMcpCall ?? null;
     t.pendingTrace = undefined;
-    finish(t, 'patchState', undefined, before, false, undefined, undefined, trace);
+    t.pendingWebMcpCall = undefined;
+    finish(t, 'patchState', undefined, before, false, undefined, undefined, trace, webMcpCall);
   };
 
   /**
@@ -1135,6 +1087,9 @@ export function createNgrxCollector<H extends object = Element>(
         ...withTrace(trace),
       },
       { kind: 'classic', action, before, after: raw },
+      action && typeof action === 'object' && webMcpActions.has(action)
+        ? webMcpActions.get(action)
+        : undefined,
     );
   };
 
@@ -1196,6 +1151,8 @@ export function createNgrxCollector<H extends object = Element>(
     const tag = (action: unknown, origin: NgrxActionOrigin) => {
       if (!active || !action || typeof action !== 'object') return;
       origins.set(action, origin);
+      // Set on every dispatch, so a reused action object drops a call it was dispatched in before.
+      webMcpActions.set(action, webMcpCallNow() ?? null);
       // Under tag and the wrapped dispatch or next.
       const trace = traceNow(2);
       if (trace) traces.set(action, trace);

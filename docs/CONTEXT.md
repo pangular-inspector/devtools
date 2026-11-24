@@ -45,7 +45,7 @@ A report a collector sends to the server over RPC, such as `push-component-tree`
 _Avoid_: sync, upload, post
 
 **Inspector**:
-One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `tanstackQuery`, `forms`, `router`, `pipes`, `http`, `analog`, `capacitor`, `errors` and `plugins` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
+One area the devtools can look at: `components`, `injectors`, `signals`, `ngrx`, `tanstackQuery`, `forms`, `router`, `pipes`, `http`, `analog`, `capacitor`, `errors`, `webmcp` and `plugins` (`PANGULAR_INSPECTORS` in `config.ts`). An inspector owns a collector, its RPC functions, its agent tools and its view in the panel, and `inspectors` in the config turns all of them off together.
 _Avoid_: plugin (a Pangular plugin is a library's own view), module, feature
 
 **Pangular plugin**:
@@ -83,6 +83,14 @@ _Avoid_: endpoint, API, handler
 **Agent tool**:
 An RPC function marked for agents, which Devframe exposes as an MCP tool. Its inspector, safety tier and the `actions` it writes for are in its entry in `AGENT_ENTRIES` in `config.ts`.
 _Avoid_: MCP command, function, skill
+
+**WebMCP tool**:
+A tool the inspected page registers for browser agents with `modelContext.registerTool()`, including the ones Angular Signal Forms registers for a form that sets `experimentalWebMcpTool`. The `webmcp` inspector lists them and logs their calls (`forms-webmcp.ts`, `webmcp-collector.ts`); Pangular's own browser agent tools are left out.
+_Avoid_: page tool, browser tool (Pangular's own agent tools that `browser-tools.ts` puts on the page), MCP tool
+
+**Call trace**:
+What one WebMCP tool call did in the app: the HTTP requests, NgRx actions, navigations, form events and signal writes around it (`traceCall` in `webmcp-trace.ts`). An effect is _caused_ when a collector saw it start while `execute` ran, synchronously or in the call's Zone.js zone, and _probably caused_ (`during`) when it started between the call's start and 500 ms after its end with no user input.
+_Avoid_: side effects, call log (the log is the list of calls), audit
 
 **Action**:
 Anything that changes the app or the server rather than reading it: setting a form value, navigating, restoring store state, HTTP fault rules. `actions` in the config blocks them, and `agent.readOnly` drops the agent tools that perform them.

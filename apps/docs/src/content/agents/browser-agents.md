@@ -87,7 +87,7 @@ The WebMCP registration carries the `readOnlyHint`, `untrustedContentHint` and `
 | The page comes back from the back/forward cache | It registers them again.                                                                                                  |
 | `disposeOverlay()` or a second `initOverlay()`  | It unregisters them.                                                                                                      |
 
-Without WebMCP, the page only listens for `devtoolstooldiscovery`. It writes nothing to your app's DOM. The [Forms](../inspectors/forms.md) tab leaves these tools out of its WebMCP list, which shows the tools of your app.
+Without WebMCP, the page only listens for `devtoolstooldiscovery`. It writes nothing to your app's DOM. The [Forms](../inspectors/forms.md) and [WebMCP](../inspectors/webmcp.md) tabs leave these tools out of their WebMCP lists, which show the tools of your app.
 
 <ngmd-callout type="warning" title="Any script on the page can call them">
   In-page agents and other scripts can list WebMCP tools and run them. The tools don't change your app's data, but they read the server's view of your page, including the source scan, and <code>inspect-component</code> selects the instance it reads in open panels. Leave <code>agent.browserTools</code> and the <strong>Browser agent tools</strong> switch off if your development page loads scripts you don't trust.

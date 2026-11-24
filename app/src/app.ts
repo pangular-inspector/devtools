@@ -31,11 +31,13 @@ import type { PipeFocus } from './types/pipe-focus.types';
 import type { SignalFocus } from './types/signal-focus.types';
 import { AnalogInspector } from './pages/analog-inspector';
 import { NetworkInspector } from './pages/network-inspector';
-import { ComingSoon, type ComingSoonInfo } from './pages/coming-soon';
+import { ComingSoon } from './pages/coming-soon';
+import { CAPACITOR_SETUP, NATIVESCRIPT_SETUP, NOT_ANALOG, NO_ANGULAR_NATIVE } from './hub-setup';
 import { CapacitorInspector } from './pages/capacitor-inspector';
 import { ErrorsInspector } from './pages/errors-inspector';
 import { PerformanceInspector } from './pages/performance-inspector';
 import { BuildInspector } from './pages/build-inspector';
+import { WebMcpInspector, type WebMcpFocus } from './pages/webmcp-inspector';
 import { PluginsInspector, pluginsReporting } from './pages/plugins-inspector';
 import { AuditInspector } from './pages/audit-inspector';
 import { Timeline } from './pages/timeline';
@@ -121,81 +123,6 @@ const VIEW_TABS: Partial<Record<View, Tab[]>> = {
   'angular-native': ['components', 'signals', 'injectors', 'store', 'queries', 'pipes', 'errors'],
 };
 
-const NATIVESCRIPT_SETUP: ComingSoonInfo = {
-  id: 'nativescript',
-  name: 'NativeScript',
-  badge: 'Available',
-  heading: 'Inspect NativeScript apps',
-  summary:
-    'A NativeScript Angular app reports from the simulator or device to this server, and its components, signals, injectors and NgRx stores show up in the Angular dock.',
-  color: '#3c5afd',
-  plansTitle: 'Set up an app',
-  plans: [
-    'Install @pangular-inspector/devtools and @valor/nativescript-websockets',
-    'Call initNativeScriptOverlay() in main.ts, before the app bootstraps',
-    'Run npx pangular dev --no-auth in the app, then open the Angular dock',
-  ],
-  link: {
-    label: 'NativeScript setup guide',
-    href: 'https://pangular-inspector.dev/getting-started/nativescript/',
-  },
-};
-
-const CAPACITOR_SETUP: ComingSoonInfo = {
-  id: 'capacitor',
-  name: 'Capacitor',
-  badge: 'Available',
-  heading: 'Inspect Capacitor apps',
-  summary:
-    'An Ionic or Capacitor app runs the browser overlay in its WebView and reports to this server, so it shows up in the Angular dock like a browser tab.',
-  color: '#119eff',
-  plansTitle: 'Set up an app',
-  plans: [
-    'With live reload on localhost, load @pangular-inspector/devtools/overlay as in a browser',
-    'In a bundled build, call initOverlay() from @pangular-inspector/devtools/overlay-manual with this server’s address and connectionMeta',
-    'Run the app, then come back here for its plugin calls, or open the Angular dock',
-  ],
-  link: {
-    label: 'Capacitor setup guide',
-    href: 'https://pangular-inspector.dev/guides/capacitor/',
-  },
-};
-
-const NOT_ANALOG: ComingSoonInfo = {
-  id: 'analog',
-  name: 'Analog',
-  badge: 'Not in this app',
-  heading: 'This app doesn’t use Analog',
-  summary:
-    'In an Analog app this dock shows your file routes, server load() and API calls, render modes and route lint.',
-  color: '#dd0330',
-  plans: [
-    'Which page, layout and .server.ts files render a URL',
-    'Every load(), server function and API call with timing',
-    'SSR, prerendered or client only, per page',
-  ],
-  link: { label: 'Get started with Analog', href: 'https://analogjs.org/docs/getting-started' },
-};
-
-const NO_ANGULAR_NATIVE: ComingSoonInfo = {
-  id: 'angular-native',
-  name: 'Angular Native',
-  badge: 'Not connected',
-  heading: 'No Angular Native app is connected',
-  summary:
-    'Start the overlay in your Angular Native app and run this server with --no-auth. The tabs fill as soon as the app reports.',
-  color: '#e11d48',
-  plans: [
-    'The component tree, with the view outlined on the device',
-    'Signals and injectors of the running app',
-    'Live @ngrx/signals and @ngrx/store state',
-  ],
-  link: {
-    label: 'Set up Angular Native',
-    href: 'https://pangular-inspector.dev/getting-started/angular-native/',
-  },
-};
-
 /** How long the panel waits before each retry while it can't reach the server. */
 const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000];
 
@@ -229,6 +156,7 @@ function readView(): View | null {
     ErrorsInspector,
     PerformanceInspector,
     BuildInspector,
+    WebMcpInspector,
     PluginsInspector,
     AuditInspector,
     Timeline,
@@ -619,6 +547,14 @@ function readView(): View | null {
             }
             @case ('build') {
               <app-build-inspector [rpc]="rpc()" />
+            }
+            @case ('webmcp') {
+              <app-webmcp-inspector
+                [rpc]="rpc()"
+                [focus]="webmcpFocus()"
+                (focusHandled)="webmcpFocus.set(null)"
+                (open)="openLink($event)"
+              />
             }
             @case ('errors') {
               <app-errors-inspector
@@ -1661,13 +1597,7 @@ export class App implements OnInit, OnDestroy {
     const tab = link.tab as Tab;
     if (!this.availableTabs().some((t) => t.id === tab)) return false;
     if (this.tab() !== tab) this.switchTab(tab);
-    if (link.id && Object.hasOwn(PANEL_LINK_ITEMS, tab)) {
-      const pageId = link.page;
-      if (tab === 'components') this.componentFocus.set({ id: link.id, pageId });
-      else if (tab === 'injectors') this.injectorFocus.set({ componentId: link.id, pageId });
-      else if (tab === 'signals') this.signalFocus.set({ componentId: link.id, pageId });
-      else if (tab === 'forms') this.formFocus.set({ id: link.id });
-    }
+    if (link.id && Object.hasOwn(PANEL_LINK_ITEMS, tab)) this.focusLinkItem(link.id, link);
     history.replaceState(history.state, '', panelLinkHash(link));
     return true;
   }
@@ -1730,17 +1660,20 @@ export class App implements OnInit, OnDestroy {
   /** The item a deep link on load names, applied once its tab is open. */
   private restoreLinkItem() {
     const link = parsePanelLink(location.hash);
-    if (!link?.id || link.tab !== this.tab()) return;
-    const tab = link.tab as Tab;
-    if (tab === 'components') this.componentFocus.set({ id: link.id, pageId: link.page });
-    else if (tab === 'injectors') {
-      this.injectorFocus.set({ componentId: link.id, pageId: link.page });
-    } else if (tab === 'signals') {
-      this.signalFocus.set({ componentId: link.id, pageId: link.page });
-    } else if (tab === 'forms') this.formFocus.set({ id: link.id });
+    if (link?.id && link.tab === this.tab()) this.focusLinkItem(link.id, link);
+  }
+
+  /** Selects the item `id` names on the link's tab, on the link's page. */
+  private focusLinkItem(id: string, { tab, page: pageId }: PanelLink) {
+    if (tab === 'components') this.componentFocus.set({ id, pageId });
+    else if (tab === 'injectors') this.injectorFocus.set({ componentId: id, pageId });
+    else if (tab === 'signals') this.signalFocus.set({ componentId: id, pageId });
+    else if (tab === 'forms') this.formFocus.set({ id });
+    else if (tab === 'webmcp') this.webmcpFocus.set({ id, page: pageId });
   }
 
   formFocus = signal<{ id: string } | null>(null);
+  webmcpFocus = signal<WebMcpFocus | null>(null);
   // Belongs to the Components tab that received it, so leaving the tab drops it.
   readonly componentFocus = linkedSignal<Tab, ComponentFocus | null>({
     source: this.tab,
