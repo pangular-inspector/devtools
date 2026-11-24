@@ -252,6 +252,7 @@ const config: NgmdConfig = {
         {label: 'Errors', href: '/inspectors/errors'},
         {label: 'Performance', href: '/inspectors/performance'},
         {label: 'Build', href: '/inspectors/build'},
+        {label: 'WebMCP', href: '/inspectors/webmcp', status: 'new'},
         {label: 'Audit', href: '/inspectors/audit'},
       ],
     },

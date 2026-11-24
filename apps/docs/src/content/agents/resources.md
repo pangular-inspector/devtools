@@ -153,6 +153,7 @@ This table covers the data that has no resource of its own.
 | `pangular:browser-tools`    | Whether pages register the [browser agent tools](./browser-agents.md) (`enabled`), and the `agent.browserTools` value it starts from (`config`) |
 | `pangular:analog`           | Analog page data and the server call log                                                                                                        |
 | `pangular:capacitor`        | Capacitor plugin calls, listeners and environment, by page id                                                                                   |
+| `pangular:webmcp`           | WebMCP tools and their calls, by page id                                                                                                        |
 | `pangular:page-angular`     | The Angular version each page reported, by page id                                                                                              |
 | `pangular:page-visibility`  | The pages in a background tab (`hidden`)                                                                                                        |
 

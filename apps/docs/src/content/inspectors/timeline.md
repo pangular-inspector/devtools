@@ -1,10 +1,10 @@
 ---
 title: Timeline
-description: Navigations, HTTP calls, NgRx actions, change detection cycles, form events and signal changes of the running page on one time axis.
+description: Navigations, HTTP calls, NgRx actions, change detection cycles, form events, signal changes and WebMCP tool calls of the running page on one time axis.
 ---
 
 <ngmd-hero title="Timeline" gradient>
-  See what happened on the page in order, across the router, HTTP, NgRx, change detection, forms and signals, and jump to any event in its own tab.
+  See what happened on the page in order, across the router, HTTP, NgRx, change detection, forms, signals and WebMCP, and jump to any event in its own tab.
 </ngmd-hero>
 
 # Timeline
@@ -25,10 +25,11 @@ The Timeline tab puts the events that other tabs already record on one time axis
 | Change detection | Recorded change detection cycles, with their time, checks and trigger      | [Components](./components.md#change-detection) | `inspectors.components` |
 | Forms            | Form events such as value, status, submit and reset, with their origin     | [Forms](./forms.md), with the form selected    | `inspectors.forms`      |
 | Signals          | Value changes of the signals in the graph the Signals tab shows            | [Signals](./signals.md#value-history)          | `inspectors.signals`    |
+| WebMCP           | WebMCP tool calls, with their outcome and duration                         | [WebMCP](./webmcp.md), with the call selected  | `inspectors.webmcp`     |
 
 A layer button shows how many events of that layer are in the range. Press it to hide or show the layer. The panel remembers the hidden layers in `localStorage` under `pangular-timeline-hidden-layers`. A layer whose inspector is off in the [configuration](../getting-started/configuration.md) is not listed.
 
-Failed navigations and HTTP calls that fail or answer 500 or more are marked as errors. Cancelled or redirected navigations, HTTP answers from 400, fault rules and change detection cycles over 16 ms are marked as warnings.
+Failed navigations and HTTP calls that fail or answer 500 or more are marked as errors. A WebMCP call that threw or failed is marked as an error. Cancelled or redirected navigations, HTTP answers from 400, fault rules, change detection cycles over 16 ms and WebMCP calls of a `readOnlyHint` tool that changed data outside signals are marked as warnings.
 
 ### Time axis
 
