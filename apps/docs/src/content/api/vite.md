@@ -89,6 +89,8 @@ interface PangularConfig {
     cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
+    /** WebMCP tool calls kept per page. Default 100. */
+    webmcpCalls?: number;
     /**
      * How long, in ms, pages keep sending the component tree, injectors,
      * change detection and forms after an agent's last call when no panel is

@@ -28,6 +28,7 @@ const INSPECTOR_LABELS: Record<string, string> = {
   errors: 'Errors',
   performance: 'Performance',
   build: 'Build',
+  webmcp: 'WebMCP',
   plugins: 'Plugins',
 };
 
