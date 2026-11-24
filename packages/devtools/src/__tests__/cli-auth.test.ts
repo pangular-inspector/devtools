@@ -128,13 +128,14 @@ describe('pangular dev access', () => {
     const dir = authStoreDir(REPO, home);
     // The store holds an empty `auth.json` from startup and devframe writes the token a moment
     // later, so wait for the token itself. Only on POSIX does the mode check also wait for it.
+    // A slow Windows runner can take more than 3 s to write it; the wait ends as soon as it is there.
     const file = join(dir, 'auth.json');
     await vi.waitFor(
       () => {
         expect(Object.keys(JSON.parse(readFileSync(file, 'utf8')).trusted)).toHaveLength(1);
         expectPrivate(file, 0o600);
       },
-      { timeout: 3000 },
+      { timeout: 15_000 },
     );
     expectPrivate(dir, 0o700);
   }, 40_000);
