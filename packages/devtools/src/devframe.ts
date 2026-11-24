@@ -228,6 +228,14 @@ const pangular = defineDevframe({
       pageTools,
       seenAt: heartbeats.seenAt,
       serverPlugins: info?.serverPlugins,
+      // Called only when an agent asks, after every state below exists.
+      webMcpSources: () => ({
+        ...(on.http ? { http: http.httpState.value() } : {}),
+        ...(on.ngrx ? { ngrx: ngrxStoreState.value() } : {}),
+        ...(on.router ? { router: router.routerState.value() } : {}),
+        ...(on.forms ? { forms: formsState.value() } : {}),
+        ...(on.signals ? { signals: signalGraphState.value() } : {}),
+      }),
     });
     const { errorsInspector, leaksInspector } = inspectors;
 
@@ -301,6 +309,7 @@ const pangular = defineDevframe({
       inspectors.reduxStores?.expire(now);
       inspectors.tanstackQuery?.expire(now);
       inspectors.startupInspector?.expire(now);
+      inspectors.webMcpInspector?.expire(now);
       inspectors.ionicInspector?.expire(now);
       inspectors.pluginsInspector?.expire(now);
       components.componentDeltas.prune((id) => componentPages.has(id));

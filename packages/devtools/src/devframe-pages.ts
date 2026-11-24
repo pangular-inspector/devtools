@@ -308,6 +308,7 @@ export function createPageDirectory(env: PageDirectoryEnv) {
     tanstackQuery,
     errorsInspector,
     startupInspector,
+    webMcpInspector,
     ionicInspector,
     pluginsInspector,
   } = env.inspectors;
@@ -385,6 +386,7 @@ export function createPageDirectory(env: PageDirectoryEnv) {
         capacitor: withUrl(capacitorPages.values()),
         errors: withUrl(errorsInspector?.pages() ?? []),
         startup: withUrl(startupInspector?.pages() ?? []),
+        webmcp: withUrl(webMcpInspector?.pages() ?? []),
         ionic: withUrl(ionicInspector?.pages() ?? []),
         plugins: withUrl(pluginsInspector?.pages() ?? []),
         analog: withUrl(on.analog ? analogPages() : []),

@@ -43,6 +43,7 @@ import {
 } from '../http-rules.ts';
 import { decodePayload, sanitizeHydration, sanitizePayload } from '../http-payload.ts';
 import { setRedaction } from '../forms-privacy.ts';
+import { fakeWebMcpCall } from './webmcp-testing.ts';
 
 const rule = (overrides: Partial<HttpRule> = {}): HttpRule => ({
   id: 'r1',
@@ -478,6 +479,31 @@ describe.runIf(angularAtLeast('16.0'))('interceptor', () => {
       expect(buffer.type).toBe('application/octet-stream');
     }
     expect(httpRegistry().calls?.[2]).toMatchObject({ mocked: true, preview: '{"a":1}' });
+  });
+
+  it('ties a request a WebMCP tool call sent to that call, by the id it gets when it ends', async () => {
+    let finished!: Promise<void>;
+    const trace = await fakeWebMcpCall(() => {
+      finished = new Promise<void>((resolve) => {
+        run(new HttpRequest('GET', '/api/agent'), later({ ok: true })).subscribe({
+          complete: resolve,
+        });
+      });
+    });
+    try {
+      // The response lands after the tool call returned.
+      expect(trace.caused()).toBeUndefined();
+      await finished;
+      const [call] = httpRegistry().calls ?? [];
+      expect(trace.caused()).toEqual([{ layer: 'http', key: call.id }]);
+      // A request sent outside any call is not tied to one.
+      await new Promise<void>((resolve) =>
+        run(new HttpRequest('GET', '/api/user'), later({})).subscribe({ complete: resolve }),
+      );
+      expect(trace.caused()).toHaveLength(1);
+    } finally {
+      trace.stop();
+    }
   });
 
   it('records a request cancelled during a delay rule', () => {

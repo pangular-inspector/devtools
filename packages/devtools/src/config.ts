@@ -11,6 +11,7 @@ export const PANGULAR_INSPECTORS = [
   'analog',
   'capacitor',
   'errors',
+  'webmcp',
   'plugins',
   'performance',
   'build',
@@ -64,6 +65,7 @@ export const PANGULAR_LIMITS = {
   cdCycles: { default: 200, min: 10, max: 2000 },
   cdSlowMs: { default: 16, min: 1, max: 1000 },
   capacitorCalls: { default: 200, min: 10, max: 2000 },
+  webmcpCalls: { default: 100, min: 10, max: 1000 },
   idleAfterMs: { default: 60_000, min: 0, max: 600_000 },
 } as const;
 
@@ -240,6 +242,8 @@ export interface PangularConfig {
     cdSlowMs?: number;
     /** Capacitor plugin calls kept per page and on the server. Default 200. */
     capacitorCalls?: number;
+    /** WebMCP tool calls kept per page. Default 100. */
+    webmcpCalls?: number;
     /**
      * How long, in ms, pages keep sending the component tree, injectors,
      * change detection and forms after an agent's last call when no panel is
@@ -455,6 +459,7 @@ export const PANEL_TABS = [
   { id: 'errors', label: 'Errors', inspector: 'errors' },
   { id: 'performance', label: 'Performance', inspector: 'performance' },
   { id: 'build', label: 'Build', inspector: 'build' },
+  { id: 'webmcp', label: 'WebMCP', inspector: 'webmcp' },
   { id: 'capacitor', label: 'Capacitor', inspector: 'capacitor' },
   { id: 'plugins', label: 'Plugins', inspector: 'plugins' },
 ] as const satisfies readonly { id: string; label: string; inspector?: PangularInspector }[];
@@ -485,6 +490,7 @@ export const PANEL_LINK_ITEMS: Partial<Record<PanelTab, string>> = {
   injectors: "a component's element injector, by the component's id",
   signals: "a component's signal graph, by the component's id",
   forms: 'a form, by its id',
+  webmcp: 'a WebMCP tool call, by its id',
 };
 
 /** Where a deep link into the panel points: a tab, and an item on one page. */
@@ -1530,6 +1536,10 @@ export const AGENT_ENTRIES: Readonly<Record<string, AgentEntry>> = {
   // Reads the build output on disk, so it works without a page.
   'chunk-sizes': { kind: 'tool', inspectors: ['build'] },
 
+  // webmcp
+  'webmcp-tools': { kind: 'tool', inspectors: ['webmcp'], page: true },
+  'webmcp-calls': { kind: 'tool', inspectors: ['webmcp'], page: true },
+
   // plugins
   'list-plugins': { kind: 'tool', inspectors: ['plugins'], page: true },
   'inspect-plugin': { kind: 'tool', inspectors: ['plugins'], page: true },
@@ -1774,6 +1784,8 @@ export const RPC_INSPECTOR: Record<string, PangularInspector> = {
   'push-performance': 'performance',
   'forget-performance-page': 'performance',
   'get-build-graph': 'build',
+  'push-webmcp': 'webmcp',
+  'forget-webmcp-page': 'webmcp',
   'push-analog': 'analog',
   'forget-analog-page': 'analog',
   'analog-clear-calls': 'analog',
@@ -1837,6 +1849,7 @@ export const SHARED_STATE_INSPECTOR: Record<string, PangularInspector> = {
   errors: 'errors',
   'server-errors': 'errors',
   performance: 'performance',
+  webmcp: 'webmcp',
   startup: 'injectors',
   plugins: 'plugins',
 };
@@ -2087,6 +2100,7 @@ const INSPECTOR_LABEL: Record<PangularInspector, string> = {
   analog: 'Analog',
   capacitor: 'Capacitor',
   errors: 'Errors',
+  webmcp: 'WebMCP',
   plugins: 'Plugins',
   performance: 'Performance',
   build: 'Build',
@@ -2112,6 +2126,7 @@ const LIMIT_LABEL: Record<PangularLimit, (value: number) => string> = {
   cdCycles: (value) => `${value} change detection cycles`,
   cdSlowMs: (value) => `slow cycles over ${value} ms`,
   capacitorCalls: (value) => `${value} Capacitor plugin calls`,
+  webmcpCalls: (value) => `${value} WebMCP tool calls`,
   idleAfterMs: (value) =>
     value ? `idle ${value / 1000} s after the last agent call` : 'never idle',
 };

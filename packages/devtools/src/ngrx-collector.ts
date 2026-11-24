@@ -34,6 +34,10 @@ import { markSecretWriter, safeArgs, touchesSecret } from './ngrx-args.ts';
 import { SliceCache } from './ngrx-slice-cache.ts';
 import { ReportMemo, ReportVersion } from './ngrx-report-memo.ts';
 import { appFrames, captureStack } from './signal-stack.ts';
+import { noteWebMcpEffect, webMcpCallNow } from './webmcp-call-context.ts';
+
+/** The WebMCP tool call that dispatched a classic action, kept until the action is logged. */
+const webMcpActions = new WeakMap<object, number>();
 
 /**
  * Angular's `untracked` (16.0+), read at runtime: a named import of it fails
@@ -89,6 +93,8 @@ interface Tracked {
   writable: boolean;
   depth: number;
   pendingBefore: Record<PropertyKey, unknown> | null;
+  /** The WebMCP tool call that made the write `pendingBefore` waits to log. */
+  pendingWebMcpCall?: number;
   lastNoop: Map<string, number>;
   undo: (() => void)[];
   /**
@@ -494,8 +500,11 @@ export function createNgrxCollector<H extends object = Element>(
   /** With `ngrx.trace`: where the event flowing through `Dispatcher.dispatch()` was dispatched. */
   let currentEventTrace: string[] | undefined;
 
-  const append = (entry: Omit<NgrxLogEntry, 'seq'>, keep: Saved) => {
+  const append = (entry: Omit<NgrxLogEntry, 'seq'>, keep: Saved, webMcpCall?: number) => {
     const full = { ...entry, seq: ++seq };
+    // A change logged later (a microtask, the actions stream) passes the call it started in.
+    const callId = webMcpCall ?? webMcpCallNow();
+    if (callId !== undefined) noteWebMcpEffect(callId, 'ngrx', String(full.seq));
     log.push(full);
     count(full);
     saved.set(full.seq, keep);
@@ -547,6 +556,7 @@ export function createNgrxCollector<H extends object = Element>(
     durationMs?: number,
     method?: unknown,
     trace?: string[],
+    webMcpCall?: number,
   ) => {
     const after = snapshot(t);
     const changes = snapshotDiff(before, after, t.stateKeys);
@@ -594,6 +604,7 @@ export function createNgrxCollector<H extends object = Element>(
         ...withTrace(trace),
       },
       { kind: 'signal', tracked: t, before, after },
+      webMcpCall,
     );
   };
 
@@ -612,12 +623,11 @@ export function createNgrxCollector<H extends object = Element>(
     t.pendingBefore = snapshot(t);
     // Under onWrite: the wrapped set or update.
     t.pendingTrace = traceNow(2);
+    t.pendingWebMcpCall = webMcpCallNow();
     queueMicrotaskOutside(() => {
       const before = t.pendingBefore;
-      const trace = t.pendingTrace;
       t.pendingBefore = null;
-      t.pendingTrace = undefined;
-      if (before) finish(t, 'patchState', undefined, before, false, undefined, undefined, trace);
+      if (before) finishPending(t, before);
     });
   };
 
@@ -629,10 +639,17 @@ export function createNgrxCollector<H extends object = Element>(
   const flushPending = (t: Tracked) => {
     const before = t.pendingBefore;
     if (!before) return;
-    const trace = t.pendingTrace;
     t.pendingBefore = null;
+    finishPending(t, before);
+  };
+
+  /** Logs the writes `pendingBefore` held, with their stack and the WebMCP call that made them. */
+  const finishPending = (t: Tracked, before: Snapshot) => {
+    const trace = t.pendingTrace;
+    const webMcpCall = t.pendingWebMcpCall;
     t.pendingTrace = undefined;
-    finish(t, 'patchState', undefined, before, false, undefined, undefined, trace);
+    t.pendingWebMcpCall = undefined;
+    finish(t, 'patchState', undefined, before, false, undefined, undefined, trace, webMcpCall);
   };
 
   /**
@@ -1135,6 +1152,7 @@ export function createNgrxCollector<H extends object = Element>(
         ...withTrace(trace),
       },
       { kind: 'classic', action, before, after: raw },
+      action && typeof action === 'object' ? webMcpActions.get(action) : undefined,
     );
   };
 
@@ -1196,6 +1214,8 @@ export function createNgrxCollector<H extends object = Element>(
     const tag = (action: unknown, origin: NgrxActionOrigin) => {
       if (!active || !action || typeof action !== 'object') return;
       origins.set(action, origin);
+      const webMcpCall = webMcpCallNow();
+      if (webMcpCall !== undefined) webMcpActions.set(action, webMcpCall);
       // Under tag and the wrapped dispatch or next.
       const trace = traceNow(2);
       if (trace) traces.set(action, trace);

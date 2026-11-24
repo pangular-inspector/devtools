@@ -64,6 +64,7 @@ import { tapConsole } from './console-tap.ts';
 export * from './http-rules.ts';
 import { redirectOf } from './http-redirect.ts';
 import { claimTransferEntry, mockContentType, parseBody } from './http-internals.ts';
+import { noteWebMcpEffect, webMcpCallNow } from './webmcp-call-context.ts';
 export { decodePayload, type PayloadEntry, type PayloadSummary } from './http-payload.ts';
 
 declare const ngDevMode: unknown;
@@ -172,6 +173,8 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
   const rules = side === 'client' ? clientRules() : registry.record && registry.rules;
   const rule = matchRule(url, req.method, rules, side);
   const started = Date.now();
+  // The WebMCP tool call that sent this request, if any.
+  const webMcpCall = webMcpCallNow();
   const delay = Math.min(Math.max(rule?.delayMs ?? 0, 0), MAX_DELAY_MS);
   const status = rule ? ruleStatus(rule) : undefined;
   const mocked = status !== undefined;
@@ -202,6 +205,7 @@ export const pangularHttpInterceptor: HttpInterceptorFn = (req, next) => {
     };
     // Only references: the headers are read when the call is reported.
     captureHeaders(call, req.headers, responseHeaders);
+    noteWebMcpEffect(webMcpCall, 'http', call.id);
     recordHttpCall(call);
   };
 

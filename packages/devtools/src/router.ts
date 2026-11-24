@@ -6,6 +6,7 @@ import { clip } from './text.ts';
 import { matchedRoutesOf } from './router-matched.ts';
 import { navigationFromQuery, redirectFromQuery } from './router-open-redirect.ts';
 import { trackOf } from './router-track.ts';
+import { noteWebMcpEffect, webMcpCallNow } from './webmcp-call-context.ts';
 import type {
   RouteGuards,
   ActiveRoute,
@@ -124,6 +125,12 @@ export function setCaller(text: string, sticky = false, router?: object | null) 
 }
 
 /** The config generation the next navigations of `router` are stamped with. */
+/** Ties a navigation that starts now to the WebMCP tool call running, if any. */
+function noteWebMcpNavigation(id: number) {
+  const call = webMcpCallNow();
+  if (call !== undefined) noteWebMcpEffect(call, 'router', String(id));
+}
+
 export function setGeneration(generation: number, router?: object | null) {
   trackOf(router).generation = generation;
 }
@@ -858,6 +865,7 @@ export function noteFailedCall(
     caller: track.caller?.text,
     generation: track.generation,
   });
+  noteWebMcpNavigation(-track.failedCalls);
   trimNavigations(navigations, navigationLimit);
 }
 
@@ -984,6 +992,7 @@ export function applyRouterEvent(
       if (found) nav.queryRedirect = found;
     }
     navigations.push(nav);
+    noteWebMcpNavigation(nav.id);
     return true;
   }
   if (type === EventType.RouteConfigLoadStart) {
@@ -1036,6 +1045,7 @@ export function applyRouterEvent(
       nav.caller = track.caller.text;
     track.caller = null;
     navigations.push(nav);
+    noteWebMcpNavigation(nav.id);
   }
   const nav = navigations.find((n) => n.id === id);
   if (!nav) return false;

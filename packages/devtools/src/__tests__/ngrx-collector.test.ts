@@ -14,6 +14,7 @@ import {
 } from '../ngrx-shared.ts';
 import { mergeNgrxReport, nameStore, ngrxStateOf, type NgrxPages } from '../rpc/ngrx-tools.ts';
 import { angularAtLeast, STANDALONE } from './angular-version.ts';
+import { fakeWebMcpCall } from './webmcp-testing.ts';
 
 /**
  * The workspace installs @ngrx 22, which loads on Angular 19.0 and later (it
@@ -201,6 +202,22 @@ describe('ngrx collector', () => {
     expect(entry.type).toBe('patchState');
     expect(entry.diff).toEqual([{ path: 'saved[0]', op: 'add', after: 'x' }]);
     expect(entry.durationMs).toBeUndefined();
+  });
+
+  it('ties a write a WebMCP tool call made to that call, though the entry is logged in a microtask', async () => {
+    const { store, collector } = setup();
+    collector.collect();
+    store.setQuery('before');
+    const trace = await fakeWebMcpCall(() => patchState(store, { saved: ['x'] }));
+    try {
+      await Promise.resolve();
+      store.setQuery('after');
+      const log = collector.logSince(0);
+      const entry = log.find((e) => e.type === 'patchState')!;
+      expect(trace.caused()).toEqual([{ layer: 'ngrx', key: String(entry.seq) }]);
+    } finally {
+      trace.stop();
+    }
   });
 
   it('keeps a method change out of a patchState entry from earlier in the same tick', async () => {
@@ -1044,6 +1061,20 @@ describe('ngrx collector with a classic store', () => {
     expect(bump.diffTruncated).toBe(10);
     expect(one.diff).toHaveLength(1);
     expect(one).not.toHaveProperty('diffTruncated');
+  });
+
+  it('ties an action a WebMCP tool call dispatched to that call', async () => {
+    const { store, collector } = fakeClassic({ n: 0 }, (state, action) =>
+      action.type === 'bump' ? { n: state.n + 1 } : state,
+    );
+    store.dispatch({ type: 'bump' });
+    const trace = await fakeWebMcpCall(() => store.dispatch({ type: 'bump' }));
+    try {
+      const [, agent] = collector.logSince(0);
+      expect(trace.caused()).toEqual([{ layer: 'ngrx', key: String(agent.seq) }]);
+    } finally {
+      trace.stop();
+    }
   });
 
   it('reuses the serialized classic state while the store holds the same object', () => {

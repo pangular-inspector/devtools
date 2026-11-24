@@ -13,6 +13,7 @@ export { lanDevtoolsURL } from './lan-url.ts';
 import { attachAnalog } from './analog-runtime.ts';
 import { attachForms } from './forms-collector.ts';
 import { attachPipes } from './pipes-collector.ts';
+import { attachWebMcp } from './webmcp-collector.ts';
 import { attachHttp } from './http-overlay.ts';
 import { watchNativeFetch } from './fetch-collector.ts';
 import { attachCapacitor } from './capacitor-overlay.ts';
@@ -559,6 +560,7 @@ async function startOverlay(
         forms?.push(true),
         leaks?.push(true),
         plugins?.push(true),
+        webmcp?.push(true),
         errors?.push(),
       ]),
   });
@@ -580,6 +582,9 @@ async function startOverlay(
       )
     : null;
   const pipes = on.pipes ? attachPipes(my, pageId, getNg) : null;
+  const webmcp = on.webmcp
+    ? attachWebMcp(my, pageId, { maxCalls: limits.webmcpCalls, tickMs })
+    : null;
   const http = on.http ? attachHttp(my, pageId, tickMs) : null;
   if (http) own(http.stop);
   // The page's own fetch() calls, next to the HttpClient ones (no-op when providePangularHttp did it).
@@ -860,6 +865,7 @@ async function startOverlay(
     queries && (() => void queries.push()),
     forms && paced(() => void forms.sync()),
     pipes?.push,
+    webmcp && (() => void webmcp.push().catch(() => {})),
     on.router && (() => void pushRouter()),
     http && (() => void http.push().catch(() => {})),
     cd && paced(() => void cd.push().catch(() => {})),
@@ -1193,6 +1199,7 @@ async function startOverlay(
     forget('router', 'forget-router-page');
     lastRouterPayload = '';
     forget('pipes', 'forget-pipes-page');
+    webmcp?.leave();
     treeChannel.resync();
     forget('components', 'forget-component-page');
     lastSignalKey = '';
@@ -1222,6 +1229,7 @@ async function startOverlay(
     heartbeat.lost();
     sentGeneration = -1;
     pipes?.resume();
+    webmcp?.resume();
     capacitor?.resume();
     errors?.resume();
     leaks?.resume();
@@ -1264,6 +1272,7 @@ async function startOverlay(
     leave();
     forms?.stop();
     pipes?.stop();
+    webmcp?.stop();
     capacitor?.stop();
     ngrx?.stop();
     otherStores?.stop();

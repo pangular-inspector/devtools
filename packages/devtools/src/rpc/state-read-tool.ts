@@ -38,6 +38,7 @@ export const STATE_READ_BY: Readonly<Record<string, string>> = {
   'pangular:capacitor': 'pangular:capacitor-list-calls',
   'pangular:analog': 'pangular:analog-list-server-calls',
   'pangular:errors': 'pangular:list-errors',
+  'pangular:webmcp': 'pangular:webmcp-calls',
   'pangular:startup': 'pangular:startup-timing',
   'pangular:plugins': 'pangular:list-plugins',
   'pangular:audit': 'pangular:audit',

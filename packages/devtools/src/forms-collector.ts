@@ -47,7 +47,7 @@ import {
   signalSubmitBlockers,
   wrapSubmitAction,
 } from './forms-submit.ts';
-import { watchWebMcp } from './forms-webmcp.ts';
+import { shareWebMcp } from './forms-webmcp.ts';
 import { FORMLESS_FORM_ACTIONS } from './config.ts';
 import { tapConsole } from './console-tap.ts';
 import { createDeltaChannel } from './delta-channel.ts';
@@ -267,7 +267,8 @@ export function attachForms(
   const pendingStarted = new Map<string, number>();
   let cancelPick: (() => void) | null = null;
   const ownerNames = new Set<string>();
-  const webMcp = watchWebMcp(() => schedulePush());
+  const sharedWebMcp = shareWebMcp(() => schedulePush());
+  const webMcp = sharedWebMcp.watcher;
 
   const originNow = (formId: string): EventOrigin =>
     isDevtoolsAction()
@@ -1010,7 +1011,7 @@ export function attachForms(
     },
     stop() {
       observer?.disconnect();
-      webMcp.stop();
+      sharedWebMcp.release();
       probeEveryTime(false);
       clearTimeout(pushTimer);
       clearTimeout(sendTimer);
