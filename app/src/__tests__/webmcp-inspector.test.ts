@@ -71,6 +71,7 @@ function webmcpState() {
             outcome: 'threw',
             detail: 'Boom',
             formId: 'f1@p1',
+            caused: [{ layer: 'forms', key: 'f1@p1:3' }],
           },
           { id: 3, tool: 'search-trips', at: 30_000, ms: 20, outcome: 'done' },
           { id: 4, tool: 'search-trips', at: 40_000, ms: 20, outcome: 'done', userInput: true },

@@ -11,7 +11,10 @@ import {
   untracked,
 } from '@angular/core';
 import type { PanelLink } from '@pangular-inspector/devtools/internal/config';
-import type { WebMcpTraceSources } from '@pangular-inspector/devtools/internal/webmcp-trace';
+import {
+  claimsReadOnly,
+  type WebMcpTraceSources,
+} from '@pangular-inspector/devtools/internal/webmcp-trace';
 import type { DevframeRpcClient } from 'devframe/client';
 import { panelConfig } from '../devtools-config';
 import { hostPageId } from '../page-id';
@@ -33,7 +36,6 @@ import {
   toolRows,
   traceRow,
   webMcpPages,
-  type WebMcpCallRow,
   type WebMcpPageView,
 } from './webmcp-data';
 import { WebMcpToolDetail } from './webmcp-tool-detail';
@@ -519,11 +521,15 @@ export class WebMcpInspector {
   readonly toolKey = signal<string | null>(null);
   readonly callKey = signal<string | null>(null);
 
-  /** Keeps the picked page while it reports, and falls back once it is gone. */
+  /**
+   * Keeps the picked page while it reports, and falls back once it is gone. Before the
+   * first reports arrive, "All pages" is only the fallback, so it gives way to this tab's page.
+   */
   readonly pageId = linkedSignal<WebMcpPageView[], string>({
     source: () => this.pages(),
     computation: (pages, previous) =>
       previous?.value &&
+      previous.source.length > 0 &&
       (previous.value === ALL_PAGES || pages.some((page) => page.pageId === previous.value))
         ? previous.value
         : defaultWebMcpPage(pages, this.hostPageId),
@@ -577,7 +583,8 @@ export class WebMcpInspector {
     const sources = this.sources();
     const keys = new Set<string>();
     for (const call of this.calls()) {
-      if (toolOf(pages, call)?.annotations?.['readOnlyHint'] !== true) continue;
+      const readOnly = call.entry.readOnly ?? claimsReadOnly(toolOf(pages, call));
+      if (!readOnly) continue;
       if (traceRow(call, pages, sources).verdict === 'warning') keys.add(call.key);
     }
     return keys;
